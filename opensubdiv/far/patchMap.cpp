@@ -86,20 +86,20 @@ PatchMap::assignLeafOrChildNode(QuadNode * node, bool isLeaf, int quadrant, int 
 //
 //  Constructor and initialization methods for the handles and quadtree:
 //
-PatchMap::PatchMap(PatchTable const & patchTable) :
+PatchMap::PatchMap(PatchTable const & patchTable, bool storeHandles ) :
     _minPatchFace(-1), _maxPatchFace(-1), _maxDepth(0) {
 
     _patchesAreTriangular =
         patchTable.GetVaryingPatchDescriptor().GetNumControlVertices() == 3;
 
     if (patchTable.GetNumPatchesTotal() > 0) {
-        initializeHandles(patchTable);
+        initializeHandles(patchTable, storeHandles);
         initializeQuadtree(patchTable);
     }
 }
 
 void
-PatchMap::initializeHandles(PatchTable const & patchTable) {
+PatchMap::initializeHandles(PatchTable const & patchTable, bool storeHandles) {
 
     //
     //  Populate the vector of patch Handles.  Keep track of the min and max
@@ -111,7 +111,9 @@ PatchMap::initializeHandles(PatchTable const & patchTable) {
     int numArrays  = (int) patchTable.GetNumPatchArrays();
     int numPatches = (int) patchTable.GetNumPatchesTotal();
 
-    _handles.resize(numPatches);
+    if (storeHandles) {
+        _handles.resize(numPatches);
+    }
 
     for (int pArray = 0, handleIndex = 0; pArray < numArrays; ++pArray) {
 
@@ -121,15 +123,17 @@ PatchMap::initializeHandles(PatchTable const & patchTable) {
 
         for (Index j=0; j < patchTable.GetNumPatches(pArray); ++j, ++handleIndex) {
 
-            Handle & h = _handles[handleIndex];
-
-            h.arrayIndex = pArray;
-            h.patchIndex = handleIndex;
-            h.vertIndex  = j * patchSize;
-
             int patchFaceId = params[j].GetFaceId();
             _minPatchFace = std::min(_minPatchFace, patchFaceId);
             _maxPatchFace = std::max(_maxPatchFace, patchFaceId);
+
+            if (storeHandles) {
+                Handle & h = _handles[handleIndex];
+
+                h.arrayIndex = pArray;
+                h.patchIndex = handleIndex;
+                h.vertIndex  = j * patchSize;
+            }
         }
     }
 }
@@ -143,7 +147,7 @@ PatchMap::initializeQuadtree(PatchTable const & patchTable) {
     //
     int nPatchFaces = (_maxPatchFace - _minPatchFace) + 1;
 
-    int nHandles = (int)_handles.size();
+    int nHandles = (int) patchTable.GetNumPatchesTotal();
 
     _quadtree.reserve(nPatchFaces + nHandles);
     _quadtree.resize(nPatchFaces);

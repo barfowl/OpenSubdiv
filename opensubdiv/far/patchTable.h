@@ -103,6 +103,9 @@ public:
     /// \brief Accessors for individual patches
     ///
 
+    /// \brief Returns the Handle for the patch identified by \p index
+    PatchHandle GetPatchHandle(Index index) const;
+
     /// \brief Returns the PatchDescriptor for the patch identified by \p handle
     PatchDescriptor GetPatchDescriptor(PatchHandle const & handle) const;
 

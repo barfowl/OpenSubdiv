@@ -237,6 +237,35 @@ PatchTable::pushPatchArray(PatchDescriptor desc, int npatches,
     }
 }
 
+PatchTable::PatchHandle
+PatchTable::GetPatchHandle(int patchIndex) const {
+
+    PatchHandle handle;
+
+    if (patchIndex < _patchArrays[0].numPatches) {
+        handle.arrayIndex = 0;
+        handle.vertIndex  = patchIndex *
+                           _patchArrays[0].desc.GetNumControlVertices();
+    } else if (patchIndex < (_patchArrays[1].patchIndex + _patchArrays[1].numPatches)) {
+        handle.arrayIndex = 1;
+        handle.vertIndex  = (patchIndex - _patchArrays[0].numPatches) * 
+                            _patchArrays[1].desc.GetNumControlVertices();
+    } else {
+        int numArrays = (int) _patchArrays.size();
+        for (int i = 2; i < numArrays; ++i) {
+            if (patchIndex < (_patchArrays[i].patchIndex + _patchArrays[i].numPatches)) {
+                handle.arrayIndex = i;
+                handle.vertIndex  = (patchIndex - _patchArrays[i].patchIndex);
+                                    _patchArrays[i].desc.GetNumControlVertices();
+                break;
+            }
+        }
+    }
+    handle.patchIndex = patchIndex;
+
+    return handle;
+}
+
 int
 PatchTable::getPatchIndex(int arrayIndex, int patchIndex) const {
     PatchArray const & pa = getPatchArray(arrayIndex);

@@ -53,9 +53,12 @@ public:
 
     /// \brief Constructor
     ///
-    /// @param patchTable  A valid PatchTable
+    /// @param patchTable    A valid PatchTable
     ///
-    PatchMap( PatchTable const & patchTable );
+    /// @param storeHandles  Build container of PatchHandles to return handles
+    ///                      by reference on searches, otherwise return indices
+    ///
+    PatchMap( PatchTable const & patchTable, bool storeHandles = true );
 
     /// \brief Returns a handle to the sub-patch of the face at the given (u,v).
     /// Note that the patch face ID corresponds to potentially quadrangulated
@@ -73,8 +76,10 @@ public:
     ///
     Handle const * FindPatch( int patchFaceId, double u, double v ) const;
 
+    Index FindPatchIndex( int patchFaceId, double u, double v ) const;
+
 private:
-    void initializeHandles(PatchTable const & patchTable);
+    void initializeHandles(PatchTable const & patchTable, bool storeHandles);
     void initializeQuadtree(PatchTable const & patchTable);
 
 private:
@@ -189,19 +194,19 @@ PatchMap::transformUVToTriQuadrant(T const & median, T & u, T & v, bool & rotate
 }
 
 /// Returns a handle to the sub-patch of the face at the given (u,v).
-inline PatchMap::Handle const *
-PatchMap::FindPatch( int faceid, double u, double v ) const {
+inline Index
+PatchMap::FindPatchIndex( int faceid, double u, double v ) const {
 
     //
     //  Reject patch faces not supported by this map, or those corresponding
     //  to holes or otherwise unassigned (the root node for a patch will
     //  have all or no quadrants set):
     //
-    if ((faceid < _minPatchFace) || (faceid > _maxPatchFace)) return 0;
+    if ((faceid < _minPatchFace) || (faceid > _maxPatchFace)) return -1;
 
     QuadNode const * node = &_quadtree[faceid - _minPatchFace];
 
-    if (!node->children[0].isSet) return 0;
+    if (!node->children[0].isSet) return -1;
 
     //
     //  Search the tree for the sub-patch containing the given (u,v)
@@ -221,13 +226,23 @@ PatchMap::FindPatch( int faceid, double u, double v ) const {
         assert(node->children[quadrant].isSet);
 
         if (node->children[quadrant].isLeaf) {
-            return &_handles[node->children[quadrant].index];
+            return node->children[quadrant].index;
         } else {
             node = &_quadtree[node->children[quadrant].index];
         }
     }
     assert(0);
-    return 0;
+    return -1;
+}
+
+/// Returns a handle to the sub-patch of the face at the given (u,v).
+inline PatchMap::Handle const *
+PatchMap::FindPatch( int faceid, double u, double v ) const {
+
+    assert(_handles.size() > 0);
+
+    Index patchIndex = FindPatchIndex(faceid, u, v );
+    return (patchIndex < 0) ? 0 : &_handles[patchIndex];
 }
 
 } // end namespace Far

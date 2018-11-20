@@ -350,7 +350,7 @@ PatchGroup::PatchGroup(Far::PatchTableFactory::Options patchOptions,
     patchTable = Far::PatchTableFactory::Create(*localRefiner, patchOptions,
                     groupFaces);
 
-    patchMap = new Far::PatchMap(*patchTable);
+    patchMap = new Far::PatchMap(*patchTable, false);
 
     patchFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(baseRefiner.GetSchemeType());
 
@@ -446,16 +446,18 @@ PatchGroup::TessellateBaseFace(int face, PosVector & tessPoints,
         if (faceIsIrregular && (i > 0)) {
             patchFace += i - 1;
         }
-        Far::PatchTable::PatchHandle const * handle =
-            patchMap->FindPatch(patchFace, st[0], st[1]);
-        assert(handle);
+
+        Index patchIndex = patchMap->FindPatchIndex(patchFace, st[0], st[1]);
+        assert(patchIndex >= 0);
+
+        Far::PatchTable::PatchHandle handle = patchTable->GetPatchHandle(patchIndex);
 
         float pWeights[20];
-        patchTable->EvaluateBasis(*handle, st[0], st[1], pWeights);
+        patchTable->EvaluateBasis(handle, st[0], st[1], pWeights);
 
         //  Identify the patch cvs and combine with the evaluated weights --
         //  remember to distinguish cvs in the base level:
-        Far::ConstIndexArray cvIndices = patchTable->GetPatchVertices(*handle);
+        Far::ConstIndexArray cvIndices = patchTable->GetPatchVertices(handle);
 
         Pos & pos = tessPoints[i];
         pos.Clear();
