@@ -1,5 +1,5 @@
 #
-#   Copyright 2013 Pixar
+#   Copyright 2018 DreamWorks Animation LLC.
 #
 #   Licensed under the Apache License, Version 2.0 (the "Apache License")
 #   with the following modification; you may not use this file except in
@@ -22,33 +22,17 @@
 #   language governing permissions and limitations under the Apache License.
 #
 
-set(TUTORIALS
-    tutorial_0
-    tutorial_1
-    tutorial_2
-    tutorial_3
-    tutorial_4
-    tutorial_5
-    tutorial_6
-    tutorial_7
-    tutorial_8
-    tutorial_9
-    tutorial_A
+set(SOURCE_FILES
+    far_tutorial_A.cpp
 )
 
-foreach(tutorial ${TUTORIALS})
-
-    add_subdirectory("${tutorial}")
-
-    list(APPEND TUTORIAL_TARGETS "far_${tutorial}")
-
-    add_test(far_${tutorial} ${EXECUTABLE_OUTPUT_PATH}/far_${tutorial})
-
-endforeach()
-
-add_custom_target(far_tutorials DEPENDS ${TUTORIAL_TARGETS})
-
-set_target_properties(far_tutorials
-    PROPERTIES 
-        FOLDER "tutorials/far"
+_add_executable(far_tutorial_A "tutorials/far"
+    ${SOURCE_FILES}
+    $<TARGET_OBJECTS:sdc_obj>
+    $<TARGET_OBJECTS:vtr_obj>
+    $<TARGET_OBJECTS:far_obj>
+    $<TARGET_OBJECTS:regression_common_obj>
 )
+
+install(TARGETS far_tutorial_A DESTINATION "${CMAKE_BINDIR_BASE}/tutorials")
+

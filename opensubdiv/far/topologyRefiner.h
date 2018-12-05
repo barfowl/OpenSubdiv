@@ -214,6 +214,7 @@ protected:
     friend class TopologyRefinerFactory;
     friend class TopologyRefinerFactoryBase;
     friend class PatchTableBuilder;
+    friend class PatchTreeBuilder;
     friend class PatchBuilder;
     friend class PtexIndices;
     template <typename REAL>

@@ -25,6 +25,8 @@
 #-------------------------------------------------------------------------------
 # source & headers
 set(SOURCE_FILES
+    basePatch.cpp
+    basePatchFactory.cpp
     bilinearPatchBuilder.cpp
     catmarkPatchBuilder.cpp
     error.cpp
@@ -35,6 +37,8 @@ set(SOURCE_FILES
     patchMap.cpp
     patchTable.cpp
     patchTableFactory.cpp
+    patchTree.cpp
+    patchTreeFactory.cpp
     ptexIndices.cpp
     stencilTable.cpp
     stencilTableFactory.cpp
@@ -55,12 +59,17 @@ set(PRIVATE_HEADER_FILES
 )
 
 set(PUBLIC_HEADER_FILES
+    basePatch.h
+    basePatchFactory.h
     error.h
     patchDescriptor.h
     patchParam.h
     patchMap.h
     patchTable.h
     patchTableFactory.h
+    patchTree.h
+    patchTreeCache.h
+    patchTreeFactory.h
     primvarRefiner.h
     ptexIndices.h
     stencilTable.h
