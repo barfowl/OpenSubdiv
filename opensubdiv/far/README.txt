@@ -16,7 +16,7 @@ The Far::PatchTree is a low-level class that represents the limit surface for a
 face of a particular topological configuration.  They are defined in terms of the
 minimal number of control points required and are not tied to any particular
 topological representation.  PatchTrees can be constructed independently or shared
-for all faces in a mesh that identified with similar topology.
+for all faces in a mesh that are identified with similar topology.
 
 The Far::BasePatch is the public class that clients are intended to use to
 construct and evaluate the limit surface associated with a face of their mesh.
@@ -36,10 +36,13 @@ The primary purpose of this branch was to illustrate the construction of a
 PatchTree using the Far::PatchBuilder class, which supports all types of both quad
 and triangular patches with little effort.  There are other ways to organize the
 data in a PatchTree -- the organization implemented is just one possibility and not
-necessarily preferred.  There are other extensions such as rotations or patches at
-interior nodes of the tree that also warrant consideration but are not addressed
-here.  These do not significanly impact the usage of the PatchBuilder in
-constructing the tree.
+necessarily preferred.  Patches were included for interior nodes of the quadtree
+(which was adapted from the tree from Far::PatchMap) and the public base level
+evaluation methods were overloaded with an optional depth argument so that patches
+at any depth in the tree can be evaluated. There are other extensions (e.g.
+parametric rotations) that also warrant consideration but are not addressed here.
+These do not significantly impact the usage of the PatchBuilder in constructing
+the tree.
 
 The secondary purpose in building the rest of the classes around the PatchTree is
 to raise issues for how this functionality will eventually be presented through

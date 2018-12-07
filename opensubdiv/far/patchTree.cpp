@@ -199,21 +199,41 @@ namespace {
 } // end namespace
 
 inline PatchTree::TreeNode *
-PatchTree::assignLeafOrChildNode(TreeNode * node, bool isLeaf, int quadrant, int index) {
+PatchTree::assignLeafOrChildNode(TreeNode * node, bool isLeaf, int quadrant, int patchIndex) {
 
-    //  Assign the node given if it is a leaf node, otherwise traverse
-    //  the node -- creating/assigning a new child node if needed
-    if (isLeaf) {
-        node->SetChild(quadrant, index, true);
-        return node;
+    //  This is getting far enough away from Far::PatchMap's original
+    //  structure and implementation that it warrants a face lift...
+
+    if (!node->children[quadrant].isSet) {
+        if (isLeaf) {
+            node->SetChild(quadrant, patchIndex, true);
+            return node;
+        } else {
+            int newNodeIndex = (int)_treeNodes.size();
+            _treeNodes.push_back(TreeNode());
+            node->SetChild(quadrant, newNodeIndex, false);
+            return &_treeNodes[newNodeIndex];
+        }
     }
-    if (node->children[quadrant].isSet) {
-        return &_treeNodes[node->children[quadrant].index];
-    } else {
-        int newChildNodeIndex = (int)_treeNodes.size();
+
+    if (isLeaf || node->children[quadrant].isLeaf) {
+        //  Need to replace the leaf index with new node and index:
+        int newNodeIndex = (int)_treeNodes.size();
         _treeNodes.push_back(TreeNode());
-        node->SetChild(quadrant, newChildNodeIndex, false);
-        return &_treeNodes[newChildNodeIndex];
+        TreeNode * newNode = &_treeNodes[newNodeIndex];
+
+        //  Move existing patch index from child to new child node:
+        newNode->patchIndex = node->children[quadrant].index;
+
+        node->children[quadrant].index  = newNodeIndex;
+        node->children[quadrant].isLeaf = false;
+        if (isLeaf) {
+            newNode->SetChild(quadrant, patchIndex, true);
+        }
+        return newNode;
+    } else {
+        //  Simply return the existing interior node:
+        return &_treeNodes[node->children[quadrant].index];
     }
 }
 
@@ -238,7 +258,7 @@ PatchTree::buildQuadtree() {
         TreeNode * node = &_treeNodes[0];
 
         if (depth == rootDepth) {
-            node->SetChildren(patchIndex);
+            node->patchIndex = patchIndex;
             continue;
         }
             
@@ -276,21 +296,23 @@ PatchTree::buildQuadtree() {
 int
 PatchTree::searchQuadtree(float u, float v, int searchDepth) const {
 
-    //  Search the tree for the sub-patch containing the given (u,v)
+    //  Identify the root patch and make a quick exist when seeking it:
     TreeNode const * node = &_treeNodes[0];
-    assert(node->children[0].isSet);
 
+    int maxDepth = (searchDepth >= 0) ? searchDepth : _treeDepth;
+    if (maxDepth == 0) {
+        if ((node->patchIndex >= 0) || (_treeDepth == 0)) {
+            return node->patchIndex;
+        }
+        //  No patch at level 0 but subpatches present (adj to irreg face)
+        maxDepth = 1;
+    }
+
+    //  Search the tree for the sub-patch containing the given (u,v)
     float median = 0.5f;
     bool triRotated = false;
 
-    //  Note the "searchDepth" is intended to be able to identify patches at
-    //  interior nodes when supported -- but patches at interior nodes are
-    //  not yet supported (the TreeNode requires extension).
-
-    int maxDepth = (searchDepth >= 0) ? searchDepth : _treeDepth;
-    assert(maxDepth == _treeDepth); // until interior nodes populated
-
-    for (int depth = 0; depth <= maxDepth; ++depth, median *= 0.5f) {
+    for (int depth = 1; depth <= maxDepth; ++depth, median *= 0.5f) {
 
         int quadrant = _patchesAreTriangular
                      ? transformUVToTriQuadrant(median, u, v, triRotated)
@@ -302,8 +324,7 @@ PatchTree::searchQuadtree(float u, float v, int searchDepth) const {
             node = &_treeNodes[node->children[quadrant].index];
         }
     }
-    assert("searchQuadTree() failed" == 0);
-    return -1;
+    return node->patchIndex;
 }
 
 } // end namespace Far

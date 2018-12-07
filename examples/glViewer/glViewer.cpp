@@ -147,7 +147,7 @@ enum ShadingMode { kShadingMaterial,
                    kShadingPatchCoord,
                    kShadingNormal };
 
-enum EndCap      { kEndCapNone = 0,
+enum EndCap      { kEndCapLinearBasis = 0,
                    kEndCapBSplineBasis,
                    kEndCapGregoryBasis,
                    kEndCapLegacyGregory };
@@ -463,6 +463,7 @@ rebuildMesh() {
     bits.set(Osd::MeshEndCapBSplineBasis, g_endCap == kEndCapBSplineBasis);
     bits.set(Osd::MeshEndCapGregoryBasis, g_endCap == kEndCapGregoryBasis);
     bits.set(Osd::MeshEndCapLegacyGregory, g_endCap == kEndCapLegacyGregory);
+    bits.set(Osd::MeshEndCapBilinearBasis, g_endCap == kEndCapLinearBasis);
 
     int numVertexElements = 3;
     int numVaryingElements =
@@ -1558,9 +1559,9 @@ initHUD() {
 
         int endcap_pulldown = g_hud.AddPullDown(
             "End cap (E)", 10, 270, 200, callbackEndCap, 'e');
-        g_hud.AddPullDownButton(endcap_pulldown,"None",
-                                kEndCapNone,
-                                g_endCap == kEndCapNone);
+        g_hud.AddPullDownButton(endcap_pulldown,"Linear",
+                                kEndCapLinearBasis,
+                                g_endCap == kEndCapLinearBasis);
         g_hud.AddPullDownButton(endcap_pulldown, "BSpline",
                                 kEndCapBSplineBasis,
                                 g_endCap == kEndCapBSplineBasis);

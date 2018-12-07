@@ -96,8 +96,8 @@ public:
     //  Currently this matches the PatchTree interfaces -- prefer to avoid the
     //  explicit "sub patch" requirement somehow...
     //
-    int FindSubPatch(float u, float v) const {
-        return _patchTree->FindSubPatch(u, v);
+    int FindSubPatch(float u, float v, int maxDepth = -1) const {
+        return _patchTree->FindSubPatch(u, v, maxDepth);
     }
 
     ConstIndexArray GetSubPatchPoints(int subPatch) const {

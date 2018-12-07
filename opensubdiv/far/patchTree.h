@@ -102,7 +102,9 @@ public:
     StencilTableReal<float> const * GetStencilTable() const { return _stencilTable; }
 
     //  Methods supporting evaluation:
-    int FindSubPatch(float u, float v) const { return searchQuadtree(u, v); }
+    int FindSubPatch(float u, float v, int maxDepth = -1) const {
+        return searchQuadtree(u, v, maxDepth);
+    }
 
     ConstIndexArray GetSubPatchPoints(int subPatch) const;
 
@@ -121,11 +123,12 @@ protected:
             unsigned int index  : 30;
         };
 
-        TreeNode() { std::memset(children, 0, sizeof(children)); }
+        TreeNode() { patchIndex = -1; std::memset(children, 0, sizeof(children)); }
 
         void SetChildren(int index);
         void SetChild(int quadrant, int index, bool isLeaf);
 
+        int   patchIndex;
         Child children[4];
     };
 

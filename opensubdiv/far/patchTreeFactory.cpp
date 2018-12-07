@@ -122,9 +122,18 @@ PatchTreeBuilder::PatchTreeBuilder(TopologyRefiner const & refiner, Index face, 
     //
     //  Create a PatchBuilder for this refiner:
     //
+    PatchBuilder::BasisType patchBuilderIrregularBasis;
+    if (options.irregularBasis == Options::REGULAR) {
+        patchBuilderIrregularBasis = PatchBuilder::BASIS_REGULAR;
+    } else if (options.irregularBasis == Options::LINEAR) {
+        patchBuilderIrregularBasis = PatchBuilder::BASIS_LINEAR;
+    } else {
+        patchBuilderIrregularBasis = PatchBuilder::BASIS_GREGORY;
+    }
+
     PatchBuilder::Options patchOptions;
     patchOptions.regBasisType                = PatchBuilder::BASIS_REGULAR;
-    patchOptions.irregBasisType              = PatchBuilder::BASIS_GREGORY;
+    patchOptions.irregBasisType              = patchBuilderIrregularBasis;
     patchOptions.approxInfSharpWithSmooth    = false;
     patchOptions.approxSmoothCornerWithSharp = false;
     patchOptions.fillMissingBoundaryPoints   = true;
@@ -167,16 +176,14 @@ PatchTreeBuilder::InitializePatches() {
     //
     std::vector<PatchFace> patchFaces;
 
-    if (_patchBuilder->IsFaceAPatch(0, _faceAtRoot) &&
-        _patchBuilder->IsFaceALeaf(0, _faceAtRoot)) {
+    if (_patchBuilder->IsFaceAPatch(0, _faceAtRoot)) {
         patchFaces.push_back(PatchFace(0, _faceAtRoot));
     }
     for (int levelIndex = 1; levelIndex < _faceRefiner->GetNumLevels(); ++levelIndex) {
         int numFaces = _faceRefiner->getLevel(levelIndex).getNumFaces();
 
         for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
-            if (_patchBuilder->IsFaceAPatch(levelIndex, faceIndex) &&
-                _patchBuilder->IsFaceALeaf(levelIndex, faceIndex)) {
+            if (_patchBuilder->IsFaceAPatch(levelIndex, faceIndex)) {
                 patchFaces.push_back(PatchFace(levelIndex, faceIndex));
             }
         }

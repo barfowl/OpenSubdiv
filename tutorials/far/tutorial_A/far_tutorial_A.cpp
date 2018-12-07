@@ -299,7 +299,8 @@ public:
                       Options const &              options);
     ~MeshFaceEvaluator() { delete _basePatch; }
 
-    void Evaluate(float u, float v, Coord3 & P, Coord3 & Du, Coord3 & Dv) const;
+    void Evaluate(float u, float v, Coord3 & P, Coord3 & Du, Coord3 & Dv,
+                  int evalDepth = -1) const;
 
 private:
     Index            _baseFace;
@@ -329,9 +330,10 @@ MeshFaceEvaluator::MeshFaceEvaluator(Far::TopologyRefiner const & meshTopology,
 }
 
 void
-MeshFaceEvaluator::Evaluate(float u, float v, Coord3 & P, Coord3 & Du, Coord3 & Dv) const {
+MeshFaceEvaluator::Evaluate(float u, float v, Coord3 & P, Coord3 & Du, Coord3 & Dv,
+                            int evalDepth) const {
 
-    int patchIndex = _basePatch->FindSubPatch(u, v);
+    int patchIndex = _basePatch->FindSubPatch(u, v, evalDepth);
     assert(patchIndex >= 0);
 
     float wP[20], wDu[20], wDv[20];
@@ -355,9 +357,13 @@ MeshFaceEvaluator::Evaluate(float u, float v, Coord3 & P, Coord3 & Du, Coord3 & 
 //
 class Args {
 public:
+    typedef Far::PatchTreeFactory::Options::BasisType BasisType;
+public:
     std::string     inputObjFile;
     Sdc::SchemeType schemeType;
     int             maxPatchDepth;
+    int             evalDepth;
+    BasisType       irregularBasis;
     int             uniformRes;
     bool            noTessFlag;
     bool            noOutputFlag;
@@ -367,6 +373,8 @@ public:
         inputObjFile(),
         schemeType(Sdc::SCHEME_CATMARK),
         maxPatchDepth(3),
+        evalDepth(-1),
+        irregularBasis(Far::PatchTreeFactory::Options::GREGORY),
         uniformRes(5),
         noTessFlag(false),
         noOutputFlag(false) {
@@ -384,8 +392,16 @@ public:
                 schemeType = Sdc::SCHEME_CATMARK;
             } else if (!strcmp(argv[i], "-loop")) {
                 schemeType = Sdc::SCHEME_LOOP;
+            } else if (!strcmp(argv[i], "-linear")) {
+                irregularBasis = Far::PatchTreeFactory::Options::LINEAR;
+            } else if (!strcmp(argv[i], "-regular")) {
+                irregularBasis = Far::PatchTreeFactory::Options::REGULAR;
+            } else if (!strcmp(argv[i], "-gregory")) {
+                irregularBasis = Far::PatchTreeFactory::Options::GREGORY;
             } else if (!strcmp(argv[i], "-depth")) {
                 if (++i < argc) maxPatchDepth = atoi(argv[i]);
+            } else if (!strcmp(argv[i], "-eval")) {
+                if (++i < argc) evalDepth = atoi(argv[i]);
             } else if (!strcmp(argv[i], "-res")) {
                 if (++i < argc) uniformRes = atoi(argv[i]);
             } else if (!strcmp(argv[i], "-notess")) {
@@ -447,7 +463,8 @@ run(Args const & args) {
     Far::PatchTreeCache patchTreeCache;
 
     Far::BasePatchFactory::Options basePatchOptions;
-    basePatchOptions.maxPatchDepth = args.maxPatchDepth;
+    basePatchOptions.patchTreeOptions.maxPatchDepth = args.maxPatchDepth;
+    basePatchOptions.patchTreeOptions.irregularBasis = args.irregularBasis;
     basePatchOptions.patchTreeCache = &patchTreeCache;
     basePatchOptions.updatePatchTreeCache = true;
 
@@ -477,7 +494,8 @@ run(Args const & args) {
         int numVerts = tessPattern.GetNumVertices();
         for (int i = 0; i < numVerts; ++i) {
             float const * uv = tessParams[i].uv;
-            faceEval.Evaluate(uv[0], uv[1], tessPos[i], tessDu[i], tessDv[i]);
+            faceEval.Evaluate(uv[0], uv[1], tessPos[i], tessDu[i], tessDv[i],
+                              args.evalDepth);
         }
 
         //

@@ -187,7 +187,7 @@ BasePatchFactory::Create(TopologyRefiner const & meshTopology,
 
     if (basePatch->_patchTree == 0) {
         basePatch->_patchTree = PatchTreeFactory::Create(topologyDescriptor,
-                        PatchTreeFactory::Options(options.maxPatchDepth));
+                        options.patchTreeOptions);
         basePatch->_patchTreeIsExternal = false;
 
         if (options.updatePatchTreeCache) {

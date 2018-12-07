@@ -44,10 +44,13 @@ public:
     //  approximating options here...
     //
     struct Options {
-        Options()          : maxPatchDepth(4) { }
-        Options(int depth) : maxPatchDepth(depth) { }
+        enum BasisType { REGULAR, GREGORY, LINEAR };
 
-        unsigned int maxPatchDepth : 4;
+        Options()          : irregularBasis(GREGORY), maxPatchDepth(4) { }
+        Options(int depth) : irregularBasis(GREGORY), maxPatchDepth(depth) { }
+
+        unsigned int irregularBasis : 4;
+        unsigned int maxPatchDepth  : 4;
     };
 
     //  A PatchTree is constructed from a local topological description of a

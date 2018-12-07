@@ -28,6 +28,7 @@
 #include "../version.h"
 
 #include "../far/basePatch.h"
+#include "../far/patchTreeFactory.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -56,11 +57,12 @@ public:
     //  approximating options here...
     //
     struct Options {
-        Options() : maxPatchDepth(4),
+        Options() : patchTreeOptions(4),
                     updatePatchTreeCache(false),
                     patchTreeCache(0) { }
 
-        unsigned int maxPatchDepth        : 4;
+        PatchTreeFactory::Options patchTreeOptions;
+
         unsigned int updatePatchTreeCache : 1;
 
         PatchTreeCache * patchTreeCache;
