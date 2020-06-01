@@ -254,6 +254,63 @@ StencilTableFactoryReal<REAL>::AppendLocalPointStencilTableFaceVarying(
         factorize);
 }
 
+
+namespace {
+    //
+    //  This helper function should become a private method of StencilTable (my
+    //  preference), or possibly StencilTableFactory.  A possible signature for
+    //  a StencilTable method might be (ignoring the template naming noise for
+    //  brevity):
+    //
+    //    int
+    //    StencilTable::combineStencils(Stencil const & inputStencilsToCombine,
+    //                                  Stencil       & outputStencil) const;
+    //
+    //  Keeping it here while its performance is being assessed...
+    //
+    template <typename REAL>
+    int
+    combineStencils(
+            StencilTableReal<REAL> const & stencilTable, int numBaseVertices,
+            int const combineIndices[], REAL const combineWeights[], int combineSize,
+            int       resultIndices[],  REAL       resultWeights[]) {
+
+        //
+        //  Accumulate <index,weight> results directly in the output arrays:
+        //
+        int resultSize = 0;
+
+        for (int i = 0; i < combineSize; ++i) {
+            REAL weight  = combineWeights[i];
+            if (weight == 0.0f) continue;
+
+            int stencilIndex = combineIndices[i] - numBaseVertices;
+            Far::StencilReal<REAL> stencil = stencilTable.GetStencil(stencilIndex);
+
+            for (int j = 0; j < stencil.GetSize(); ++j) {
+                REAL contribWeight = stencil.GetWeights()[j] * weight;
+                int  contribIndex  = stencil.GetVertexIndices()[j];
+
+                if (contribWeight == 0.0f) continue;
+
+                int indexInResult = 0;
+                for ( ; indexInResult < resultSize; ++indexInResult) {
+                    if (resultIndices[indexInResult] == contribIndex) {
+                        resultWeights[indexInResult] += contribWeight;
+                        break;
+                    }
+                }
+                if (indexInResult == resultSize) {
+                    resultWeights[resultSize  ] = contribWeight;
+                    resultIndices[resultSize++] = contribIndex;
+                }
+            }
+        }
+        return resultSize;
+    }
+}
+
+
 template <typename REAL>
 StencilTableReal<REAL> const *
 StencilTableFactoryReal<REAL>::appendLocalPointStencilTable(
@@ -334,75 +391,70 @@ StencilTableFactoryReal<REAL>::appendLocalPointStencilTable(
         }
     }
 
-    // copy all local point stencils to proto stencils, and factorize if needed.
+    // create new stencil table, estimating number of elements if factorized:
     int nLocalPointStencils = localPointStencilTable->GetNumStencils();
-    int nLocalPointStencilsElements = 0;
+    int nLocalPointStencilsElements = factorize ? (nLocalPointStencils * 24) :
+            localPointStencilTable->GetWeights().size();
 
-    StencilBuilder<REAL> builder(nControlVerts,
-                                /*genControlVerts*/ false,
-                                /*compactWeights*/  factorize);
-    typename StencilBuilder<REAL>::Index origin(&builder, 0);
-    typename StencilBuilder<REAL>::Index dst = origin;
-    typename StencilBuilder<REAL>::Index srcIdx = origin;
+    int nResultStencils = nBaseStencils + nLocalPointStencils;
+    int nResultStencilsElements = nBaseStencilsElements + nLocalPointStencilsElements;
 
-    for (int i = 0 ; i < nLocalPointStencils; ++i) {
-        StencilReal<REAL> src = localPointStencilTable->GetStencil(i);
-        dst = origin[i];
-        for (int j = 0; j < src.GetSize(); ++j) {
-            Index index = src.GetVertexIndices()[j];
-            REAL weight = src.GetWeights()[j];
-            if (isWeightZero<REAL>(weight)) continue;
-
-            if (factorize) {
-                dst.AddWithWeight(
-                    // subtracting controlVertsIndex if the baseStencil doesn't
-                    // include control vertices (see above diagram)
-                    // since currently local point stencils are created with
-                    // absolute indices including control (level=0) vertices.
-                    baseStencilTable->GetStencil(index - controlVertsIndexOffset),
-                    weight);
-            } else {
-                srcIdx = origin[index + controlVertsIndexOffset];
-                dst.AddWithWeight(srcIdx, weight);
-            }
-        }
-        nLocalPointStencilsElements += builder.GetNumVertsInStencil(i);
-    }
-
-    // create new stencil table
     StencilTableReal<REAL> * result = new StencilTableReal<REAL>;
     result->_numControlVertices = nControlVerts;
-    result->resize(nBaseStencils + nLocalPointStencils,
-                   nBaseStencilsElements + nLocalPointStencilsElements);
+    result->resize(nResultStencils, nResultStencilsElements);
 
-    int* sizes = &result->_sizes[0];
-    Index * indices = &result->_indices[0];
-    REAL * weights = &result->_weights[0];
+    // copy base stencils first
+    memcpy(&result->_sizes[0], &baseStencilTable->_sizes[0],
+           nBaseStencils * sizeof(int));
+    memcpy(&result->_indices[0], &baseStencilTable->_indices[0],
+           nBaseStencilsElements * sizeof(Index));
+    memcpy(&result->_weights[0], &baseStencilTable->_weights[0],
+           nBaseStencilsElements * sizeof(REAL));
 
-    // put base stencils first
-    memcpy(sizes, &baseStencilTable->_sizes[0],
-           nBaseStencils*sizeof(int));
-    memcpy(indices, &baseStencilTable->_indices[0],
-           nBaseStencilsElements*sizeof(Index));
-    memcpy(weights, &baseStencilTable->_weights[0],
-           nBaseStencilsElements*sizeof(REAL));
+    // append local-point stencils second
+    if (!factorize) {
+        memcpy(&result->_sizes[nBaseStencils], &localPointStencilTable->_sizes[0],
+               nLocalPointStencils * sizeof(int));
+        memcpy(&result->_indices[nBaseStencilsElements], &localPointStencilTable->_indices[0],
+               nLocalPointStencilsElements * sizeof(Index));
+        memcpy(&result->_weights[nBaseStencilsElements], &localPointStencilTable->_weights[0],
+               nLocalPointStencilsElements * sizeof(REAL));
+    } else {
+        int regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(refiner.GetSchemeType());
+        int maxStencilSize = refiner.GetMaxValence() * ((regFaceSize == 4) ? 8 : 3);
 
-    sizes += nBaseStencils;
-    indices += nBaseStencilsElements;
-    weights += nBaseStencilsElements;
+        int resultStencilCount = nBaseStencils;
+        int resultElementCount = nBaseStencilsElements;
 
-    // endcap stencils second
-    for (int i = 0 ; i < nLocalPointStencils; ++i) {
-        int size = builder.GetNumVertsInStencil(i);
-        int idx = builder.GetStencilOffsets()[i];
-        for (int j = 0; j < size; ++j) {
-            *indices++ = builder.GetStencilSources()[idx+j];
-            *weights++ = builder.GetStencilWeights()[idx+j];
+        for (int i = 0 ; i < nLocalPointStencils; ++i, ++resultStencilCount) {
+            //  Make sure we have space to accomodate the resulting stencil:
+            if ((result->_weights.size() - resultElementCount) < maxStencilSize) {
+                result->resize(nResultStencils, result->_weights.size() + maxStencilSize);
+            }
+
+            StencilReal<REAL> localPointStencil = localPointStencilTable->GetStencil(i);
+
+            int          localPointSize    = localPointStencil.GetSize();
+            int const *  localPointIndices = localPointStencil.GetVertexIndices();
+            REAL const * localPointWeights = localPointStencil.GetWeights();
+
+            int *  resultStencilSize    = &result->_sizes[resultStencilCount];
+            int *  resultStencilIndices = &result->_indices[resultElementCount];
+            REAL * resultStencilWeights = &result->_weights[resultElementCount];
+
+            *resultStencilSize = combineStencils(*baseStencilTable, controlVertsIndexOffset,
+                    localPointIndices, localPointWeights, localPointSize,
+                    resultStencilIndices, resultStencilWeights);
+
+            resultElementCount += *resultStencilSize;
         }
-        *sizes++ = size;
+        //  Size may be over-allocated, so resize to reflect actual size used:
+        result->_indices.resize(resultElementCount);
+        result->_weights.resize(resultElementCount);
     }
 
-    // have to re-generate offsets from scratch
+    // have to re-generate offsets from scratch -- though we could do this more
+    // easily above now given we explicitly visit each appended stencil...
     result->generateOffsets();
 
     return result;

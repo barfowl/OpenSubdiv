@@ -231,9 +231,10 @@ PrintResult(TestResult const & result, PrintOptions const & options) {
                result.timeStencilFactory/result.timeTotal*100);
     }
     if (options.appendTime) {
-        printf("    StencilTableFactory::Append %f %5.2f%%\n",
+        printf("    StencilTableFactory::Append %f %5.2f%% (%5.2fx PatchTable)\n",
                result.timeAppendStencil,
-               result.timeAppendStencil/result.timeTotal*100);
+               result.timeAppendStencil/result.timeTotal*100,
+               result.timeAppendStencil/result.timePatchFactory);
     }
     if (options.totalTime) {
         printf("    Total                       %f\n",
@@ -302,6 +303,8 @@ int main(int argc, char **argv)
             testOptions.refineAdaptive = false;
         } else if (!strcmp(argv[i], "-l")) {
             if (++i < argc) maxLevel = parseIntArg(argv[i], maxLevel);
+        } else if (!strcmp(argv[i], "-lmin")) {
+            if (++i < argc) minLevel = parseIntArg(argv[i], minLevel);
         } else if (!strcmp(argv[i], "-bilinear")) {
             defaultScheme = kBilinear;
         } else if (!strcmp(argv[i], "-catmark")) {
