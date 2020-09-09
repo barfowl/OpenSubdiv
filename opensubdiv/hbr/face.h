@@ -209,7 +209,7 @@ public:
     bool HasLimit();
 
     // Returns memory statistics
-    unsigned long GetMemStats() const;
+    size_t GetMemStats() const;
 
     // Return facevarying data from the appropriate vertex index
     // registered to this face. Note that this may either be "generic"
@@ -827,7 +827,7 @@ HbrFace<T>::HasLimit() {
 }
 
 template <class T>
-unsigned long
+size_t
 HbrFace<T>::GetMemStats() const {
     return sizeof(HbrFace<T>);
 }

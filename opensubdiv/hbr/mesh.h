@@ -215,7 +215,7 @@ public:
     void SetFVarPropagateCorners(bool p) { fvarpropagatecorners = p; }
 
     // Register routines for keeping track of memory usage
-    void RegisterMemoryRoutines(void (*increment)(unsigned long bytes), void (*decrement)(unsigned long bytes)) {
+    void RegisterMemoryRoutines(void (*increment)(size_t bytes), void (*decrement)(size_t bytes)) {
         m_faceAllocator.SetMemStatsIncrement(increment);
         m_faceAllocator.SetMemStatsDecrement(decrement);
         m_vertexAllocator.SetMemStatsIncrement(increment);

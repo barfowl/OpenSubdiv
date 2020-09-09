@@ -274,7 +274,7 @@ public:
     void ClearVertexEdit() { hasvertexedit = 0; }
 
     // Returns memory statistics
-    unsigned long GetMemStats() const;
+    size_t GetMemStats() const;
 
     // Returns true if the vertex is connected. This means that it has
     // an incident edge
@@ -1471,7 +1471,7 @@ HbrVertex<T>::GuaranteeNeighbors() {
 }
 
 template <class T>
-unsigned long
+size_t
 HbrVertex<T>::GetMemStats() const {
     return sizeof(HbrVertex<T>);
 }
