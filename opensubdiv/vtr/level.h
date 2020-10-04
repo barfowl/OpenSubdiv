@@ -307,7 +307,8 @@ public:
         TOPOLOGY_NON_MANIFOLD_EDGE,
 
         TOPOLOGY_INVALID_CREASE_EDGE,
-        TOPOLOGY_INVALID_CREASE_VERT
+        TOPOLOGY_INVALID_CREASE_VERT,
+        TOPOLOGY_INVALID_INDEX
     };
 
     static char const * getTopologyErrorString(TopologyError errCode);

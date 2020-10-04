@@ -1,0 +1,21 @@
+Work-in-progress...
+
+Started on this when bogus indices for UV coords were being specified in some
+of the example Obj files and making their way through parsing and into the
+TopologyRefiner construction.  Changes elsewhere catch those indices in the
+Obj parsing, but nothing stops bogus FVar indices from being encountered from
+other sources.
+
+Adding the desired checks to TopologyRefinerFactory<>::validateTopology()
+turned not as neat as I would have hoped...
+
+    - adding component index checking is straight-forward:
+        - just validate indices between existence and correspondence
+
+    - adding face-varying index checking is awkward:
+        - FVar channels are not considered at all in validateTopology():
+            - they have not yet even been created
+        - need to extend prepareFaceVaryingChannels() to accomodate args
+        * arguably checking FVar channels is distinct from "topology":
+            - separate option may make more sense:
+                - but does it then need its own callback, etc.?

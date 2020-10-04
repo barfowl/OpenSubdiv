@@ -57,7 +57,7 @@ protected:
     static bool prepareComponentTopologyAssignment(TopologyRefiner& refiner, bool fullValidation,
                                                    TopologyCallback callback, void const * callbackData);
     static bool prepareComponentTagsAndSharpness(TopologyRefiner& refiner);
-    static bool prepareFaceVaryingChannels(TopologyRefiner& refiner);
+    static bool prepareFaceVaryingChannels(TopologyRefiner& refiner, bool fullValidation);
 };
 
 
@@ -86,7 +86,7 @@ public:
         Options(Sdc::SchemeType sdcType = Sdc::SCHEME_CATMARK, Sdc::Options sdcOptions = Sdc::Options()) :
             schemeType(sdcType),
             schemeOptions(sdcOptions),
-            validateFullTopology(false) { }
+            validateFullTopology(true) { }
 
         Sdc::SchemeType schemeType;             ///< The subdivision scheme type identifier
         Sdc::Options    schemeOptions;          ///< The full set of options for the scheme,
@@ -397,7 +397,7 @@ TopologyRefinerFactory<MESH>::populateBaseLevel(TopologyRefiner& refiner, MESH c
     //  Defining channels of face-varying primvar data -- an optional specialization for MESH.
     //
     if (! assignFaceVaryingTopology(refiner, mesh)) return false;
-    if (! prepareFaceVaryingChannels(refiner)) return false;
+    if (! prepareFaceVaryingChannels(refiner, validate)) return false;
 
     return true;
 }

@@ -114,6 +114,8 @@ Level::getTopologyErrorString(TopologyError errCode) {
             return "INVALID_CREASE_EDGE";
         case TOPOLOGY_INVALID_CREASE_VERT :
             return "INVALID_CREASE_VERT";
+        case TOPOLOGY_INVALID_INDEX :
+            return "INVALID_INDEX";
 
         default:
             assert(0);
@@ -157,10 +159,24 @@ Level::getTopologyErrorString(TopologyError errCode) {
     }
 
 bool
+indicesAreInRange(ConstIndexArray const & indexVector, Index indexMin, Index indexMax) {
+    for (int i = 0; i < indexVector.size(); ++i) {
+        if ((indexVector[i] < indexMin) || (indexVector[i] > indexMax)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool
 Level::validateTopology(ValidationCallback callback, void const * clientData) const {
 
     //
-    //  Verify internal topological consistency (eventually a Level method?):
+    //  Verify the existence of and indices within all relations:
+    //      - for faces: face-verts and face-edges
+    //      - for edges: edge-verts and edge-faces
+    //      - for vertices: vert-faces and vert-edges
+    //  Verify internal topological consistency:
     //      - each face-vert has corresponding vert-face (and child)
     //      - each face-edge has corresponding edge-face
     //      - each edge-vert has corresponding vert-edge (and child)
@@ -179,16 +195,67 @@ Level::validateTopology(ValidationCallback callback, void const * clientData) co
     bool returnOnFirstError = true;
     bool isValid = true;
 
-    //  Verify each face-vert has corresponding vert-face and child:
-    if ((getNumFaceVerticesTotal() == 0) || (getNumVertexFacesTotal() == 0)) {
-        if (getNumFaceVerticesTotal() == 0) {
-            REPORT(TOPOLOGY_MISSING_FACE_VERTS, "missing face-verts");
-        }
-        if (getNumVertexFacesTotal() == 0) {
-            REPORT(TOPOLOGY_MISSING_VERT_FACES, "missing vert-faces");
-        }
+    //  Verify existence of and indices in face-vert and face-edge relations:
+    if (getNumFaceVerticesTotal() == 0) {
+        REPORT(TOPOLOGY_MISSING_FACE_VERTS, "missing face-verts");
         return false;
     }
+    if (getNumFaceEdgesTotal() == 0) {
+        REPORT(TOPOLOGY_MISSING_FACE_EDGES, "missing face-edges");
+        return false;
+    }
+    for (int fIndex = 0; fIndex < getNumFaces(); ++fIndex) {
+        if (!indicesAreInRange(getFaceVertices(fIndex), 0, getNumVertices() - 1)) {
+            REPORT(TOPOLOGY_INVALID_INDEX, "invalid face-vert index in face %d", fIndex);
+            return false;
+        }
+        if (!indicesAreInRange(getFaceEdges(fIndex), 0, getNumEdges() - 1)) {
+            REPORT(TOPOLOGY_INVALID_INDEX, "invalid face-edge index in face %d", fIndex);
+            return false;
+        }
+    }
+
+    //  Verify the existence of and indices in edge-vert and edge-face relations:
+    if (getNumEdgeVerticesTotal() == 0) {
+        REPORT(TOPOLOGY_MISSING_EDGE_VERTS, "missing edge-verts");
+        return false;
+    }
+    if (getNumEdgeFacesTotal() == 0) {
+        REPORT(TOPOLOGY_MISSING_EDGE_FACES, "missing edge-faces");
+        return false;
+    }
+    for (int eIndex = 0; eIndex < getNumEdges(); ++eIndex) {
+        if (!indicesAreInRange(getEdgeVertices(eIndex), 0, getNumVertices() - 1)) {
+            REPORT(TOPOLOGY_INVALID_INDEX, "invalid edge-vert index in edge %d", eIndex);
+            return false;
+        }
+        if (!indicesAreInRange(getEdgeFaces(eIndex), 0, getNumFaces() - 1)) {
+            REPORT(TOPOLOGY_INVALID_INDEX, "invalid edge-face index in edge %d", eIndex);
+            return false;
+        }
+    }
+
+    //  Verify the existence of and indices in vert-edge and vert-face relations:
+    if (getNumVertexFacesTotal() == 0) {
+        REPORT(TOPOLOGY_MISSING_VERT_FACES, "missing vert-faces");
+        return false;
+    }
+    if (getNumVertexEdgesTotal() == 0) {
+        REPORT(TOPOLOGY_MISSING_VERT_EDGES, "missing vert-edges");
+        return false;
+    }
+    for (int vIndex = 0; vIndex < getNumVertices(); ++vIndex) {
+        if (!indicesAreInRange(getVertexEdges(vIndex), 0, getNumEdges() - 1)) {
+            REPORT(TOPOLOGY_INVALID_INDEX, "invalid vert-edge index in edge %d", vIndex);
+            return false;
+        }
+        if (!indicesAreInRange(getVertexFaces(vIndex), 0, getNumFaces() - 1)) {
+            REPORT(TOPOLOGY_INVALID_INDEX, "invalid vert-face index in edge %d", vIndex);
+            return false;
+        }
+    }
+
+    //  Verify each face-vert has corresponding vert-face and child:
     for (int fIndex = 0; fIndex < getNumFaces(); ++fIndex) {
         ConstIndexArray     fVerts      = getFaceVertices(fIndex);
         int                 fVertCount  = fVerts.size();
@@ -216,15 +283,6 @@ Level::validateTopology(ValidationCallback callback, void const * clientData) co
     }
 
     //  Verify each face-edge has corresponding edge-face:
-    if ((getNumEdgeFacesTotal() == 0) || (getNumFaceEdgesTotal() == 0)) {
-        if (getNumEdgeFacesTotal() == 0) {
-            REPORT(TOPOLOGY_MISSING_EDGE_FACES, "missing edge-faces");
-        }
-        if (getNumFaceEdgesTotal() == 0) {
-            REPORT(TOPOLOGY_MISSING_FACE_EDGES, "missing face-edges");
-        }
-        return false;
-    }
     for (int fIndex = 0; fIndex < getNumFaces(); ++fIndex) {
         ConstIndexArray  fEdges      = getFaceEdges(fIndex);
         int              fEdgeCount  = fEdges.size();
@@ -252,15 +310,6 @@ Level::validateTopology(ValidationCallback callback, void const * clientData) co
     }
 
     //  Verify each edge-vert has corresponding vert-edge and child:
-    if ((getNumEdgeVerticesTotal() == 0) || (getNumVertexEdgesTotal() == 0)) {
-        if (getNumEdgeVerticesTotal() == 0) {
-            REPORT(TOPOLOGY_MISSING_EDGE_VERTS, "missing edge-verts");
-        }
-        if (getNumVertexEdgesTotal() == 0) {
-            REPORT(TOPOLOGY_MISSING_VERT_EDGES, "missing vert-edges");
-        }
-        return false;
-    }
     for (int eIndex = 0; eIndex < getNumEdges(); ++eIndex) {
         ConstIndexArray  eVerts = getEdgeVertices(eIndex);
 

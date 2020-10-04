@@ -416,7 +416,7 @@ TopologyRefinerFactoryBase::prepareComponentTagsAndSharpness(
 
 bool
 TopologyRefinerFactoryBase::prepareFaceVaryingChannels(
-    TopologyRefiner& refiner) {
+    TopologyRefiner& refiner, bool validate) {
 
     Vtr::internal::Level& baseLevel = refiner.getLevel(0);
 
@@ -425,7 +425,8 @@ TopologyRefinerFactoryBase::prepareFaceVaryingChannels(
     int regBoundaryValence = regVertexValence / 2;
 
     for (int channel=0; channel<refiner.GetNumFVarChannels(); ++channel) {
-        if (baseLevel.getNumFVarValues(channel) == 0) {
+        int numFVarValues = baseLevel.getNumFVarValues(channel);
+        if (numFVarValues == 0) {
             char msg[1024];
             snprintf(msg, 1024,
                 "Failure in TopologyRefinerFactory<>::Create() -- "
@@ -433,6 +434,24 @@ TopologyRefinerFactoryBase::prepareFaceVaryingChannels(
             Error(FAR_RUNTIME_ERROR, msg);
             return false;
         }
+
+        if (validate) {
+            for (int fIndex = 0; fIndex < baseLevel.getNumFaces(); ++fIndex) {
+                ConstIndexArray fvarValues = baseLevel.getFaceFVarValues(fIndex, channel);
+                for (int vIndex = 0; vIndex < fvarValues.size(); ++vIndex) {
+                    Index fvIndex = fvarValues[vIndex];
+                    if ((fvIndex < 0) || (fvIndex >= numFVarValues)) {
+                        char msg[1024];
+                        snprintf(msg, 1024, "Failure in TopologyRefinerFactory<>::Create() -- "
+                                "invalid index %d in face %d of face-varying channel %d.",
+                                fvIndex, fIndex, channel);
+                        Error(FAR_RUNTIME_ERROR, msg);
+                        return false;
+                    }
+                }
+            }
+        }
+
         baseLevel.completeFVarChannelTopology(channel, regBoundaryValence);
     }
     return true;
