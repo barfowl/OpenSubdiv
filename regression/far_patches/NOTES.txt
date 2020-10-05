@@ -1,0 +1,49 @@
+
+
+This regression test needs a lot more work before commiting it to
+the main repository...
+
+
+The general approach is as follows:
+
+    - compute limit points for uniform refinement to level L
+
+    - build a patch table adaptively refined to level L
+
+    - compute patch points corresponding to limit points:
+        - build PatchTable for uniform refinement
+        - use PatchParams of uniform PatchTable for correspondence
+        - remember to skip holes (uniform faces but no patches)
+
+
+Several issues result in an unacceptable number of differences:
+
+    - positions:
+        - semi-sharp creases limit behavior differs from patches:
+            - semi-sharp features are limited as sharp
+            - patches at semi-sharp features constructed as smooth
+            - only affects the limit points at the semi-sharp feature:
+                - refined interior neighbors will be limited as smooth
+                - should correspond to corner of regular smooth patch
+            - possibilities:
+                - could modify Sdc limit behavior -- but only locally
+                - refine to resolve semi-sharp -- too high for some
+                * detect semi-sharp features and ignore (report?)
+                    * DONE
+
+    - normals:
+        - degenerate normal vectors at smooth corners:
+            - limit tangents will produce correct normal
+            - parametric partials will produce degenerate normal
+            * detect and resolve with 2nd derivatives:
+                - this needs to be done when N is computed
+                - will require full 2nd deriv eval and Taylor approx
+
+        - normal vectors at inf-sharp features:
+            - these are essentially undefined
+            - only one value computed for a limit point of a vertex
+            - multiple values computed for each patch incident a vertex
+
+        - normal accuracy at extra-ordinary vertices:
+            - Catmark patches to not use
+

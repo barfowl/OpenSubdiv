@@ -1,0 +1,7 @@
+
+This directory includes changes on top of a rebased version of the
+original branch with regression/far_facevarying.
+
+A lot of debugging code was added here -- most of which needs to be
+stripped out before this regression test is acceptable.
+

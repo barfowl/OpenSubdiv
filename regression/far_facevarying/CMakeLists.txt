@@ -22,22 +22,26 @@
 #   language governing permissions and limitations under the Apache License.
 #
 
-add_subdirectory(common)
+include_directories("${OPENSUBDIV_INCLUDE_DIR}")
 
-if (NOT NO_REGRESSION)
+set(SOURCE_FILES
+    main.cpp
+    testMesh.cpp
+)
 
-    add_subdirectory(hbr_regression)
+set(PLATFORM_LIBRARIES
+    "${OSD_LINK_TARGET}"
+)
 
-    add_subdirectory(far_regression)
+osd_add_executable(far_facevarying "regression"
+    ${SOURCE_FILES}
+    $<TARGET_OBJECTS:sdc_obj>
+    $<TARGET_OBJECTS:vtr_obj>
+    $<TARGET_OBJECTS:far_obj>
+    $<TARGET_OBJECTS:regression_common_obj>
+)
 
-    add_subdirectory(far_facevarying)
-    add_subdirectory(far_patches)
-    add_subdirectory(far_stencils)
+install(TARGETS far_facevarying DESTINATION "${CMAKE_BINDIR_BASE}")
 
-    add_subdirectory(far_perf)
+add_test(far_facevarying ${EXECUTABLE_OUTPUT_PATH}/far_facevarying)
 
-    if(OPENGL_FOUND AND GLFW_FOUND)
-        add_subdirectory(osd_regression)
-    endif()
-
-endif()
