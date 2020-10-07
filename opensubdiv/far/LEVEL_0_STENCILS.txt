@@ -1,0 +1,52 @@
+
+
+    NOTE -- much of this is out of date with the 3.4 changes (which
+    include some StencilTable additions), but a few points are still
+    relevant...
+
+
+
+StencilTableFactory::AppendLocalPointStencilTable() has issues...
+
+    - appending when source or dest is empty crashes
+
+    - support for face-varying tables is questionable
+
+Its purpose is to append "local point stencils" to the "base stencils"
+that arrise from refinement.
+
+If either one is NULL, the result is NULL -- rather than the non-NULL
+of the two being copied to the result.
+
+"base stencils" are NULL when adaptive refinment does not generate any
+faces for level 1.  The mesh will be all quads and may or may not have
+any irregular patches.
+
+"local point stencils" are NULL when all patches are regular.  This is
+unlikely but possible.  Consider a regular quad mesh with irregular
+face-varying UVs...  The vertex patches will all be regular -- so it 
+will not have any local points.  The converse is also possible.
+
+
+Can both be NULL?  Should we return a non-NULL (empty) table if so?
+
+    - YES, all regular quads and all regular patches
+
+    - a torus should create this situation -- what is happening?
+        - an empty local point StencilTable avoids the call to Append
+
+
+So we only need to deal with an empty set of vertex stencils -- which
+does require the local point stencils to be appended (copied).
+
+
+We cannot simply return one as the result when the other is empty --
+existing usage may be deleting the input, or it will be retained in
+the PatchTable and potentially double-deleted later.
+
+
+NOTE -- there is no copy constructor or copy method for StencilTable
+
+    - we will need one to return a result when one input is NULL
+
+    - it can be protected as will only be used by StencilTableFactory

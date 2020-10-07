@@ -58,7 +58,8 @@ enum MeshBits {
     MeshEndCapBSplineBasis   = 8,  // exclusive
     MeshEndCapGregoryBasis   = 9,  // exclusive
     MeshEndCapLegacyGregory  = 10, // exclusive
-    NUM_MESH_BITS            = 11,
+    MeshNonLinearUniform     = 11,
+    NUM_MESH_BITS            = 12,
 };
 typedef std::bitset<NUM_MESH_BITS> MeshBitset;
 
@@ -106,11 +107,10 @@ protected:
             options.useSingleCreasePatch = singleCreasePatch;
             refiner.RefineAdaptive(options);
         } else {
-            //  This dependency on FVar channels should not be necessary
-            bool fullTopologyInLastLevel = refiner.GetNumFVarChannels()>0;
+            //  Is this variant used at all?
 
             Far::TopologyRefiner::UniformOptions options(level);
-            options.fullTopologyInLastLevel = fullTopologyInLastLevel;
+            options.fullTopologyInLastLevel = false;
             refiner.RefineUniform(options);
         }
     }
@@ -123,11 +123,8 @@ protected:
             options.considerFVarChannels = bits.test(MeshFVarAdaptive);
             refiner.RefineAdaptive(options);
         } else {
-            //  This dependency on FVar channels should not be necessary
-            bool fullTopologyInLastLevel = refiner.GetNumFVarChannels()>0;
-
             Far::TopologyRefiner::UniformOptions options(level);
-            options.fullTopologyInLastLevel = fullTopologyInLastLevel;
+            options.fullTopologyInLastLevel = bits.test(MeshNonLinearUniform);
             refiner.RefineUniform(options);
         }
     }
@@ -588,7 +585,7 @@ private:
         Far::StencilTableFactory::Options options;
         options.generateOffsets = true;
         options.generateIntermediateLevels =
-            _refiner->IsUniform() ? false : true;
+            _refiner->IsUniform() ? bits.test(MeshNonLinearUniform) : true;
 
         Far::StencilTable const * vertexStencils = NULL;
         Far::StencilTable const * varyingStencils = NULL;
@@ -614,6 +611,8 @@ private:
         poptions.generateLegacySharpCornerPatches = !bits.test(MeshUseSmoothCornerPatch);
         poptions.useSingleCreasePatch = bits.test(MeshUseSingleCreasePatch);
         poptions.useInfSharpPatch = bits.test(MeshUseInfSharpPatch);
+
+        poptions.generateNonLinearUniformPatches = bits.test(MeshNonLinearUniform);
 
         // points on bilinear and gregory basis endcap boundaries can be
         // shared among adjacent patches to save some stencils.

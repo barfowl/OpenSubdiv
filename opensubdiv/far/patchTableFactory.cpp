@@ -447,10 +447,7 @@ PatchTableBuilder::PatchTableBuilder(
     _requiresVaryingLocalPoints = _options.generateVaryingTables &&
                                   _options.generateVaryingLocalPoints;
 
-    //  Option to be made public in future:
-    bool options_generateNonLinearUniformPatches = false;
-
-    _buildUniformLinear = _refiner.IsUniform() && !options_generateNonLinearUniformPatches;
+    _buildUniformLinear = _refiner.IsUniform() && !_options.generateNonLinearUniformPatches;
 
     //
     //  Create and initialize the new PatchTable instance to be assembled:

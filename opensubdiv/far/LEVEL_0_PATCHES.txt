@@ -1,0 +1,81 @@
+
+
+    NOTE -- much of this is out of date with the 3.4 changes, but a
+    few points are still relevant...
+
+
+Two patch-related problems exist in 3.3.1 that inhibit generating patches
+at level 0:
+
+    - boundary isolation
+    - irregular faces
+
+Boundary isolation is being addressed with the Loop changes.
+
+    * BUT -- note that there may be some other subtle dependencies on
+      expected feature isolation.  The following regression/shapes
+      exhibit problems constructing patches for level 0:
+
+          catmark_gregory_test2 (non-quads)
+          catmark_gregory_test3 (unisolated boundary)
+          catmark_gregory_test4 (unisolated inf-sharp)
+
+Irregular faces cannot have a patch representing them at level 0.
+
+    * AND -- neither can the patches neighboring an irregular face as
+      their limit points (positions and tangents) cannot be computed
+      with non-quads in the corner rings
+
+    - PatchBuilder could do extra test in IsFaceAPatch() when at level 0
+      and any vertex is irregular.  But what is quickest way to determine
+      when a vertex is incident an irregular face?
+
+Generating as many patches as possible at level 0 and the minimum necessary
+at level 1 is a possibility.  In future, it will only be necessary to deal
+with irregular faces.
+
+This is currently possible now by setting adaptive refinement level to 1
+while setting the secondary level to 0:  level 1 patches will be generated
+for irregular faces, boundary isolation (not a future issue) and creasing.
+
+Presumably those wanting level 0 don't care about creasing.  The above
+will trigger level 1 patches for creased features -- those not wanting
+them can choose not to assign creasing to the base mesh.
+
+The remaining issue is patches generated from irregular faces...
+
+We will not be generating triangular patches for any quadrilateral scheme
+as the parameterization of the surface is quadrangulated.  A triangular
+face is parameterized as three quads, not as a triangular patch.  It is
+also likely that GPU users will favor one patch type (quad) and slightly
+more of those patches compared to a combination of two patch types --
+that further reduces any motivation for a triangular patch.
+
+As for quad patches at level 1 from non-quad faces, unfortunately we
+generate quad patches for the non-quad face and all of its neighboring
+faces.  This is likely to be objectionable to those wanting to minimize
+their patches as this can rapidly explode the number of patches when
+non-quad faces are even sparsely distributed in a mesh.
+
+Is it possible to not refine the non-quad neighbors?
+
+In part, yes -- there is nothing in the adaptive refinement or the patch
+generation that requires non-quad neighbors to be refined.
+
+BUT, the quad neighbors will be irregular and their corners that adjoin
+the non-quad face will need special handling -- current limit computations
+assume all quad neighbors.  The ACC paper extended these.  We could use
+the same extensions, but is it worth it?
+
+Would boundaries of the non-quad's children and its quad neighbor be cts?
+
+No.  The limit calculations and boundary curve along the edge of a quad
+neighbor would not likely match the two BSplines curves of the children
+of the non-quad:  the single boundary curve would be cubic while the two
+child boundary curves would be separate cubics -- unlikely that those
+would match.  Even if so, tangent continuity across that boundary is
+certainly not guaranteed or likely.
+
+
+So, the best we can do in future is patches for level 0 quads that are
+not next to non-quads, and level 1 quads for all others.

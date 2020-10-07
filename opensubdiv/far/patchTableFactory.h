@@ -44,20 +44,12 @@ public:
     ///
     struct Options {
 
-        /// \brief Choice for approximating irregular patches (end-caps)
-        ///
-        /// This enum specifies how irregular patches (end-caps) are approximated.
-        /// A basis is chosen, rather than a specific patch type, and has a
-        /// corresponding patch type for each subdivision scheme, i.e. a quad and
-        /// triangular patch type exists for each basis.  These choices provide a
-        /// trade-off between surface quality and performance.
-        ///
         enum EndCapType {
-            ENDCAP_NONE = 0,        ///< unspecified
-            ENDCAP_BILINEAR_BASIS,  ///< use linear patches (simple quads or tris)
-            ENDCAP_BSPLINE_BASIS,   ///< use BSpline-like patches (same patch type as regular)
-            ENDCAP_GREGORY_BASIS,   ///< use Gregory patches (highest quality, recommended default)
-            ENDCAP_LEGACY_GREGORY   ///< legacy option for 2.x style Gregory patches (Catmark only)
+            ENDCAP_NONE = 0,             ///< no endcap
+            ENDCAP_BILINEAR_BASIS,       ///< use bilinear quads (4 cp) as end-caps
+            ENDCAP_BSPLINE_BASIS,        ///< use BSpline basis patches (16 cp) as end-caps
+            ENDCAP_GREGORY_BASIS,        ///< use Gregory basis patches (20 cp) as end-caps
+            ENDCAP_LEGACY_GREGORY        ///< use legacy (2.x) Gregory patches (4 cp + valence table) as end-caps
         };
 
         Options(unsigned int maxIsolation=10) :
@@ -65,6 +57,7 @@ public:
              includeBaseLevelIndices(true),
              includeFVarBaseLevelIndices(false),
              triangulateQuads(false),
+             generateNonLinearUniformPatches(false),
              useSingleCreasePatch(false),
              useInfSharpPatch(false),
              maxIsolationLevel(maxIsolation),
@@ -81,10 +74,10 @@ public:
              fvarChannelIndices(0)
         { }
 
-        /// \brief Get endcap basis type
+        /// \brief Get endcap patch type
         EndCapType GetEndCapType() const { return (EndCapType)endCapType; }
 
-        /// \brief Set endcap basis type
+        /// \brief Set endcap patch type
         void SetEndCapType(EndCapType e) { endCapType = e; }
 
         /// \brief Set precision of vertex patches
@@ -108,6 +101,8 @@ public:
                      includeBaseLevelIndices     : 1, ///< Include base level in patch point indices (Uniform mode only)
                      includeFVarBaseLevelIndices : 1, ///< Include base level in face-varying patch point indices (Uniform mode only)
                      triangulateQuads            : 1, ///< Triangulate 'QUADS' primitives (Uniform mode only)
+
+                     generateNonLinearUniformPatches : 1, ///< Generate non-linear patches for uniform
 
                      useSingleCreasePatch : 1, ///< Use single crease patch
                      useInfSharpPatch     : 1, ///< Use infinitely-sharp patch
@@ -183,7 +178,7 @@ public:
     //  It is no longer used internally and is being kept here to respect preservation
     //  of the public interface, but it will be deprecated at the earliest opportunity.
     //
-    /// \brief Obsolete internal struct not intended for public use -- due to
+    /// \brief Obsolete internal struct accidentally exposed for public use -- due to
     /// be deprecated.
     //
     struct PatchFaceTag {

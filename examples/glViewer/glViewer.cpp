@@ -146,6 +146,7 @@ enum HudCheckBox { kHUD_CB_DISPLAY_CONTROL_MESH_EDGES,
                    kHUD_CB_FREEZE,
                    kHUD_CB_DISPLAY_PATCH_COUNTS,
                    kHUD_CB_ADAPTIVE,
+                   kHUD_CB_NON_LINEAR_UNIFORM,
                    kHUD_CB_SMOOTH_CORNER_PATCH,
                    kHUD_CB_SINGLE_CREASE_PATCH,
                    kHUD_CB_INF_SHARP_PATCH };
@@ -163,6 +164,7 @@ int   g_freeze = 0,
       g_shadingMode = kShadingPatchType,
       g_displayStyle = kDisplayStyleWireOnShaded,
       g_adaptive = 1,
+      g_nonLinearUniform = 0,
       g_endCap = kEndCapGregoryBasis,
       g_smoothCornerPatch = 1,
       g_singleCreasePatch = 1,
@@ -460,6 +462,7 @@ rebuildMesh() {
     bits.set(Osd::MeshEndCapBSplineBasis,   g_endCap == kEndCapBSplineBasis);
     bits.set(Osd::MeshEndCapGregoryBasis,   g_endCap == kEndCapGregoryBasis);
     bits.set(Osd::MeshEndCapLegacyGregory,  g_endCap == kEndCapLegacyGregory);
+    bits.set(Osd::MeshNonLinearUniform,     g_nonLinearUniform != 0);
 
     int numVertexElements = 3;
     int numVaryingElements =
@@ -1455,6 +1458,10 @@ callbackCheckBox(bool checked, int button) {
             g_adaptive = checked;
             rebuildMesh();
             return;
+        case kHUD_CB_NON_LINEAR_UNIFORM:
+            g_nonLinearUniform = checked;
+            rebuildMesh();
+            return;
         case kHUD_CB_SMOOTH_CORNER_PATCH:
             g_smoothCornerPatch = checked;
             rebuildMesh();
@@ -1600,7 +1607,9 @@ initHUD() {
 #endif
     if (GLUtils::SupportsAdaptiveTessellation()) {
         g_hud.AddCheckBox("Adaptive (`)", g_adaptive!=0,
-                          10, 190, callbackCheckBox, kHUD_CB_ADAPTIVE, '`');
+                          10, 170, callbackCheckBox, kHUD_CB_ADAPTIVE, '`');
+        g_hud.AddCheckBox("Non-linear Uniform (|)", g_nonLinearUniform!=0,
+                          10, 190, callbackCheckBox, kHUD_CB_NON_LINEAR_UNIFORM, '|');
         g_hud.AddCheckBox("Smooth Corner Patch (O)", g_smoothCornerPatch!=0,
                           10, 210, callbackCheckBox, kHUD_CB_SMOOTH_CORNER_PATCH, 'o');
         g_hud.AddCheckBox("Single Crease Patch (S)", g_singleCreasePatch!=0,
@@ -1626,10 +1635,10 @@ initHUD() {
         }
     }
 
-    for (int i = 1; i < 11; ++i) {
+    for (int i = 0; i < 10; ++i) {
         char level[16];
-        sprintf(level, "Lv. %d", i);
-        g_hud.AddRadioButton(3, level, i == g_level, 10, 310+i*20, callbackLevel, i, '0'+(i%10));
+        sprintf(level, "Lv. %d%s", i, i ? "" : "(test)");
+        g_hud.AddRadioButton(3, level, i == g_level, 10, 310+(i+1)*20, callbackLevel, i, '0'+(i%10));
     }
 
     int shapes_pulldown = g_hud.AddPullDown("Shape (N)", -300, 10, 300, callbackModel, 'n');
