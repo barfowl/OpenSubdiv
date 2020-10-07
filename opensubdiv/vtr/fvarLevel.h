@@ -135,16 +135,6 @@ public:
         ValueTagSize _infIrregular  : 1;  // value span includes inf-sharp irregularity
 
         Level::VTag combineWithLevelVTag(Level::VTag) const;
-
-        //  Alternate constructor and accessor for dealing with integer bits directly:
-        explicit ValueTag(ValueTagSize bits) {
-            std::memcpy(this, &bits, sizeof(bits));
-        }
-        ValueTagSize getBits() const {
-            ValueTagSize bits;
-            std::memcpy(&bits, this, sizeof(bits));
-            return bits;
-        }
     };
 
     typedef Vtr::ConstArray<ValueTag> ConstValueTagArray;
@@ -181,7 +171,7 @@ public:
     bool isLinear() const            { return _isLinear; }
     bool hasLinearBoundaries() const { return _hasLinearBoundaries; }
     bool hasSmoothBoundaries() const { return ! _hasLinearBoundaries; }
-    bool hasCreaseEnds() const       { return hasSmoothBoundaries(); }
+    bool hasCreaseEnds() const       { return !isLinear(); }
 
     Sdc::Options getOptions() const { return _options; }
 
@@ -397,26 +387,16 @@ inline Level::VTag
 FVarLevel::ValueTag::combineWithLevelVTag(Level::VTag levelTag) const
 {
     if (this->_mismatch) {
-        //
-        //  Semi-sharp FVar values are always tagged and treated as corners
-        //  (at least three sharp edges (two boundary edges and one interior
-        //  semi-sharp) and/or vertex is semi-sharp) until the sharpness has
-        //  decayed, but they ultimately lie on the inf-sharp crease of the
-        //  FVar boundary.  Consider this when tagging inf-sharp features.
-        //
         if (this->isCorner()) {
             levelTag._rule = (Level::VTag::VTagSize) Sdc::Crease::RULE_CORNER;
-        } else {
-            levelTag._rule = (Level::VTag::VTagSize) Sdc::Crease::RULE_CREASE;
-        }
-        if (this->isCrease() || this->isSemiSharp()) {
-            levelTag._infSharp = false;
-            levelTag._infSharpCrease = true;
-            levelTag._corner = false;
-        } else {
             levelTag._infSharp = true;
             levelTag._infSharpCrease = false;
             levelTag._corner = !this->_infIrregular && !this->_infSharpEdges;
+        } else {
+            levelTag._rule = (Level::VTag::VTagSize) Sdc::Crease::RULE_CREASE;
+            levelTag._infSharp = false;
+            levelTag._infSharpCrease = true;
+            levelTag._corner = false;
         }
         levelTag._infSharpEdges = true;
         levelTag._infIrregular = this->_infIrregular;

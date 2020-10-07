@@ -93,8 +93,10 @@ FVarRefinement::applyRefinement() {
 
     propagateEdgeTags();
     propagateValueTags();
-    if (_childFVar.hasSmoothBoundaries()) {
+    if (_childFVar.hasCreaseEnds()) {
         propagateValueCreases();
+    }
+    if (_childFVar.hasSmoothBoundaries()) {
         reclassifySemisharpValues();
     }
 
@@ -165,7 +167,7 @@ void
 FVarRefinement::trimAndFinalizeChildValues() {
 
     _childFVar._vertValueTags.resize(_childFVar._valueCount);
-    if (_childFVar.hasSmoothBoundaries()) {
+    if (_childFVar.hasCreaseEnds()) {
         _childFVar._vertValueCreaseEnds.resize(_childFVar._valueCount);
     }
 
@@ -410,7 +412,7 @@ FVarRefinement::propagateValueTags() {
     FVarLevel::ValueTag valTagCrease = valTagMismatch;
     valTagCrease._crease = true;
 
-    FVarLevel::ValueTag& valTagSplitEdge = _parentFVar.hasSmoothBoundaries() ? valTagCrease : valTagMismatch;
+    FVarLevel::ValueTag& valTagSplitEdge = _parentFVar.hasCreaseEnds() ? valTagCrease : valTagMismatch;
 
     cVert    = _refinement.getFirstChildVertexFromEdges();
     cVertEnd = cVert + _refinement.getNumChildVerticesFromEdges();
@@ -449,7 +451,7 @@ FVarRefinement::propagateValueTags() {
 void
 FVarRefinement::propagateValueCreases() {
 
-    assert(_childFVar.hasSmoothBoundaries());
+    assert(_childFVar.hasCreaseEnds());
 
     //  Skip child vertices from faces:
 

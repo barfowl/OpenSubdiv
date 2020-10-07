@@ -1,0 +1,33 @@
+The changes here are speculative and may not be of any benefit.
+
+The problem of over-refinement -- as originally observed -- may be
+occuring for other reasons and never be triggered as assumed here.
+
+
+This all applies to the FVAR_LINEAR_BOUNDARY case...
+
+These changes are applied to prevent subdivided refined FVar values
+for edges from being set infinitely sharp -- under the premise that
+these refined inf-sharp boundary vertices trigger the creation of
+more irregular patches than necessary.
+
+But adaptive refinement appears not to be triggering successive
+refinement around the refined inf-sharp FVar values -- why?
+
+Is it that the refined boundary FVar values are NOT being tagged
+as inf-sharp?
+
+
+The original problem was discovered as follows:
+
+    - degenerate triangle (000) with distinct FVar values (012)
+
+    - at level 1:
+        - refined vertices from edges are NOT inf-sharp for geometry:
+            - they derive from a non-manifold edge only
+        - refined FVar values from edges ARE inf-sharp for UVs:
+            - this triggered the "sharp ended interior edge" issue
+
+    * adaptive refinement will always generate more patches here:
+        - non-manifold edge triggers refinement, not FVar boundary
+
