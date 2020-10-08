@@ -231,11 +231,35 @@ Crease::GetSharpEdgePairOfCrease(float const * incidentEdgeSharpness, int incide
     //  Only to be called when a crease is present at a vertex -- exactly two sharp
     //  edges are expected here:
     //
-    sharpEdgePair[0] = 0;
-    while (IsSmooth(incidentEdgeSharpness[sharpEdgePair[0]])) ++ sharpEdgePair[0];
+    //  NOTE -- this REALLY requires two sharp edges here or it will read past the
+    //  end of the array.  Consider revising this such that if the two expected sharp
+    //  edges are not found, the first and last are returned -- assuming a boundary.
+    //
+    bool originalSearch = true;
+    if (originalSearch) {
+        sharpEdgePair[0] = 0;
+        while (IsSmooth(incidentEdgeSharpness[sharpEdgePair[0]])) ++ sharpEdgePair[0];
 
-    sharpEdgePair[1] = incidentEdgeCount - 1;
-    while (IsSmooth(incidentEdgeSharpness[sharpEdgePair[1]])) -- sharpEdgePair[1];
+        sharpEdgePair[1] = incidentEdgeCount - 1;
+        while (IsSmooth(incidentEdgeSharpness[sharpEdgePair[1]])) -- sharpEdgePair[1];
+    } else {
+        //  Two sharp edges are expected -- if not found, assume a boundary crease, i.e.
+        //  the first and last edges are implicitly sharp:
+        sharpEdgePair[0] = -1;
+        sharpEdgePair[1] = -1;
+        for (int i = 0; i < incidentEdgeCount; ++i) {
+            if (!IsSmooth(incidentEdgeSharpness[i])) {
+                if (sharpEdgePair[0] < 0) {
+                    sharpEdgePair[0] = i;
+                } else if (sharpEdgePair[1] < 0) {
+                    sharpEdgePair[1] = i;
+                    return;
+                }
+            }
+        }
+        sharpEdgePair[0] = 0;
+        sharpEdgePair[1] = incidentEdgeCount - 1;
+    }
 }
 
 } // end namespace sdc

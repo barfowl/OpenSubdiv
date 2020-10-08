@@ -200,6 +200,8 @@ TopologyRefinerFactoryBase::prepareComponentTagsAndSharpness(
         (Sdc::SchemeTypeTraits::GetLocalNeighborhoodSize(
             refiner.GetSchemeType()) > 0);
 
+    bool sharpenBoundaryEdges = !makeBoundaryFacesHoles;
+
     bool sharpenCornerVerts =
         (options.GetVtxBoundaryInterpolation() ==
             Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
@@ -254,11 +256,26 @@ TopologyRefinerFactoryBase::prepareComponentTagsAndSharpness(
         float& eSharpness = baseLevel.getEdgeSharpness(eIndex);
 
         eTag._boundary = (baseLevel.getNumEdgeFaces(eIndex) < 2);
-        if (eTag._boundary || (eTag._nonManifold && sharpenNonManFeatures)) {
-            eSharpness = Sdc::Crease::SHARPNESS_INFINITE;
+
+        //  Some edges are implicitly inf-sharp but we don't want to override
+        //  user-assigned sharpness unless expected from a specified option:
+        float effectiveSharpness = eSharpness;
+        bool  overrideSharpness  = false;
+
+        if (eTag._boundary) {
+            effectiveSharpness = Sdc::Crease::SHARPNESS_INFINITE;
+            overrideSharpness  = sharpenBoundaryEdges;
+        } else if (eTag._nonManifold) {
+            effectiveSharpness = Sdc::Crease::SHARPNESS_INFINITE;
+            overrideSharpness  = sharpenNonManFeatures;
         }
-        eTag._infSharp  = Sdc::Crease::IsInfinite(eSharpness);
-        eTag._semiSharp = Sdc::Crease::IsSharp(eSharpness) && !eTag._infSharp;
+        if (overrideSharpness) {
+            eSharpness = effectiveSharpness;
+        }
+
+        eTag._infSharp  = Sdc::Crease::IsInfinite(effectiveSharpness);
+        eTag._semiSharp = Sdc::Crease::IsSharp(effectiveSharpness) &&
+                          !eTag._infSharp;
     }
 
     //

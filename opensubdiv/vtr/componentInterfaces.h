@@ -79,12 +79,25 @@ public:
     void SetIndex(int edgeIndex) { _eIndex = edgeIndex; }
 
 public:  //  Generic interface expected of <typename EDGE>:
-    int   GetNumFaces() const { return _level->getEdgeFaces(_eIndex).size(); }
-    float GetSharpness() const { return _level->getEdgeSharpness(_eIndex); }
+    int GetNumFaces() const { return _level->getEdgeFaces(_eIndex).size(); }
+
+    //
+    //  Remember that Vtr implicitly sharpens some edges via the ETags, but sharp
+    //  values must be provided to Sdc to ensure that the appropriate subdivision
+    //  rules are detected (e.g. from 0, 1, 2 or 3 sharp edges) and applied:
+    //
+    float GetSharpness() const {
+        return _level->getEdgeTag(_eIndex)._infSharp ?
+            Sdc::Crease::SHARPNESS_INFINITE : _level->getEdgeSharpness(_eIndex);
+    }
 
     void GetChildSharpnesses(Sdc::Crease const&, float s[2]) const {
-        //  Need to use the Refinement here to identify the two child edges:
-        s[0] = s[1] = GetSharpness() - 1.0f;
+        if (_level->getEdgeTag(_eIndex)._infSharp) {
+            s[0] = s[1] = Sdc::Crease::SHARPNESS_INFINITE;
+        } else {
+            //  Need to use the Refinement here to identify the two child edges:
+            s[0] = s[1] = GetSharpness() - 1.0f;
+        }
     }
 
     void GetNumVerticesPerFace(int vertsPerFace[]) const {
@@ -121,16 +134,28 @@ public:  //  Generic interface expected of <typename VERT>:
     int GetNumEdges() const { return _eCount; }
     int GetNumFaces() const { return _fCount; }
 
-    float  GetSharpness() const { return _parent->getVertexSharpness(_pIndex); }
+    //
+    //  Remember that Vtr implicitly sharpens some features via the tags, but sharp
+    //  values must be provided to Sdc to ensure that the appropriate subdivision
+    //  rules are detected from features that are implicitly or explicily sharpened:
+    //
+    float GetSharpness() const {
+        return _parent->getVertexTag(_pIndex)._infSharp ?
+            Sdc::Crease::SHARPNESS_INFINITE : _parent->getVertexSharpness(_pIndex);
+    }
     float* GetSharpnessPerEdge(float pSharpness[]) const {
         ConstIndexArray pEdges = _parent->getVertexEdges(_pIndex);
         for (int i = 0; i < _eCount; ++i) {
-            pSharpness[i] = _parent->getEdgeSharpness(pEdges[i]);
+            pSharpness[i] = _parent->getEdgeTag(pEdges[i])._infSharp ?
+                Sdc::Crease::SHARPNESS_INFINITE : _parent->getEdgeSharpness(pEdges[i]);
         }
         return pSharpness;
     }
 
-    float  GetChildSharpness(Sdc::Crease const&) const { return _child->getVertexSharpness(_cIndex); }
+    float GetChildSharpness(Sdc::Crease const&) const {
+        return _child->getVertexTag(_cIndex)._infSharp ?
+            Sdc::Crease::SHARPNESS_INFINITE : _child->getVertexSharpness(_cIndex);
+    }
     float* GetChildSharpnessPerEdge(Sdc::Crease const& crease, float cSharpness[]) const {
         internal::StackBuffer<float,16> pSharpness(_eCount);
         GetSharpnessPerEdge(pSharpness);

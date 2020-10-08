@@ -537,7 +537,10 @@ PrimvarRefinerReal<REAL>::interpFromEdges(int level, T const & src, U & dst) con
 
         eHood.SetIndex(edge);
 
-        Sdc::Crease::Rule pRule = (parent.getEdgeSharpness(edge) > 0.0f) ? Sdc::Crease::RULE_CREASE : Sdc::Crease::RULE_SMOOTH;
+        Vtr::internal::Level::ETag eTag = parent.getEdgeTag(edge);
+
+        Sdc::Crease::Rule pRule = (eTag._infSharp || eTag._semiSharp)
+                                ? Sdc::Crease::RULE_CREASE : Sdc::Crease::RULE_SMOOTH;
         Sdc::Crease::Rule cRule = child.getVertexRule(cVert);
 
         scheme.ComputeEdgeVertexMask(eHood, eMask, pRule, cRule);
@@ -753,7 +756,9 @@ PrimvarRefinerReal<REAL>::interpFVarFromEdges(int level, T const & src, U & dst,
             if (!isLinearFVar) {
                 eHood.SetIndex(edge);
 
-                Sdc::Crease::Rule pRule = (parentLevel.getEdgeSharpness(edge) > 0.0f)
+                Vtr::internal::Level::ETag eTag = parentLevel.getEdgeTag(edge);
+
+                Sdc::Crease::Rule pRule = (eTag._infSharp || eTag._semiSharp)
                                         ? Sdc::Crease::RULE_CREASE : Sdc::Crease::RULE_SMOOTH;
                 Sdc::Crease::Rule cRule = childLevel.getVertexRule(cVert);
 

@@ -537,6 +537,7 @@ Scheme<SCHEME>::ComputeVertexVertexMask(VERTEX const&   vertex,
                                   (pRule == Crease::RULE_CREASE) ||
                                   (pRule != cRule);
     if (requireParentSharpness) {
+//  Vertex sharpness is gathered here for a CREASE...
         pVertexSharpness = vertex.GetSharpness();
         pEdgeSharpness   = vertex.GetSharpnessPerEdge(pEdgeSharpnessBuffer);
 
@@ -548,6 +549,7 @@ Scheme<SCHEME>::ComputeVertexVertexMask(VERTEX const&   vertex,
         assignSmoothMaskForVertex(vertex, mask);
         return;  //  As done on entry, we can return immediately if parent is Smooth/Dart
     } else if (pRule == Crease::RULE_CREASE) {
+//  ... and inspected here to idenfity the pair of edges for the CREASE
         int creaseEnds[2];
         Crease(_options).GetSharpEdgePairOfCrease(pEdgeSharpness, valence, creaseEnds);
 

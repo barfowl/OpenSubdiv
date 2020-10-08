@@ -1,0 +1,39 @@
+Some unexpected behavior has been noted as a result of not sharpening boundary edges...
+
+    - the triangle/Loop case produces incorrect corner patches
+
+    - uniform refinement produces incorrectly interpolated values in many cases
+
+
+Other thoughts...
+
+    Consider that the initially assigned _rule in the VTags is impacted by sharpness
+    values and counts -- not sharpening the edge and not compensating for the same
+    logic when setting the _rule may lead to mis-classification.  The number of edges
+    semi-sharp, inf-sharp, etc. is based on the tags -- initialized based on effective
+    sharpness -- so this should be correct.  The vertex sharpness shouldn't really
+    impact this, as we don't care about "effective sharpness" for vertices...
+
+
+UPDATE...
+
+    Scope has become clearer:  Far is not going to sharpen client boundary edges, but
+    Sdc wants boundary edges to detect creases and other features properly at the
+    lowest level.
+    
+    Let Vtr -- the VERTEX and EDGE component interfaces in particular -- provide the
+    implicitly sharpened values to Sdc based on Vtr's tags.  All Far code should be
+    using the tags for topological queries, not the sharpness values.
+
+    Note there is an oversight in far/primvarRefiner -- the sharpness values are used
+    to infer crease, corner, etc. rather than the tags.
+
+    Local changes to the library include:
+        far:  - the PrimvarRefiner's use of sharpness values instead of tags
+        vtr:  - the componentInterfaces are modified to return sharp boundary
+                edges based on the tags
+        sdc:  * technically nothing necessary here
+              - any existing changes were experimental
+
+    Additional changes to Hbr related regression utilities -- both hbr_regression
+    and common/hbr_utils.h -- are also noteworthy.
