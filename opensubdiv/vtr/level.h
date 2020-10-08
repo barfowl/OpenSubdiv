@@ -375,6 +375,8 @@ public:
     int gatherTriRegularCornerEdgePatchPoints(    Index fIndex, Index patchVerts[], int cornerEdgeInFace) const;
 
 public:
+    void setDepth(int depth) { _depth = depth; }
+
     //  Sizing methods used to construct a level to populate:
     void resizeFaces(       int numFaces);
     void resizeFaceVertices(int numFaceVertsTotal);

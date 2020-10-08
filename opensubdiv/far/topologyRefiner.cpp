@@ -92,6 +92,50 @@ TopologyRefiner::TopologyRefiner(TopologyRefiner const & source) :
     assembleFarLevels();
 }
 
+//
+//  This partial copy constructor is protected and used by the factory to create a new
+//  instance from a specified level of the given instance.  Unlike the constructor that
+//  shares the base level, the level here is copied.  The new copy of the level must
+//  also be modified in some minor ways for use as a base level -- aside from the
+//  obvious depth assignment, there are some assigned during refinement that warrant
+//  changes for the base level.
+//
+TopologyRefiner::TopologyRefiner(TopologyRefiner const & source, int level) :
+    _subdivType(source._subdivType),
+    _subdivOptions(source._subdivOptions),
+    _isUniform(true),
+    _hasHoles(source._hasHoles),
+    _hasIrregFaces(source._hasIrregFaces),
+    _regFaceSize(source._regFaceSize),
+    _maxLevel(0),
+    _uniformOptions(0),
+    _adaptiveOptions(0),
+    _baseLevelOwned(true) {
+
+    _levels.reserve(10);
+
+    //
+    //  Need a couple additions to Vtr::Level to properly support this:
+    //      - verify that it is truly copy-constructible
+    //      - need a setDepth() method
+    //
+    Vtr::internal::Level * newLevel = new Vtr::internal::Level(*source._levels[level]);
+    if (level > 0) {
+        _hasHoles      = source._isUniform ? source._hasHoles : false;
+        _hasIrregFaces = false;
+
+        newLevel->setDepth(0);
+        //  Need possible tweaks to the VTags ("complete", etc.)
+        //      * when adaptive, other tags may be invalid where "incomplete"
+        //     ** this could be the deal-breaker -- for adaptive and all...
+    }
+    _levels.push_back(newLevel);
+
+    initializeInventory();
+
+    _farLevels.reserve(10);
+    assembleFarLevels();
+}
 
 TopologyRefiner::~TopologyRefiner() {
 

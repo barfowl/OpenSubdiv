@@ -127,6 +127,10 @@ public:
     ///
     static TopologyRefiner* Create(TopologyRefiner const & baseLevel);
 
+    /// \brief Instantiates a TopologyRefiner from a copy of a level of an
+    ///        existing instance.
+    static TopologyRefiner* Create(TopologyRefiner const & refiner, int level);
+
 protected:
     typedef Vtr::internal::Level::TopologyError TopologyError;
 
@@ -351,6 +355,19 @@ TopologyRefiner*
 TopologyRefinerFactory<MESH>::Create(TopologyRefiner const & source) {
 
     return new TopologyRefiner(source);
+}
+
+template <class MESH>
+TopologyRefiner*
+TopologyRefinerFactory<MESH>::Create(TopologyRefiner const & source, int level) {
+
+    //
+    //  Some error checking here is warranted before attempting to construct:
+    //      - the level needs to be valid
+    //      - if the last level, it needs to have full topology
+    //      ? anything else...
+    //
+    return new TopologyRefiner(source, level);
 }
 
 template <class MESH>

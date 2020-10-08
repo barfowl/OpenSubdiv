@@ -219,8 +219,9 @@ protected:
     template <typename REAL>
     friend class PrimvarRefinerReal;
 
-    //  Copy constructor exposed via the factory class:
+    //  Specialized "copy constructors" exposed via the factory class:
     TopologyRefiner(TopologyRefiner const & source);
+    TopologyRefiner(TopologyRefiner const & source, int level);
 
     Vtr::internal::Level & getLevel(int l) { return *_levels[l]; }
     Vtr::internal::Level const & getLevel(int l) const { return *_levels[l]; }
