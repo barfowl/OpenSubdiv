@@ -27,16 +27,27 @@
 #-------------------------------------------------------------------------------
 # source & headers
 set(SOURCE_FILES
+     faceBuilders.cpp
+     faceDescriptors.cpp
+     limitSurface.cpp
+     limitSurfaceFactory.cpp
      parameterization.cpp
+     refinerLimitSurfaceFactory.cpp
      tessellation.cpp
+     topologyCache.cpp
 )
 
 set(PRIVATE_HEADER_FILES
+     faceBuilders.h
 )
 
 set(PUBLIC_HEADER_FILES
-     parameterization.h
+     faceDescriptors.h
+     limitSurface.h
+     limitSurfaceFactory.h
+     refinerLimitSurfaceFactory.h
      tessellation.h
+     topologyCache.h
      types.h
 )
 
