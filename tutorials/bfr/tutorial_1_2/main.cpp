@@ -448,30 +448,35 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         {
             limitSurfaceXYZPoints.resize(vtxEval->GetNumPatchPoints());
 
-            vtxEval->PreparePatchPointValues(&baseMeshVertexXYZs[0],
-                                             &limitSurfaceXYZPoints[0]);
+            vtxEval->PreparePatchPointValues(baseMeshVertexXYZs,
+                                             limitSurfaceXYZPoints);
 
             tessXYZ.resize(numTessCoords);
             tessDu.resize(numTessCoords);
             tessDv.resize(numTessCoords);
 
-            vtxEval->Evaluate(numTessCoords, &tessCoords[0],
-                              &limitSurfaceXYZPoints[0],
-                              &tessXYZ[0], &tessDu[0], &tessDv[0]);
+            for (int i = 0; i < numTessCoords; ++i) {
+                vtxEval->Evaluate(tessCoords[i][0], tessCoords[i][1],
+                                  limitSurfaceXYZPoints,
+                                  tessXYZ[i], tessDu[i], tessDv[i]);
+            }
         }
 
         Bfr::Evaluator const * fvarEval = limitSurface.GetFaceVaryingEvaluator();
         if (fvarEval) {
             limitSurfaceUVPoints.resize(fvarEval->GetNumPatchPoints());
 
-            fvarEval->PreparePatchPointValues(&baseMeshFVarUVs[0],
-                                              &limitSurfaceUVPoints[0]);
+            fvarEval->PreparePatchPointValues(baseMeshFVarUVs,
+                                              limitSurfaceUVPoints);
 
             tessUV.resize(numTessCoords);
 
-            fvarEval->Evaluate(numTessCoords, &tessCoords[0],
-                               &limitSurfaceUVPoints[0],
-                               &tessUV[0]);
+            for (int i = 0; i < numTessCoords; ++i) {
+                Vec3f tmpDu, tmpDv;  // WIP - future overload will avoid these
+                fvarEval->Evaluate(tessCoords[i][0], tessCoords[i][1],
+                                   limitSurfaceUVPoints,
+                                   tessUV[i], tmpDu, tmpDv);
+            }
         }
 
         //

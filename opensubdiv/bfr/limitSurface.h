@@ -111,15 +111,11 @@ public:
         int GetNumPatchPoints() const { return _numPatchPoints; }
 
         template <class T, class U> void
-        PreparePatchPointValues(T const * meshVertices, U * patchPoints) const;
+        PreparePatchPointValues(T const & meshVertices, U & patchPoints) const;
 
         template <class T, class U> void
         Evaluate(float u, float v,
-                 T const * patchPoints, U & P, U & Du, U & Dv) const;
-
-        template <class T, class U> void
-        Evaluate(int numUVs, Coord const uvs[],
-                 T const * patchPoints, U * P, U * Du = 0, U * Dv = 0) const;
+                 T const & patchPoints, U & P, U & Du, U & Dv) const;
 
         //
         //  The "control vertices" identify the subset of vertices of the
@@ -135,7 +131,7 @@ public:
         ConstIndexArray GetControlVertexIndices() const;
 
         template <class T, class U> void
-        GatherControlVertexValues(T const * meshVerts, U * controlVerts) const;
+        GatherControlVertexValues(T const & meshVerts, U & controlVerts) const;
 /*
         int EvaluateStencils(float u, float v, float wP[],
                                                float wDu[] = 0,
@@ -246,7 +242,7 @@ Evaluator::GetControlVertexIndices() const {
 }
 
 template <class T, class U> void
-Evaluator::GatherControlVertexValues(T const * meshPoints, U * controlPoints) const {
+Evaluator::GatherControlVertexValues(T const & meshPoints, U & controlPoints) const {
     for (int i = 0; i < _numControlPoints; ++i) {
         //  Cannot guarantee that type T is copy-constructible, i.e.:
         //
@@ -258,7 +254,7 @@ Evaluator::GatherControlVertexValues(T const * meshPoints, U * controlPoints) co
 }
 
 template <class T, class U> void
-Evaluator::PreparePatchPointValues(T const * meshPoints, U * patchPoints) const {
+Evaluator::PreparePatchPointValues(T const & meshPoints, U & patchPoints) const {
 
     GatherControlVertexValues(meshPoints, patchPoints);
 
@@ -272,7 +268,7 @@ Evaluator::PreparePatchPointValues(T const * meshPoints, U * patchPoints) const 
 //  Evaluation method templates:
 //
 template <class T, class U> void
-Evaluator::Evaluate(float u, float v, T const * patchPoints,
+Evaluator::Evaluate(float u, float v, T const & patchPoints,
                        U & P, U & Du, U & Dv) const {
 
     float wP[20], wDu[20], wDv[20];
@@ -329,26 +325,6 @@ Evaluator::Evaluate(float u, float v, T const * patchPoints,
             P.AddWithWeight( patchPoints[subPatchPointIndices[i]], wP[i]);
             Du.AddWithWeight(patchPoints[subPatchPointIndices[i]], wDu[i]);
             Dv.AddWithWeight(patchPoints[subPatchPointIndices[i]], wDv[i]);
-        }
-    }
-}
-
-//  Unclear if we want to use Coord[] or something more primitive here:
-template <class T, class U> void
-Evaluator::Evaluate(int numCoords, Coord const coords[],
-                    T const * patchPoints, U * P, U * Du, U * Dv) const {
-
-    if (Du && Dv) {
-        for (int i = 0; i < numCoords; ++i) {
-            float const * uv = coords[i].uv;
-            Evaluate(uv[0], uv[1], patchPoints, P[i], Du[i], Dv[i]);
-        }
-    } else {
-        //  WIP - this is temporary, should never construct these user types
-        U DuTmp, DvTmp;
-        for (int i = 0; i < numCoords; ++i) {
-            float const * uv = coords[i].uv;
-            Evaluate(uv[0], uv[1], patchPoints, P[i], DuTmp, DvTmp);
         }
     }
 }
