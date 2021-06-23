@@ -98,8 +98,8 @@ LimitSurface::clear() {
 //  Evaluation methods accessing the local data for a simple regular patch:
 //
 void
-Evaluator::evalRegularPatch(float u, float v,
-                               float wP[], float wDu[], float wDv[]) const {
+Evaluator::evalRegularPatchBasis(float u, float v,
+        float wP[], float wDu[], float wDv[]) const {
 
     Far::internal::EvaluatePatchBasisNormalized(
             _regPatchType, _regPatchParam, u, v, wP, wDu, wDv);
@@ -108,34 +108,9 @@ Evaluator::evalRegularPatch(float u, float v,
 //
 //  Evaluation methods accessing the Far::PatchTree for irregular patches:
 //
-namespace {
-    //  WIP - this should now be redundant given Bfr::Parameterization
-    template <typename REAL, typename INT>
-    inline void
-    irregUvToPtexUv(REAL u, REAL v, INT & ptexID, REAL & ptexU, REAL & ptexV) {
-        ptexID = (INT) u;
-        ptexU = 2.0f * (u - ptexID);
-        ptexV = 2.0f *  v;
-    }
-
-    inline void
-    convertSubFaceWeightsToBase(int N, float const wSub[4], float wBase[4]) {
-
-        float wOrigin = wSub[0];
-        float wNext   = wSub[1] * 0.5f;
-        float wCenter = wSub[2] / (float)N;
-        float wPrev   = wSub[3] * 0.5f;
-
-        wBase[0] = wCenter + wNext + wPrev + wOrigin;
-        wBase[1] = wCenter + wNext;
-        wBase[2] = wCenter;
-        wBase[3] = wCenter + wPrev;
-    }
-}
-
 ConstIndexArray
-Evaluator::evalIrregularPatch(float u, float v,
-                              float wP[], float wDu[], float wDv[]) const {
+Evaluator::evalIrregularPatchBasis(float u, float v,
+        float wP[], float wDu[], float wDv[]) const {
 
     Parameterization const & param = _limitSurface._param;
 
@@ -152,25 +127,62 @@ Evaluator::evalIrregularPatch(float u, float v,
     return _irregPatch->GetSubPatchPoints(subPatchIndex);
 }
 
+//
+//  Evaluation methods for the N-sided quadrangulated linear patch:
+//
+//  Rather than computing a set of weights for potentially large N, basis
+//  evaluation computes basis functions on the containing bilinear sub-face
+//  (only 4 weights) and transforms them to a set of 4 unique weights to
+//  be used for all N base points.
+//
+namespace {
+    //
+    //  Regardless of N, there are four unique weights derived from the
+    //  four bilinear weights of the sub-face.  Given these weights as
+    //  input for a sub-face with origin at base point P, the resulting
+    //  weights are associated with the N base points as follows:
+    //
+    //      w[0] = the point at the origin (P)
+    //      w[1] = the point following P
+    //      w[2] = the N-3 points not adjacent to P (contributing to center)
+    //      w[3] = the point preceding P
+    //
+    inline void
+    transformSubFaceWeightsToBase(int N, float w[4]) {
+
+        float wOrigin = w[0];
+        float wNext   = w[1] * 0.5f;
+        float wCenter = w[2] / (float)N;
+        float wPrev   = w[3] * 0.5f;
+
+        w[0] = wCenter + wNext + wPrev + wOrigin;
+        w[1] = wCenter + wNext;
+        w[2] = wCenter;
+        w[3] = wCenter + wPrev;
+    }
+}
+
 int
-Evaluator::evalIrregularLinearPatch(float u, float v,
-                                    float wP[], float wDu[], float wDv[]) const {
+Evaluator::evalMultiLinearPatchBasis(float u, float v,
+        float wP[4], float wDu[4], float wDv[4]) const {
 
     Parameterization const & param = _limitSurface._param;
     assert(param.GetType() == Parameterization::QPOLY);
 
     int subFace = param.ConvertQPolyUVToNormalizedSubQuad(u, v, u, v);
 
-    float wsP[4], wsDu[4], wsDv[4];
-    //  This may be optimized out internally and so may not link with -O...
-    //      Far::internal::EvalBasisLinear(u, v, wsP, wsDu, wsDv);
-    //  WIP - Fix far/patchBasis so we can use the Linear functions
+    //  WIP - Prefer to eval Linear basis directly, i.e.:
+    //
+    //      Far::internal::EvalBasisLinear(u, v, wP, wDu, wDv);
+    //
+    //  but this internal Far function is sometimes optimized out, causing
+    //  link errors.  Need to fix in Far with explicit instantiation...
     Far::internal::EvaluatePatchBasisNormalized(
-        Far::PatchDescriptor::QUADS, Far::PatchParam(), u, v, wsP, wsDu, wsDv);
+        Far::PatchDescriptor::QUADS, Far::PatchParam(), u, v, wP, wDu, wDv);
 
-    convertSubFaceWeightsToBase(_numControlPoints, wsP,  wP);
-    convertSubFaceWeightsToBase(_numControlPoints, wsDu, wDu);
-    convertSubFaceWeightsToBase(_numControlPoints, wsDv, wDv);
+    transformSubFaceWeightsToBase(_numControlPoints, wP);
+    if (wDu) transformSubFaceWeightsToBase(_numControlPoints, wDu);
+    if (wDv) transformSubFaceWeightsToBase(_numControlPoints, wDv);
 
     return subFace;
 }

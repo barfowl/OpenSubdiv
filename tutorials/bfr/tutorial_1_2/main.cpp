@@ -472,10 +472,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
             tessUV.resize(numTessCoords);
 
             for (int i = 0; i < numTessCoords; ++i) {
-                Vec3f tmpDu, tmpDv;  // WIP - future overload will avoid these
                 fvarEval->Evaluate(tessCoords[i][0], tessCoords[i][1],
                                    limitSurfaceUVPoints,
-                                   tessUV[i], tmpDu, tmpDv);
+                                   tessUV[i]);
             }
         }
 

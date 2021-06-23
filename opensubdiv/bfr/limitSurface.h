@@ -110,12 +110,17 @@ public:
         //
         int GetNumPatchPoints() const { return _numPatchPoints; }
 
-        template <class T, class U> void
-        PreparePatchPointValues(T const & meshVertices, U & patchPoints) const;
+        template <class T, class U>
+        void PreparePatchPointValues(T const & meshVertices,
+                                     U       & patchPoints) const;
 
-        template <class T, class U> void
-        Evaluate(float u, float v,
-                 T const & patchPoints, U & P, U & Du, U & Dv) const;
+        //  WIP - overload with references or optional pointer arguments?
+        template <class T, class U>
+        void Evaluate(float u, float v, T const & patchPoints, U & P) const;
+
+        template <class T, class U>
+        void Evaluate(float u, float v, T const & patchPoints, U & P,
+                      U & Du, U & Dv) const;
 
         //
         //  The "control vertices" identify the subset of vertices of the
@@ -130,8 +135,9 @@ public:
 
         ConstIndexArray GetControlVertexIndices() const;
 
-        template <class T, class U> void
-        GatherControlVertexValues(T const & meshVerts, U & controlVerts) const;
+        template <class T, class U>
+        void GatherControlVertexValues(T const & meshVerts,
+                                       U       & controlVerts) const;
 /*
         int EvaluateStencils(float u, float v, float wP[],
                                                float wDu[] = 0,
@@ -151,18 +157,35 @@ public:
 
         bool isValid() const { return _numControlPoints > 0; }
 
+        //  WIP - internal support of overloaded eval methods (this may yet
+        //  replace them as the primary public eval method)
+        template <class T, class U>
+        void evaluate(float u, float v, T const & patchPoints,
+                U * P, U * Du = 0, U * Dv = 0) const;
+
         //  Dealing directly with StencilTable may provide more flexibility
         //  than the public method that applies it (like the PatchTable):
         Far::StencilTableReal<float> const * getIrregPatchStencilTable() const;
 
         //  Evaluation of basis functions and contributing points of internal
         //  patch (implicit for a regular patch):
-        void evalRegularPatch(float u, float v,
+        void evalRegularPatchBasis(float u, float v,
                 float wP[], float wDu[], float wDv[]) const;
-        ConstIndexArray evalIrregularPatch(float u, float v,
+        ConstIndexArray evalIrregularPatchBasis(float u, float v,
                 float wP[], float wDu[], float wDv[]) const;
-        int evalIrregularLinearPatch(float u, float v,
-                float wP[], float wDu[], float wDv[]) const;
+        int evalMultiLinearPatchBasis(float u, float v,
+                float wP[4], float wDu[4], float wDv[4]) const;
+
+        //  Evaluation to combine basis functions and contributing points:
+        template <class T, class U>
+        void evalRegularPatch(float u, float v, T const & patchPoints,
+                U * P, U * Du = 0, U * Dv = 0) const;
+        template <class T, class U>
+        void evalIrregularPatch(float u, float v, T const & patchPoints,
+                U * P, U * Du = 0, U * Dv = 0) const;
+        template <class T, class U>
+        void evalMultiLinearPatch(float u, float v, T const & patchPoints,
+                U * P, U * Du = 0, U * Dv = 0) const;
 
     private:
         //  Private members (inc ref back to LimitSurface that contains it)
@@ -241,20 +264,22 @@ Evaluator::GetControlVertexIndices() const {
     return ConstIndexArray(&_controlPoints[0], (int)_controlPoints.GetSize());
 }
 
-template <class T, class U> void
-Evaluator::GatherControlVertexValues(T const & meshPoints, U & controlPoints) const {
+template <class T, class U>
+void
+Evaluator::GatherControlVertexValues(T const & meshPoints,
+                                     U       & controlPoints) const {
     for (int i = 0; i < _numControlPoints; ++i) {
-        //  Cannot guarantee that type T is copy-constructible, i.e.:
-        //
-        //    controlPoints[i] = meshPoints[_vtxEval._controlPoints[i]];
-        //
+        //  WIP - Cannot guarantee that type T is copyable here, so must
+        //  use Clear() and AddWithWeight():
         controlPoints[i].Clear();
         controlPoints[i].AddWithWeight(meshPoints[_controlPoints[i]], 1.0f);
     }
 }
 
-template <class T, class U> void
-Evaluator::PreparePatchPointValues(T const & meshPoints, U & patchPoints) const {
+template <class T, class U>
+void
+Evaluator::PreparePatchPointValues(T const & meshPoints,
+                                   U       & patchPoints) const {
 
     GatherControlVertexValues(meshPoints, patchPoints);
 
@@ -267,66 +292,142 @@ Evaluator::PreparePatchPointValues(T const & meshPoints, U & patchPoints) const 
 //
 //  Evaluation method templates:
 //
-template <class T, class U> void
-Evaluator::Evaluate(float u, float v, T const & patchPoints,
-                       U & P, U & Du, U & Dv) const {
+template <class T, class U>
+void
+Evaluator::evalRegularPatch(float u, float v, T const & patchPoints,
+                            U * P, U * Du, U * Dv) const {
+    //
+    //  Regular basis evaluation simply returns weights for use with
+    //  the entire set of patch control points:
+    //
+    if (Du && Dv) {
+        float wP[20], wDu[20], wDv[20];
+        evalRegularPatchBasis(u, v, wP, wDu, wDv);
 
-    float wP[20], wDu[20], wDv[20];
-
-    P.Clear();
-    Du.Clear();
-    Dv.Clear();
-
-    if (_isRegular) {
-        //
-        //  Regular patch evaluation simply returns weights in terms of the
-        //  assigned control points:
-        //
-        evalRegularPatch(u, v, wP, wDu, wDv);
+        P->Clear();
+        Du->Clear();
+        Dv->Clear();
         for (int i = 0; i < _numControlPoints; ++i) {
-            P.AddWithWeight( patchPoints[i], wP[i]);
-            Du.AddWithWeight(patchPoints[i], wDu[i]);
-            Dv.AddWithWeight(patchPoints[i], wDv[i]);
-        }
-    } else if (_isLinear) {
-        //
-        //  Linear evaluation of irregular N-sided faces (usually for varying
-        //  or linear face-varying cases) quadrangulates the face implicitly
-        //  as part of evaluation.  The control point that is the origin of
-        //  the sub-face is returned along with the weights adjusted to apply
-        //  to the full set of control points:
-        //
-        int iOrigin = evalIrregularLinearPatch(u, v, wP, wDu, wDv);
-        int iNext   = (iOrigin + 1) % _numControlPoints;
-        int iPrev   = (iOrigin + _numControlPoints - 1) % _numControlPoints;
-
-        for (int i = 0; i < _numControlPoints; ++i) {
-            int wIndex = 2;
-            if (i == iOrigin) {
-                wIndex = 0;
-            } else if (i == iNext) {
-                wIndex = 1;
-            } else if (i == iPrev) {
-                wIndex = 3;
-            }
-            P.AddWithWeight( patchPoints[i], wP[wIndex]);
-            Du.AddWithWeight(patchPoints[i], wDu[wIndex]);
-            Dv.AddWithWeight(patchPoints[i], wDv[wIndex]);
+            P->AddWithWeight( patchPoints[i], wP[i]);
+            Du->AddWithWeight(patchPoints[i], wDu[i]);
+            Dv->AddWithWeight(patchPoints[i], wDv[i]);
         }
     } else {
-        //
-        //  Non-linear irregular patch evaluation returns both the weights
-        //  and the corresponding points of a sub-patch defined by a subset
-        //  of the given patch points:
-        //
-        ConstIndexArray subPatchPointIndices =
-                evalIrregularPatch(u, v, wP, wDu, wDv);
-        for (int i = 0; i < subPatchPointIndices.size(); ++i) {
-            P.AddWithWeight( patchPoints[subPatchPointIndices[i]], wP[i]);
-            Du.AddWithWeight(patchPoints[subPatchPointIndices[i]], wDu[i]);
-            Dv.AddWithWeight(patchPoints[subPatchPointIndices[i]], wDv[i]);
+        float wP[20];
+        evalRegularPatchBasis(u, v, wP, 0, 0);
+
+        P->Clear();
+        for (int i = 0; i < _numControlPoints; ++i) {
+            P->AddWithWeight(patchPoints[i], wP[i]);
         }
     }
+}
+
+template <class T, class U>
+void
+Evaluator::evalIrregularPatch(float u, float v, T const & patchPoints,
+                              U * P, U * Du, U * Dv) const {
+    //
+    //  Non-linear irregular basis evaluation returns both the weights
+    //  and the corresponding points of a sub-patch defined by a subset
+    //  of the given patch points:
+    //
+    if (Du && Dv) {
+        float wP[20], wDu[20], wDv[20];
+        ConstIndexArray subPatchPointIndices =
+                evalIrregularPatchBasis(u, v, wP, wDu, wDv);
+
+        P->Clear();
+        Du->Clear();
+        Dv->Clear();
+        for (int i = 0; i < subPatchPointIndices.size(); ++i) {
+            P->AddWithWeight( patchPoints[subPatchPointIndices[i]], wP[i]);
+            Du->AddWithWeight(patchPoints[subPatchPointIndices[i]], wDu[i]);
+            Dv->AddWithWeight(patchPoints[subPatchPointIndices[i]], wDv[i]);
+        }
+    } else {
+        float wP[20];
+        ConstIndexArray subPatchPointIndices =
+                evalIrregularPatchBasis(u, v, wP, 0, 0);
+
+        P->Clear();
+        for (int i = 0; i < subPatchPointIndices.size(); ++i) {
+            P->AddWithWeight( patchPoints[subPatchPointIndices[i]], wP[i]);
+        }
+    }
+}
+
+template <class T, class U>
+void
+Evaluator::evalMultiLinearPatch(float u, float v, T const & patchPoints,
+                                U * P, U * Du, U * Dv) const {
+    //
+    //  Linear evaluation of irregular N-sided faces (usually for varying
+    //  or linear face-varying cases) quadrangulates the face implicitly
+    //  as part of evaluation.  The control point that is the origin of
+    //  the sub-face is returned along with the weights adjusted to apply
+    //  to the full set of control points:
+    //
+    bool eval1stDerivs = (Du && Dv);
+
+    float wP[4], wDu[4], wDv[4];
+
+    int iOrigin = eval1stDerivs ?
+                  evalMultiLinearPatchBasis(u, v, wP, wDu, wDv) :
+                  evalMultiLinearPatchBasis(u, v, wP, 0, 0);
+
+    int iNext = (iOrigin + 1) % _numControlPoints;
+    int iPrev = (iOrigin + _numControlPoints - 1) % _numControlPoints;
+
+    P->Clear();
+    if (eval1stDerivs) {
+        Du->Clear();
+        Dv->Clear();
+    }
+    for (int i = 0; i < _numControlPoints; ++i) {
+        int wIndex = 2;
+        if (i == iOrigin) {
+            wIndex = 0;
+        } else if (i == iNext) {
+            wIndex = 1;
+        } else if (i == iPrev) {
+            wIndex = 3;
+        }
+        P->AddWithWeight( patchPoints[i], wP[wIndex]);
+        if (eval1stDerivs) {
+            Du->AddWithWeight(patchPoints[i], wDu[wIndex]);
+            Dv->AddWithWeight(patchPoints[i], wDv[wIndex]);
+        }
+    }
+}
+
+template <class T, class U>
+inline void
+Evaluator::evaluate(float u, float v, T const & patchPoints,
+                    U * P, U * Du, U * Dv) const {
+
+    if (_isRegular) {
+        evalRegularPatch(u, v, patchPoints, P, Du, Dv);
+    } else if (_isLinear) {
+        evalMultiLinearPatch(u, v, patchPoints, P, Du, Dv);
+    } else {
+        evalIrregularPatch(u, v, patchPoints, P, Du, Dv);
+    }
+}
+
+template <class T, class U>
+inline void
+Evaluator::Evaluate(float u, float v, T const & patchPoints,
+                    U & P, U & Du, U & Dv) const {
+
+    evaluate(u, v, patchPoints, &P, &Du, &Dv);
+}
+
+template <class T, class U>
+inline void
+Evaluator::Evaluate(float u, float v, T const & patchPoints, U & P) const {
+
+    evaluate(u, v, patchPoints, &P);
 }
 
 } // end namespace Bfr
