@@ -83,19 +83,8 @@ public:
     //
     class Options {
     public:
-        Options() : createVtxEval(1), createVarEval(0), createFVarEval(0),
-                    maxLevelPrimary(6), maxLevelSecondary(2),
+        Options() : maxLevelPrimary(6), maxLevelSecondary(2),
                     disableCache(0), extCachePtr(0) { }
-
-        //  Construct Evaluators for vertex, face-varying and varying data:
-        void CreateVertexEvaluators(bool on) { createVtxEval = on; }
-        bool CreateVertexEvaluators()  const { return createVtxEval; }
-
-        void CreateFVarEvaluators(bool on) { createFVarEval = on; }
-        bool CreateFVarEvaluators()  const { return createFVarEval; }
-
-        void CreateVaryingEvaluators(bool on) { createVarEval = on; }
-        bool CreateVaryingEvaluators() const  { return createVarEval; }
 
         //  Alternatives to the default internal TopologyCache:
         void DisableTopologyCache(bool on) { disableCache = on; }
@@ -113,9 +102,6 @@ public:
 
     protected:
         //  Member variables:
-        unsigned int createVtxEval     : 1;
-        unsigned int createVarEval     : 1;
-        unsigned int createFVarEval    : 1;
         unsigned int maxLevelPrimary   : 4;
         unsigned int maxLevelSecondary : 4;
         unsigned int disableCache      : 1;
@@ -132,17 +118,57 @@ public:
     Sdc::SchemeType GetSchemeType() const    { return _schemeType; }
     Sdc::Options    GetSchemeOptions() const { return _schemeOptions; }
 
-    int GetNumFaces() const    { return _numFaces; }
+    int GetNumFaces() const { return _numFaces; }
+    int GetNumFVarChannels() const { return _numFVarTopologies; }
+
     int GetRegFaceSize() const { return _regFaceSize; }
+
+    //
+    //  Options to construct specific Evaluators for the LimitSurface:
+    //
+    class EvaluatorOptions {
+    public:
+        EvaluatorOptions() : _vtxEvaluator(true),
+                             _varEvaluator(false),
+                             _fvarEvaluators(0),
+                             _fvarIndices(0) { }
+
+        //  Construct Evaluators for vertex and/or varying data:
+        void CreateVertexEvaluator(bool on) { _vtxEvaluator = on; }
+        bool CreateVertexEvaluator()  const { return _vtxEvaluator; }
+
+        void CreateVaryingEvaluator(bool on) { _varEvaluator = on; }
+        bool CreateVaryingEvaluator() const  { return _varEvaluator; }
+
+        //  Specify construction of Evaluators for face-varying topologies:
+        //      - specifying the count alone creates [0..count-1]
+        //      - specify explicit indices for an unordered subset
+        void CreateFVarEvaluators(int count) { _fvarEvaluators = count; }
+        int  GetNumFVarEvaluators() const  { return _fvarEvaluators; }
+
+        void SetFVarEvaluatorIndices(int const * iVec) { _fvarIndices = iVec; }
+        int const * GetFVarEvaluatorIndices() const { return _fvarIndices; }
+
+    protected:
+        //  Member variables:
+        unsigned int _vtxEvaluator :  1;
+        unsigned int _varEvaluator :  1;
+
+        int        _fvarEvaluators;
+        int const *_fvarIndices;
+    };
 
     //
     //  Methods to create or re-populate an existing LimitSurface:
     //
     bool FaceHasLimitSurface(Index baseFace) const;
 
-    LimitSurface * Create(Index baseFace) const;
+    LimitSurface * Create(Index            baseFace,
+                          EvaluatorOptions opts = EvaluatorOptions()) const;
 
-    bool Populate(LimitSurface & instance, Index baseFace) const;
+    bool Populate(LimitSurface &   instance,
+                  Index            baseFace,
+                  EvaluatorOptions opts = EvaluatorOptions()) const;
 
 protected:
     //
@@ -151,14 +177,20 @@ protected:
     //  WIP - The number of different FaceDescriptors available will be
     //  reduced, and the nature of those remaining is going to change.
     //
-    virtual bool isFaceHole(Index baseFace) const = 0;
+    virtual bool isFaceHole( Index baseFace) const = 0;
+    virtual int  getFaceSize(Index baseFace) const = 0;
+
+    virtual int getFaceVertexIndices(   Index baseFace,
+                                        Index indices[]) const = 0;
+    virtual int getFaceFVarValueIndices(Index baseFace,
+                                        Index indices[], int fvIndex) const = 0;
 
     virtual bool populateDescriptor(Index baseFace,
-                                    RegularFaceDescriptor  &) const = 0;
+                                    RegularFaceDescriptor &) const = 0;
     virtual bool populateDescriptor(Index baseFace,
                                     ManifoldFaceDescriptor &) const = 0;
     virtual bool populateDescriptor(Index baseFace,
-                                    NonManifoldFaceDescriptor  &) const = 0;
+                                    NonManifoldFaceDescriptor &) const = 0;
 
 protected:
     //
@@ -168,43 +200,34 @@ protected:
         Sdc::SchemeType schemeType,
         Sdc::Options    schemeOptions,
         Options         limitOptions,
-        bool            supportsRegularDescriptors,
-        bool            supportsManifoldDescriptors,
-        bool            supportsNonManifoldDescriptors,
-        int             numFaces);
+        int             numFaces,
+        int             numFVarTopologies);
     virtual ~LimitSurfaceFactory();
 
 private:
     //  Supporting internal methods:
-    void resetSurface(LimitSurface &, Index baseFace) const;
-    void buildSurface(LimitSurface &, internal::RegularFaceBuilder &) const;
-    void buildSurface(LimitSurface &, internal::ManifoldFaceBuilder &) const;
-    void buildSurface(LimitSurface &, internal::NonManifoldFaceBuilder &) const;
+    //      - WIP - hide these from public header if possible
+    bool assignLinearPatch(LimitSurface::Evaluator &, Parameterization p,
+                           int faceIndex, int fvarIndex) const;
 
-    //  May want to hide these from the public header:
-    bool assignRegularPatch(LimitSurface::Evaluator &,
+    bool assignRegularPatch(LimitSurface::Evaluator &, Parameterization p,
                             internal::RegularFaceBuilder const &) const;
 
     template <class INTERNAL_BUILDER_TYPE>
-    bool assignIrregularPatch(LimitSurface::Evaluator &,
+    bool assignIrregularPatch(LimitSurface::Evaluator &, Parameterization p,
                               INTERNAL_BUILDER_TYPE const &) const;
-
-    template <class INTERNAL_BUILDER_TYPE>
-    bool assignLinearPatch(LimitSurface::Evaluator &,
-                           INTERNAL_BUILDER_TYPE const &,
-                           bool faceVarying = false) const;
 
 private:
     Sdc::SchemeType _schemeType;
     Sdc::Options    _schemeOptions;
     Options         _limitOptions;
 
-    unsigned int _supportsRegularDescriptors     : 1;
-    unsigned int _supportsManifoldDescriptors    : 1;
-    unsigned int _supportsNonManifoldDescriptors : 1;
-
-    int _regFaceSize;
     int _numFaces;
+    int _numFVarTopologies;
+
+    int  _regFaceSize;
+    bool _linearScheme;
+    bool _linearFVar;
 
     TopologyCache mutable *  _topologyCache;
 };

@@ -43,6 +43,7 @@ LimitSurface::Evaluator::initialize() {
     _numControlPoints = 0;
     _numPatchPoints   = 0;
 
+    _isValid   = false;
     _isRegular = true;
     _isLinear  = false;
     _isCached  = false;
@@ -59,10 +60,9 @@ LimitSurface::Evaluator::clear() {
 //
 //  LimitSurface constructor and destructor:
 //
-LimitSurface::LimitSurface() :
-        _vtxEval(*this), _varEval(*this), _fvarEval(*this) {
+LimitSurface::LimitSurface() {
 
-    initialize();
+    initialize(0);
 }
 
 LimitSurface::~LimitSurface() {
@@ -71,13 +71,20 @@ LimitSurface::~LimitSurface() {
 }
 
 void
-LimitSurface::initialize() {
+LimitSurface::initialize(int numFVarEvaluators) {
 
     _faceIndex = -1;
 
-    _vtxEval.initialize();
-    _varEval.initialize();
-    _fvarEval.initialize();
+    if (_vtxEval.isValid()) _vtxEval.initialize();
+    if (_varEval.isValid()) _varEval.initialize();
+
+    if (numFVarEvaluators == (int)_fvarEval.GetSize()) {
+        for (int i = 0; i < numFVarEvaluators; ++i) {
+            if (_fvarEval[i].isValid()) _fvarEval[i].initialize();
+        }
+    } else {
+        _fvarEval.SetSize(numFVarEvaluators);
+    }
 }
 
 void
@@ -89,9 +96,12 @@ LimitSurface::parameterize(Parameterization const & param) {
 void
 LimitSurface::clear() {
 
-    _vtxEval.clear();
-    _varEval.clear();
-    _fvarEval.clear();
+    if (_vtxEval.isValid()) _vtxEval.clear();
+    if (_varEval.isValid()) _varEval.clear();
+
+    for (int i = 0; i < (int)_fvarEval.GetSize(); ++i) {
+        if (_fvarEval[i].isValid()) _fvarEval[i].clear();
+    }
 }
 
 //
@@ -112,11 +122,9 @@ ConstIndexArray
 Evaluator::evalIrregularPatchBasis(float u, float v,
         float wP[], float wDu[], float wDv[]) const {
 
-    Parameterization const & param = _limitSurface._param;
-
     int subFace = 0;
-    if (param.GetType() == Parameterization::QPOLY) {
-        subFace = param.ConvertQPolyUVToNormalizedSubQuad(u, v, u, v);
+    if (_param.GetType() == Parameterization::QPOLY) {
+        subFace = _param.ConvertQPolyUVToNormalizedSubQuad(u, v, u, v);
     }
 
     int subPatchIndex = _irregPatch->FindSubPatch(u, v, subFace);
@@ -166,10 +174,9 @@ int
 Evaluator::evalMultiLinearPatchBasis(float u, float v,
         float wP[4], float wDu[4], float wDv[4]) const {
 
-    Parameterization const & param = _limitSurface._param;
-    assert(param.GetType() == Parameterization::QPOLY);
+    assert(_param.GetType() == Parameterization::QPOLY);
 
-    int subFace = param.ConvertQPolyUVToNormalizedSubQuad(u, v, u, v);
+    int subFace = _param.ConvertQPolyUVToNormalizedSubQuad(u, v, u, v);
 
     //  WIP - Prefer to eval Linear basis directly, i.e.:
     //

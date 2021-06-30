@@ -87,12 +87,12 @@ public:
     //  Methods for retrieving Evaluators for varying, face-varying, etc.:
     bool HasVertexEvaluator() const;
     bool HasVaryingEvaluator() const;
-    bool HasFaceVaryingEvaluator() const;
+    bool HasFaceVaryingEvaluator(int fvarIndex = 0) const;
 
     class Evaluator;
     Evaluator const * GetVertexEvaluator() const;
     Evaluator const * GetVaryingEvaluator() const;
-    Evaluator const * GetFaceVaryingEvaluator() const;
+    Evaluator const * GetFaceVaryingEvaluator(int fvarIndex = 0) const;
 
     //
     //  The local Evaluator class contains the evaluation interface used for
@@ -145,17 +145,18 @@ public:
 */
 
     private:
+        template <typename TYPE, unsigned int SIZE, bool POD_TYPE>
+        friend class Vtr::internal::StackBuffer;
         friend class LimitSurface;
         friend class LimitSurfaceFactory;
 
-        Evaluator(LimitSurface const & s) :
-                _limitSurface(s), _numControlPoints(0) { }
+        Evaluator() { initialize(); }
         ~Evaluator() { }
 
         void initialize();
         void clear();
 
-        bool isValid() const { return _numControlPoints > 0; }
+        bool isValid() const { return _isValid; }
 
         //  WIP - internal support of overloaded eval methods (this may yet
         //  replace them as the primary public eval method)
@@ -188,14 +189,14 @@ public:
                 U * P, U * Du = 0, U * Dv = 0) const;
 
     private:
-        //  Private members (inc ref back to LimitSurface that contains it)
-        LimitSurface const & _limitSurface;
+        Parameterization _param;
 
         Vtr::internal::StackBuffer<Index,20,true> _controlPoints;
 
         int _numControlPoints;
         int _numPatchPoints;
 
+        unsigned int _isValid   : 1;
         unsigned int _isRegular : 1;
         unsigned int _isLinear  : 1;
         unsigned int _isCached  : 1;
@@ -210,7 +211,7 @@ protected:
     friend class LimitSurfaceFactory;
 
     void clear();
-    void initialize();
+    void initialize(int numFVarEvaluators);
     void parameterize(Parameterization const & param);
 
 private:
@@ -221,7 +222,8 @@ private:
 
     Evaluator _vtxEval;
     Evaluator _varEval;
-    Evaluator _fvarEval;
+
+    Vtr::internal::StackBuffer<Evaluator,2> _fvarEval;
 };
 
 //  WIP - unclear if Evaluator should be nested or not, revisit this later...
@@ -239,21 +241,22 @@ LimitSurface::HasVaryingEvaluator() const {
     return _varEval.isValid();
 }
 inline bool
-LimitSurface::HasFaceVaryingEvaluator() const {
-    return _fvarEval.isValid();
+LimitSurface::HasFaceVaryingEvaluator(int fvarIndex) const {
+    return (fvarIndex < (int)_fvarEval.GetSize()) &&
+        _fvarEval[fvarIndex].isValid();
 }
 
 inline Evaluator const *
 LimitSurface::GetVertexEvaluator() const {
-    return _vtxEval.isValid() ? &_vtxEval : 0;
+    return HasVertexEvaluator() ? &_vtxEval : 0;
 }
 inline Evaluator const *
 LimitSurface::GetVaryingEvaluator() const {
-    return _varEval.isValid() ? &_varEval : 0;
+    return HasVaryingEvaluator() ? &_varEval : 0;
 }
 inline Evaluator const *
-LimitSurface::GetFaceVaryingEvaluator() const {
-    return _fvarEval.isValid() ? &_fvarEval : 0;
+LimitSurface::GetFaceVaryingEvaluator(int fvarIndex) const {
+    return HasFaceVaryingEvaluator(fvarIndex) ? &_fvarEval[fvarIndex] : 0;
 }
 
 //

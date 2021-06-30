@@ -61,20 +61,26 @@ LimitSurfaceFactory::LimitSurfaceFactory(
     Sdc::SchemeType schemeType,
     Sdc::Options    schemeOptions,
     Options         limitOptions,
-    bool            supportsRegularDescriptors,
-    bool            supportsManifoldDescriptors,
-    bool            supportsNonManifoldDescriptors,
-    int             numFaces) :
+    int             numFaces,
+    int             numFVarTopologies) :
         _schemeType(schemeType),
         _schemeOptions(schemeOptions),
         _limitOptions(limitOptions),
-        _supportsRegularDescriptors(supportsRegularDescriptors),
-        _supportsManifoldDescriptors(supportsManifoldDescriptors),
-        _supportsNonManifoldDescriptors(supportsNonManifoldDescriptors),
         _numFaces(numFaces),
+        _numFVarTopologies(numFVarTopologies),
         _topologyCache(0) {
 
+    //  Iniialize members dependent on mesh topology:
     _regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(_schemeType);
+
+    _linearScheme =
+        (Sdc::SchemeTypeTraits::GetLocalNeighborhoodSize(_schemeType) == 0);
+
+    _linearFVar = _linearScheme || (_numFVarTopologies == 0) ||
+                  (_schemeOptions.GetFVarLinearInterpolation() ==
+                             Sdc::Options::FVAR_LINEAR_ALL);
+
+    _linearFVar = true; //  WIP - non-linear FVar surfaces deferred
 
     //  Assign the topology cache -- externally or to an internal instance:
     if (_limitOptions.ExternalTopologyCache()) {
@@ -155,9 +161,12 @@ LimitSurfaceFactory::FaceHasLimitSurface(Index face) const {
 //
 bool
 LimitSurfaceFactory::assignRegularPatch(LimitSurface::Evaluator & eval,
+        Parameterization param,
         RegularFaceBuilder const & builder) const {
 
     assert(builder.IsFinalized());
+
+    eval._param = param;
 
     //  Initialize the PatchParam for repeated use in evaluation (argument
     //  order is:  face, u, v, depth, non-quad, boundary, trans, regular):
@@ -177,23 +186,19 @@ LimitSurfaceFactory::assignRegularPatch(LimitSurface::Evaluator & eval,
     eval._numControlPoints = patchSize;
     eval._numPatchPoints   = patchSize;
 
+    eval._isValid = true;
     return true;
 }
 
-template <class BUILDER_TYPE>
 bool
 LimitSurfaceFactory::assignLinearPatch(LimitSurface::Evaluator & eval,
-        BUILDER_TYPE const & builder, bool useFaceVaryingIndices) const {
-
-    assert(builder.IsFinalized());
-
-    //  Cannot construct a face-varying evaluator when no FVar values:
-    if (useFaceVaryingIndices && !builder.HasFVarIndices()) {
-        return false;
-    }
+        Parameterization param,
+        int faceIndex, int fvarIndex) const {
 
     //  Initialize instance members from the associated irregular patch:
-    int faceSize = builder.GetFaceSize();
+    int faceSize = param.GetFaceSize();
+
+    eval._param = param;
 
     eval._isRegular = (faceSize == _regFaceSize);
     eval._isLinear  = true;
@@ -206,14 +211,18 @@ LimitSurfaceFactory::assignLinearPatch(LimitSurface::Evaluator & eval,
 
     //  Assign control points from face-vertices of the descriptor/builder:
     eval._controlPoints.SetSize(faceSize);
-    if (useFaceVaryingIndices) {
-        builder.GetFaceFVarValueIndices(&eval._controlPoints[0]);
+    if (fvarIndex < 0) {
+        getFaceVertexIndices(faceIndex, &eval._controlPoints[0]);
     } else {
-        builder.GetFaceVertexIndices(&eval._controlPoints[0]);
+        int nFVarValues = getFaceFVarValueIndices(faceIndex,
+                                &eval._controlPoints[0], fvarIndex);
+        assert(nFVarValues == faceSize);
     }
 
     eval._numControlPoints = faceSize;
     eval._numPatchPoints   = faceSize;
+
+    eval._isValid = true;
     return true;
 }
 
@@ -324,6 +333,7 @@ namespace {
 template <class BUILDER_TYPE>
 bool
 LimitSurfaceFactory::assignIrregularPatch(LimitSurface::Evaluator & eval,
+        Parameterization param,
         BUILDER_TYPE const & builder) const {
 
     Far::PatchTree const * patch = 0;
@@ -356,6 +366,8 @@ LimitSurfaceFactory::assignIrregularPatch(LimitSurface::Evaluator & eval,
     }
 
     //  Initialize instance members from the associated irregular patch:
+    eval._param = param;
+
     eval._isRegular = false;
 
     eval._irregPatch = patch;
@@ -369,107 +381,14 @@ LimitSurfaceFactory::assignIrregularPatch(LimitSurface::Evaluator & eval,
     eval._numControlPoints = patch->GetNumControlPoints();
     eval._numPatchPoints   = patch->GetNumPointsTotal();
 
+    eval._isValid = true;
     return true;
 }
 
-void
-LimitSurfaceFactory::buildSurface(LimitSurface & s,
-        RegularFaceBuilder & regBuilder) const {
-
-    //
-    //  Assign vertex, varying and/or face-varying Evaluators:
-    //
-    s.parameterize(Parameterization(_schemeType, _regFaceSize));
-
-    if (_limitOptions.CreateVertexEvaluators()) {
-        assignRegularPatch(s._vtxEval, regBuilder);
-    }
-    if (_limitOptions.CreateVaryingEvaluators()) {
-        assignLinearPatch(s._varEval, regBuilder);
-    }
-    if (_limitOptions.CreateFVarEvaluators()) {
-        //  WIP - need to support non-linear FVar patch in future,
-        //        which may not be regular (!)
-        assignLinearPatch(s._fvarEval, regBuilder, true);
-    }
-#ifdef _BFR_DEBUG_TOP_TYPE_STATS
-    __numRegularPatches++;
-#endif
-}
-
-void
-LimitSurfaceFactory::buildSurface(LimitSurface & s,
-        ManifoldFaceBuilder & manBuilder) const {
-
-    if (!_supportsRegularDescriptors) {
-        RegularFaceBuilder regBuilder;
-        if (manBuilder.IsRegular(regBuilder)) {
-            buildSurface(s, regBuilder);
-            return;
-        }
-    }
-
-    //
-    //  Assign vertex, varying and/or face-varying Evaluators:
-    //
-    s.parameterize(Parameterization(_schemeType, manBuilder.GetFaceSize()));
-
-    if (_limitOptions.CreateVertexEvaluators()) {
-        assignIrregularPatch(s._vtxEval, manBuilder);
-    }
-    if (_limitOptions.CreateVaryingEvaluators()) {
-        assignLinearPatch(s._varEval, manBuilder);
-    }
-    if (_limitOptions.CreateFVarEvaluators()) {
-        //  WIP - need to support non-linear FVar patch in future
-        assignLinearPatch(s._fvarEval, manBuilder, true);
-    }
-#ifdef _BFR_DEBUG_TOP_TYPE_STATS
-    __numManifoldPatches++;
-#endif
-}
-
-void
-LimitSurfaceFactory::buildSurface(LimitSurface & s,
-        NonManifoldFaceBuilder & nonmanBuilder) const {
-
-    //  WIP - future plans...
-    bool manifoldConversionSupported = false;
-    if (manifoldConversionSupported) {
-        ManifoldFaceBuilder manBuilder;
-        nonmanBuilder.GetManifoldSubset(manBuilder);
-
-        RegularFaceBuilder regBuilder;
-        if (manBuilder.IsRegular(regBuilder)) {
-            buildSurface(s, regBuilder);
-        } else {
-            buildSurface(s, manBuilder);
-        }
-        return;
-    }
-
-    //
-    //  Assign vertex, varying and/or face-varying Evaluators:
-    //
-    s.parameterize(Parameterization(_schemeType, nonmanBuilder.GetFaceSize()));
-
-    if (_limitOptions.CreateVertexEvaluators()) {
-        assignIrregularPatch(s._vtxEval, nonmanBuilder);
-    }
-    if (_limitOptions.CreateVaryingEvaluators()) {
-        assignLinearPatch(s._varEval, nonmanBuilder);
-    }
-    if (_limitOptions.CreateFVarEvaluators()) {
-        //  WIP - need to support non-linear FVar patch in future
-        assignLinearPatch(s._fvarEval, nonmanBuilder, true);
-    }
-#ifdef _BFR_DEBUG_TOP_TYPE_STATS
-    __numOtherPatches++;
-#endif
-}
-
 bool
-LimitSurfaceFactory::Populate(LimitSurface & s, Index baseFace) const {
+LimitSurfaceFactory::Populate(LimitSurface & s,
+                              Index baseFace,
+                              EvaluatorOptions evalOptions) const {
 
     //
     //  Clear and re-initialize the existing instance before re-populating.
@@ -477,11 +396,38 @@ LimitSurfaceFactory::Populate(LimitSurface & s, Index baseFace) const {
     //  parameterized and so can be detected as invalid:
     //
     s.clear();
-    s.initialize();
+    s.initialize(_numFVarTopologies);
 
     s._faceIndex = baseFace;
 
     if (!FaceHasLimitSurface(baseFace)) return false;
+
+    //
+    //  Deal with the trivial linear cases before gathering topology:
+    //
+    s.parameterize(Parameterization(_schemeType, getFaceSize(baseFace)));
+
+    if (evalOptions.CreateVaryingEvaluator()) {
+        assignLinearPatch(s._varEval, s._param, baseFace, -1);
+    }
+    if (evalOptions.CreateVertexEvaluator() && _linearScheme) {
+        assignLinearPatch(s._vtxEval, s._param, baseFace, -1);
+    }
+    if (evalOptions.GetNumFVarEvaluators() && _linearFVar) {
+        int         fvarCount   = evalOptions.GetNumFVarEvaluators();
+        int const * fvarIndices = evalOptions.GetFVarEvaluatorIndices();
+
+        for (int i = 0; i < fvarCount; ++i) {
+            int j = fvarIndices ? fvarIndices[i] : i;
+            if (j < _numFVarTopologies) {
+                assignLinearPatch(s._fvarEval[j], s._param, baseFace, j);
+            }
+        }
+    }
+
+    if (evalOptions.GetNumFVarEvaluators() && !_linearFVar) {
+        assert("Non-linear face-varying surfaces not yet supported." == 0);
+    }
 
     //
     //  Three Descriptor types may be supported and are executed in an order
@@ -489,32 +435,41 @@ LimitSurfaceFactory::Populate(LimitSurface & s, Index baseFace) const {
     //  If the face topology does not support a more specific topology, it
     //  will fail and defer to one less specific.
     //
-    if (_supportsRegularDescriptors) {
+    if (evalOptions.CreateVertexEvaluator() && !_linearScheme) {
         RegularFaceBuilder regBuilder;
         if (populateDescriptor(baseFace, regBuilder)) {
-            buildSurface(s, regBuilder);
+            assignRegularPatch(s._vtxEval, s._param, regBuilder);
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+            __numRegularPatches++;
+#endif
             return true;
         }
-    }
-    if (_supportsManifoldDescriptors) {
+
         ManifoldFaceBuilder manBuilder;
         if (populateDescriptor(baseFace, manBuilder)) {
-            buildSurface(s, manBuilder);
+            assignIrregularPatch(s._vtxEval, s._param, manBuilder);
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+            __numManifoldPatches++;
+#endif
             return true;
         }
-    }
-    if (_supportsNonManifoldDescriptors) {
+
         NonManifoldFaceBuilder nonmanBuilder;
         if (populateDescriptor(baseFace, nonmanBuilder)) {
-            buildSurface(s, nonmanBuilder);
+            assignIrregularPatch(s._vtxEval, s._param, nonmanBuilder);
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+            __numOtherPatches++;
+#endif
             return true;
         }
+        return false;
     }
-    return false;
+    return true;
 }
 
 LimitSurface *
-LimitSurfaceFactory::Create(Index baseFace) const {
+LimitSurfaceFactory::Create(Index baseFace,
+                            EvaluatorOptions evalOptions) const {
 
     //
     //  Avoid allocation if face has no limit surface (hole):
@@ -522,7 +477,7 @@ LimitSurfaceFactory::Create(Index baseFace) const {
     if (FaceHasLimitSurface(baseFace)) {
         LimitSurface * limitSurface = new LimitSurface();
 
-        Populate(*limitSurface, baseFace);
+        Populate(*limitSurface, baseFace, evalOptions);
         assert(limitSurface->IsValid());
 
         return limitSurface;

@@ -50,20 +50,10 @@ RefinerLimitSurfaceFactory::RefinerLimitSurfaceFactory(
         LimitSurfaceFactory(mesh.GetSchemeType(),
                             mesh.GetSchemeOptions(),
                             limitOptions,
-                            true,   // supports Regular descriptors
-                            true,   // supports Manifold descriptors
-                            true,   // supports General descriptors
-                            mesh.GetLevel(0).GetNumFaces()),
+                            mesh.GetLevel(0).GetNumFaces(),
+                            mesh.GetNumFVarChannels()),
         _mesh(mesh),
         _patchBuilder(0) {
-
-    //
-    //  We only need to populate the FVar indices in the face topology
-    //  Descriptors when both the option to do so is present and the
-    //  mesh actually has a FVar channel to populate:
-    //
-    _populateFVarTopology = limitOptions.CreateFVarEvaluators() &&
-                            mesh.GetNumFVarChannels();
 
     //
     //  A Far::PatchBuilder is really useful for quickly (and robustly)
@@ -120,6 +110,38 @@ RefinerLimitSurfaceFactory::isFaceLimitRegular(Index face) const {
 }
 
 //
+//  Methods to retrieve vertex and face-varying indices assigned to the face:
+//
+int
+RefinerLimitSurfaceFactory::getFaceSize(Index baseFace) const
+{
+    return _mesh.GetLevel(0).GetFaceVertices(baseFace).size();
+}
+
+int
+RefinerLimitSurfaceFactory::getFaceVertexIndices(Index baseFace,
+        Index indices[]) const
+{
+    ConstIndexArray fVerts = _mesh.GetLevel(0).GetFaceVertices(baseFace);
+
+    std::memcpy(indices, &fVerts[0], fVerts.size() * sizeof(Index));
+    return fVerts.size();
+}
+
+int
+RefinerLimitSurfaceFactory::getFaceFVarValueIndices(Index baseFace,
+        Index indices[], int fvarIndex) const
+{
+    if (fvarIndex >= _mesh.GetNumFVarChannels()) return 0;
+
+    ConstIndexArray fvarValues =
+            _mesh.GetLevel(0).GetFaceFVarValues(baseFace, fvarIndex);
+
+    std::memcpy(indices, &fvarValues[0], fvarValues.size() * sizeof(Index));
+    return fvarValues.size();
+}
+
+//
 //  Methods to populate the different kinds of topology Descriptors -- these
 //  will eventually be virtual methods that derived classes will define.
 //
@@ -129,24 +151,6 @@ RefinerLimitSurfaceFactory::populateDescriptor(Index baseFace,
 
     if (!isFaceLimitRegular(baseFace)) {
         return false;
-    }
-
-    //
-    //  Don't use Regular descriptor if FVar limit does not share matching
-    //  topology, but don't penalize the linear FVar case:
-    //
-    if (_populateFVarTopology) {
-        bool fvarIsLinear = (_mesh.GetFVarLinearInterpolation(0) ==
-                             Sdc::Options::FVAR_LINEAR_ALL);
-
-        //  WIP - Only linear FVar supported, keep regular patch for now
-        fvarIsLinear = true;
-
-        if (!fvarIsLinear) {
-            if (!_patchBuilder->DoesFaceVaryingPatchMatch(0, baseFace, 0)) {
-                return false;
-            }
-        }
     }
 
     //
@@ -165,13 +169,6 @@ RefinerLimitSurfaceFactory::populateDescriptor(Index baseFace,
 
     _patchBuilder->GetRegularPatchPoints(0, baseFace, boundaryMask,
             desc.AccessPatchVertexIndices());
-
-    if (_populateFVarTopology) {
-        //  Gather all FVar patch points, even if FVar is linear -- those
-        //  around the face will be ignored:
-        _patchBuilder->GetRegularPatchPoints(0, baseFace, boundaryMask,
-                desc.AccessPatchFVarValueIndices(), 0);
-    }
 
     desc.SetBoundaryMask(boundaryMask);
 
@@ -352,11 +349,6 @@ if (debug) {
     //
     bool faceSizesAreConstant = !fTag._incidIrregFace;
 
-    ConstIndexArray baseFVarValues;
-    if (_populateFVarTopology) {
-        baseFVarValues = baseLevel.getFaceFVarValues(baseFace, 0);
-    }
-
     desc.Initialize(fVerts.size(), faceSizesAreConstant);
 
     for (int i = 0; i < fVerts.size(); ++i) {
@@ -366,9 +358,6 @@ if (debug) {
 
         desc.SetCornerNumIncidentFaces(i, vFaces.size());
         desc.SetCornerVertexIndex(i, vIndex);
-        if (_populateFVarTopology) {
-            desc.SetCornerFVarValueIndex(i, baseFVarValues[i]);
-        }
 
         bool isBoundary = baseLevel.getVertexTag(vIndex)._boundary;
         if (isBoundary) {
@@ -556,17 +545,6 @@ RefinerLimitSurfaceFactory::populateDescriptor(Index baseFace,
                 creaseSharpness.push_back(eSharpness);
             }
         }
-    }
-
-    //  Optionally assign basic FVar values for the face:
-    std::vector<Index> & fvarIndices = desc._data.faceFVarValues;
-
-    if (_populateFVarTopology) {
-        ConstIndexArray srcIndices = baseLevel.GetFaceFVarValues(baseFace, 0);
-
-        int N = srcIndices.size();
-        fvarIndices.resize(N);
-        std::memcpy(&fvarIndices[0], &srcIndices[0], N * sizeof(int));
     }
 
     //  Finalize the General descriptor:

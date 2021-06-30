@@ -63,7 +63,11 @@ protected:
     //
     //  Virtual methods required by the base class:
     //
-    bool isFaceHole(Index baseFace) const;
+    bool isFaceHole( Index baseFace) const;
+    int  getFaceSize(Index baseFace) const;
+
+    int getFaceVertexIndices(   Index baseFace, Index indices[]) const;
+    int getFaceFVarValueIndices(Index baseFace, Index indices[], int fv) const;
 
     bool populateDescriptor(Index baseFace, RegularFaceDescriptor &) const;
     bool populateDescriptor(Index baseFace, ManifoldFaceDescriptor &) const;
@@ -76,8 +80,6 @@ protected:
 private:
     //  Additional members for the subclass:
     Far::TopologyRefiner const & _mesh;
-
-    bool _populateFVarTopology;
 
     Far::PatchBuilder const * _patchBuilder;
 };

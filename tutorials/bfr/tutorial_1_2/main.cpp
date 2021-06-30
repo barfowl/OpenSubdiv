@@ -374,8 +374,13 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  evaluation (declared here to reuse memory for each face):
     //
     Bfr::RefinerLimitSurfaceFactory::Options limitFactoryOptions;
-    limitFactoryOptions.CreateFVarEvaluators(!args.noUVFlag &&
-                                             (baseMeshFVarUVs.size() > 0));
+
+    Bfr::RefinerLimitSurfaceFactory::EvaluatorOptions limitSurfaceOptions;
+    limitSurfaceOptions.CreateVertexEvaluator(true);
+    limitSurfaceOptions.CreateVaryingEvaluator(false);
+
+    int numFVarEvaluators = !args.noUVFlag && (baseMeshFVarUVs.size() > 0);
+    limitSurfaceOptions.CreateFVarEvaluators(numFVarEvaluators);
 
     std::vector<Vec3f> limitSurfaceXYZPoints;
     std::vector<Vec3f> limitSurfaceUVPoints;
@@ -422,7 +427,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         if (!limitFactory.FaceHasLimitSurface(faceIndex)) continue;
 
         Bfr::LimitSurface limitSurface;
-        limitFactory.Populate(limitSurface, faceIndex);
+        limitFactory.Populate(limitSurface, faceIndex, limitSurfaceOptions);
 
         Bfr::Tessellation tessPattern(limitSurface.GetParameterization(),
                                       args.tessUniform,
