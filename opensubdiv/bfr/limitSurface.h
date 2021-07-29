@@ -44,6 +44,8 @@ namespace Far {
 }
 
 namespace Bfr {
+//  WIP - eventually will hide this explicit reference
+typedef Far::PatchTree const * IrregPatchPtr;
 
 //
 //  LimitSurface is the main client-facing class that provides a potentially
@@ -199,12 +201,13 @@ public:
         unsigned int _isValid   : 1;
         unsigned int _isRegular : 1;
         unsigned int _isLinear  : 1;
-        unsigned int _isCached  : 1;
+
+        //  WIP - consider a union here for the reg/irreg members:
+        unsigned int _irregOwner : 1;
+        IrregPatchPtr _irregPatch;
 
         Far::PatchDescriptor::Type _regPatchType;
         Far::PatchParam            _regPatchParam;
-
-        Far::PatchTree const * _irregPatch;
     };
 
 protected:

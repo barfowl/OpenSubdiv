@@ -46,15 +46,15 @@ LimitSurface::Evaluator::initialize() {
     _isValid   = false;
     _isRegular = true;
     _isLinear  = false;
-    _isCached  = false;
 
+    _irregOwner = false;
     _irregPatch = 0;
 }
 
 void
 LimitSurface::Evaluator::clear() {
 
-    if (_irregPatch && !_isCached) delete _irregPatch;
+    if (_irregOwner) delete _irregPatch;
 }
 
 //
@@ -168,6 +168,15 @@ namespace {
         w[2] = wCenter;
         w[3] = wCenter + wPrev;
     }
+
+    inline void
+    scaleSubFaceWeightsForDerivs(float w[4], float derivScale) {
+
+        w[0] *= derivScale;
+        w[1] *= derivScale;
+        w[2] *= derivScale;
+        w[3] *= derivScale;
+    }
 }
 
 int
@@ -188,8 +197,15 @@ Evaluator::evalMultiLinearPatchBasis(float u, float v,
         Far::PatchDescriptor::QUADS, Far::PatchParam(), u, v, wP, wDu, wDv);
 
     transformSubFaceWeightsToBase(_numControlPoints, wP);
-    if (wDu) transformSubFaceWeightsToBase(_numControlPoints, wDu);
-    if (wDv) transformSubFaceWeightsToBase(_numControlPoints, wDv);
+    if (wDu) {
+        transformSubFaceWeightsToBase(_numControlPoints, wDu);
+        scaleSubFaceWeightsForDerivs(wDu, 2.0);
+    }
+    if (wDv) {
+        transformSubFaceWeightsToBase(_numControlPoints, wDv);
+        scaleSubFaceWeightsForDerivs(wDv, 2.0);
+    }
+    //  WIP - remember later for 2nd derivs that non-zero dudv needs scaling
 
     return subFace;
 }

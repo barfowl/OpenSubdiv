@@ -27,28 +27,28 @@
 #-------------------------------------------------------------------------------
 # source & headers
 set(SOURCE_FILES
-     faceBuilders.cpp
-     faceDescriptors.cpp
+     faceTopology.cpp
      limitSurface.cpp
      limitSurfaceFactory.cpp
      parameterization.cpp
      refinerLimitSurfaceFactory.cpp
      tessellation.cpp
      topologyCache.cpp
+     vertexTopology.cpp
 )
 
 set(PRIVATE_HEADER_FILES
-     faceBuilders.h
+     faceTopology.h
 )
 
 set(PUBLIC_HEADER_FILES
-     faceDescriptors.h
      limitSurface.h
      limitSurfaceFactory.h
      refinerLimitSurfaceFactory.h
      tessellation.h
      topologyCache.h
      types.h
+     vertexTopology.h
 )
 
 set(DOXY_HEADER_FILES ${PUBLIC_HEADER_FILES})

@@ -35,7 +35,6 @@ namespace OPENSUBDIV_VERSION {
 
 namespace Far {
     class TopologyRefiner;
-    class PatchBuilder;
 }
 
 namespace Bfr {
@@ -43,10 +42,6 @@ namespace Bfr {
 //
 //  Subclass of LimitSurfaceFactory using Far::TopologyRefiner as the mesh
 //  class:
-//
-//  WIP - The virtual interface is going to be changing here.  What exists
-//  now allows this subclass to support all possible topological cases, but
-//  not as easily as we would like others to do in future.
 //
 class RefinerLimitSurfaceFactory : public LimitSurfaceFactory {
 public:
@@ -59,6 +54,19 @@ public:
 
     Far::TopologyRefiner const & GetMesh() const { return _mesh; }
 
+public:
+    //
+    //  TEMPORARY methods for development and debugging -- all of these
+    //  "unsupported" cases will eventually be supported:
+    //
+    bool IsFaceUnsupported(Index baseFace) const;
+
+    bool HasUnsupportedFaces() const;
+    int  GetNumUnsupportedFaces() const;
+
+    int  GetNumNonManifoldFaces() const;
+    int  GetNumVal2InteriorFaces() const;
+
 protected:
     //
     //  Virtual methods required by the base class:
@@ -66,22 +74,29 @@ protected:
     bool isFaceHole( Index baseFace) const;
     int  getFaceSize(Index baseFace) const;
 
-    int getFaceVertexIndices(   Index baseFace, Index indices[]) const;
-    int getFaceFVarValueIndices(Index baseFace, Index indices[], int fv) const;
+    int getFaceVertexIndices(   Index baseFace,
+                                Index indices[]) const;
+    int getFaceFVarValueIndices(Index baseFace,
+                                Index indices[], int fvar) const;
 
-    bool populateDescriptor(Index baseFace, RegularFaceDescriptor &) const;
-    bool populateDescriptor(Index baseFace, ManifoldFaceDescriptor &) const;
-    bool populateDescriptor(Index baseFace, NonManifoldFaceDescriptor &) const;
+    int populateFaceCornerTopology(Index baseFace, int cornerVertex,
+                                   VertexTopology & vertexTopology) const;
 
-protected:
-    //  Internal support (should be able to hide these from public header):
-    bool isFaceLimitRegular(Index baseFace) const;
+    int getFaceCornerVertexIndices(Index baseFace, int cornerVertex,
+                                   Index indices[]) const;
+    int getFaceCornerFVarValueIndices(Index baseFace, int cornerVertex,
+                                      Index indices[], int fvar) const;
+
+private:
+    //
+    //  Additional supporting methods:
+    //
+    int getFaceCornerIndices(Index baseFace, int corner,
+                             Index indices[], int fvarIndex) const;
 
 private:
     //  Additional members for the subclass:
     Far::TopologyRefiner const & _mesh;
-
-    Far::PatchBuilder const * _patchBuilder;
 };
 
 } // end namespace Bfr

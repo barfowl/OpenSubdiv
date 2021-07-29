@@ -89,7 +89,7 @@ public:
     //
     //  General queries:
     //
-    Parameterization GetParametrization() const { return _param; }
+    Parameterization GetParameterization() const { return _param; }
 
     int GetFaceSize() const { return _param.GetFaceSize(); }
 

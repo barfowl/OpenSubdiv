@@ -40,18 +40,11 @@ namespace Bfr {
 //
 //  Forward declarations of classes used by the factories:
 //
-class RegularFaceDescriptor;
-class ManifoldFaceDescriptor;
-class NonManifoldFaceDescriptor;
+class FaceTopology;
+class CornerSubset;
+class VertexTopology;
 class TopologyCache;
-namespace internal {
-    class RegularFaceBuilder;
-    class ManifoldFaceBuilder;
-    class NonManifoldFaceBuilder;
-}
 
-//
-//  WORK IN PROGRESS...
 //
 //  LimitSurfaceFactory is an abstract class that provides the construction
 //  of instances of LimitSurface from the faces of a mesh -- whose type is
@@ -63,20 +56,22 @@ namespace internal {
 //  constructed consistently.  An instance of such a Factory may also manage
 //  its own topology cache internally for all faces of the mesh.
 //
-//  WIP - The nature of the virtual methods required by subclasses is going
-//  to change significantly here.
+//  WIP - The nature of the virtual methods required by subclasses warrants
+//  close inspection and review.
 //
 class LimitSurfaceFactory {
 public:
     //
-    //  Options here include whether or not to create Evaluators for the
-    //  different types of primvar data (vertex, face-varying or varying),
-    //  and to control caching.
-    //
-    //  We prefer to avoid (or at least minimize) the number of shape
-    //  approximating options here compared to the Far classes.  Using a
-    //  max tessellation rate is under consideration, but may limit the
-    //  effectiveness of caching across multiple meshes...
+    //  Options are primarily concerned with caching and approximation.
+    //  Former options to create vertex, varying or face-varying evaluators
+    //  for each LimitSurface have been moved to LimitSuface construction
+    //  (but may eventually be duplicated here).
+    //  
+    //  The number of shape approximating options is minimized here (in
+    //  contrast to the Far classes that are forced to maintain legacy
+    //  option).  Using a max tessellation rate is under consideration to
+    //  control local refinement depth, but may limit the effectiveness
+    //  of caching across multiple meshes.
     //
     //  Given the regret elsewhere of exposing Option members directly,
     //  member variables not public and are accessed/assigned by methods.
@@ -126,6 +121,11 @@ public:
     //
     //  Options to construct specific Evaluators for the LimitSurface:
     //
+    //  Using these options per-LimitSurface provides added flexibility
+    //  but added tedium for those cases that don't warrant it.  For
+    //  that reason, duplicating these at the Factory level so that they
+    //  do not have to be applied to every face, is being considered.
+    //
     class EvaluatorOptions {
     public:
         EvaluatorOptions() : _vtxEvaluator(true),
@@ -161,8 +161,13 @@ public:
     //
     //  Methods to create or re-populate an existing LimitSurface:
     //
-    bool FaceHasLimitSurface(Index baseFace) const;
-
+    //  Note that create/populate will fail if the face does not have a
+    //  corresponding limit surface, i.e. due to the face being tagged as
+    //  a hole, or due to boundary interpolation conditions when the face
+    //  lies on a boundary (typically the BOUNDARY_NONE case).  Failure is
+    //  also possible if the subclass cannot provide the full topological
+    //  description of the face.
+    //
     LimitSurface * Create(Index            baseFace,
                           EvaluatorOptions opts = EvaluatorOptions()) const;
 
@@ -174,23 +179,25 @@ protected:
     //
     //  Virtual methods required to support LimitSurface construction:
     //
-    //  WIP - The number of different FaceDescriptors available will be
-    //  reduced, and the nature of those remaining is going to change.
-    //
     virtual bool isFaceHole( Index baseFace) const = 0;
     virtual int  getFaceSize(Index baseFace) const = 0;
 
-    virtual int getFaceVertexIndices(   Index baseFace,
-                                        Index indices[]) const = 0;
+    virtual int getFaceVertexIndices(Index baseFace,
+                                     Index indices[]) const = 0;
     virtual int getFaceFVarValueIndices(Index baseFace,
-                                        Index indices[], int fvIndex) const = 0;
+                                        Index indices[],
+                                        int   fvarIndex) const = 0;
 
-    virtual bool populateDescriptor(Index baseFace,
-                                    RegularFaceDescriptor &) const = 0;
-    virtual bool populateDescriptor(Index baseFace,
-                                    ManifoldFaceDescriptor &) const = 0;
-    virtual bool populateDescriptor(Index baseFace,
-                                    NonManifoldFaceDescriptor &) const = 0;
+    //  WIP - naming here, i.e. use of "FaceCorner", is questionable
+    //      - see notes in header for VertexTopology for details/examples
+    virtual int populateFaceCornerTopology(Index baseFace, int cornerVertex,
+                                           VertexTopology & vt) const = 0;
+
+    virtual int getFaceCornerVertexIndices(Index baseFace, int cornerVertex,
+                                           Index indices[]) const = 0;
+    virtual int getFaceCornerFVarValueIndices(Index baseFace, int cornerVertex,
+                                              Index indices[],
+                                              int fvarIndex) const = 0;
 
 protected:
     //
@@ -200,34 +207,68 @@ protected:
         Sdc::SchemeType schemeType,
         Sdc::Options    schemeOptions,
         Options         limitOptions,
+        //  WIP - these may not be necessary in the base class
         int             numFaces,
         int             numFVarTopologies);
     virtual ~LimitSurfaceFactory();
 
+    int getRegularFaceSize() const { return _regFaceSize; }
+
 private:
     //  Supporting internal methods:
-    //      - WIP - hide these from public header if possible
-    bool assignLinearPatch(LimitSurface::Evaluator &, Parameterization p,
-                           int faceIndex, int fvarIndex) const;
+    //
+    //  WIP - hide some of these from public header if possible
+    //
+    //  Methods to assemble topology and corresponding indices for a face:
+    bool populateFaceTopology(Index          baseFace,
+                              FaceTopology & faceTopology) const;
 
-    bool assignRegularPatch(LimitSurface::Evaluator &, Parameterization p,
-                            internal::RegularFaceBuilder const &) const;
+    int gatherFaceTopologyIndices(Index                baseFace,
+                                  FaceTopology const & faceTopology,
+                                  Index                faceTopologyIndices[],
+                                  int fvarIndex = -1) const;
 
-    template <class INTERNAL_BUILDER_TYPE>
-    bool assignIrregularPatch(LimitSurface::Evaluator &, Parameterization p,
-                              INTERNAL_BUILDER_TYPE const &) const;
+    //  Methods to assemble Evaluators for the different categories of patch:
+    void assignLinearEvaluator(LimitSurface::Evaluator & evaluator,
+                               Index baseFace, int fvarIndex = -1) const;
+
+    void assignRegularEvaluator(LimitSurface::Evaluator & evaluator,
+                                FaceTopology const & faceTopology,
+                                Index        const   faceIndices[],
+                                CornerSubset const   faceSubsets[] = 0) const;
+
+    void assignIrregularEvaluator(LimitSurface::Evaluator & evaluator,
+                                  FaceTopology const & faceTopology,
+                                  Index        const   faceIndices[],
+                                  CornerSubset const   faceSubsets[] = 0) const;
+
+    void copyNonLinearEvaluator(LimitSurface::Evaluator       & dstEvaluator,
+                                LimitSurface::Evaluator const & srcEvaluator,
+                                FaceTopology const & faceTopology,
+                                Index        const   fvarIndices[],
+                                CornerSubset const   fvarSubsets[]) const;
+
+    //  Methods to deal with construction and caching of irregular patches:
+    IrregPatchPtr findIrregularPatch(FaceTopology const & faceTopology,
+                                     CornerSubset const   faceSubsets[],
+                                     bool               & patchIsNew,
+                                     bool               & patchIsCached) const;
+
+    IrregPatchPtr buildIrregularPatch(FaceTopology const & faceTopology,
+                                      CornerSubset const   faceSubsets[]) const;
 
 private:
     Sdc::SchemeType _schemeType;
     Sdc::Options    _schemeOptions;
     Options         _limitOptions;
 
+    //  WIP - can easily these to a subclass, so may not be necessary
     int _numFaces;
     int _numFVarTopologies;
 
     int  _regFaceSize;
     bool _linearScheme;
-    bool _linearFVar;
+    bool _linearFVarInterp;
 
     TopologyCache mutable *  _topologyCache;
 };
