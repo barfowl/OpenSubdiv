@@ -71,6 +71,7 @@ FaceTopology::Initialize(int faceSize) {
 
     _vertexTopology.SetSize(faceSize);
     _faceInVertex.SetSize(faceSize);
+    _cornerSubsets.SetSize(faceSize);
 }
 
 void
