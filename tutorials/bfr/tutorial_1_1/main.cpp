@@ -411,10 +411,8 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  edge, e.g. evaluating positions and normals at corners of the
         //  face to assess curvature, etc.)
         //
-        if (!limitFactory.FaceHasLimitSurface(faceIndex)) continue;
-
         Bfr::LimitSurface limitSurface;
-        limitFactory.Populate(limitSurface, faceIndex);
+        if (!limitFactory.Populate(limitSurface, faceIndex)) continue;
 
         Bfr::Tessellation tessPattern(limitSurface.GetParameterization(),
                                       args.tessUniform,
