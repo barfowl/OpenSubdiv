@@ -183,13 +183,14 @@ protected:
     //  WIP - full "int" size unnecessary for most members here, and since
     //  we have local arrays of these, that may matter -- so use "short"
     //  where possible internally but beware size conversion warnings
-    unsigned int _isInitialized : 1;
-    unsigned int _isOrdered     : 1;
-    unsigned int _isBoundary    : 1;
-    unsigned int _isInterior    : 1;
-    unsigned int _hasSharpVert  : 1;
-    unsigned int _hasSharpEdge  : 1;
-    unsigned int _isFinalized   : 1;
+    unsigned int _isInitialized   : 1;
+    unsigned int _isOrdered       : 1;
+    unsigned int _isBoundary      : 1;
+    unsigned int _isInfSharp      : 1;
+    unsigned int _isSemiSharp     : 1;
+    unsigned int _hasSharpEdge    : 1;
+    unsigned int _hasUnSharpBound : 1;
+    unsigned int _isFinalized     : 1;
 
     int _numFaces;
     int _commonFaceSize;
@@ -212,7 +213,6 @@ VertexTopology::SetOrdered(bool isBoundary) {
 
     _isOrdered  = true;
     _isBoundary = isBoundary;
-    _isInterior = !isBoundary;
 }
 inline void
 VertexTopology::SetCommonFaceSize(int size) {
@@ -233,7 +233,6 @@ inline void
 VertexTopology::SetVertexSharpness(float sharpness) {
 
     _vertSharpness = sharpness;
-    _hasSharpVert  = (sharpness > 0.0);
 }
 
 inline float *

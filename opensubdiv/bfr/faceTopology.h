@@ -140,14 +140,13 @@ protected:
 
     int GetFaceSize() const { return _faceSize; }
 
-    bool HasLimit() const;
     bool IsRegular(CornerSubset const cornerSubsets[] = 0) const;
 
     //  WIP - will be removed once all features supported
     //      - REMEMBER that Loop patches NOT fully supported:
     //          - regular patches also not complete for Loop
     bool IsUnsupported() const {
-        if (_hasVal2IntVerts || _hasNonManCorners) {
+        if (_hasVal2IntVerts || _hasUnorderedVerts) {
             return true;
         }
         return false;
@@ -227,12 +226,14 @@ private:
     int _faceSize;
     int _regFaceSize;
 
-    unsigned int _hasBoundaryVerts : 1;
-    unsigned int _hasSharpVerts    : 1;
-    unsigned int _hasSharpEdges    : 1;
-    unsigned int _hasIncIrregFaces : 1;
-    unsigned int _hasNonManCorners : 1;
-    unsigned int _hasVal2IntVerts  : 1;
+    unsigned int _hasBoundaryVerts  : 1;
+    unsigned int _hasInfSharpVerts  : 1;
+    unsigned int _hasSemiSharpVerts : 1;
+    unsigned int _hasSharpEdges     : 1;
+    unsigned int _hasUnSharpBound   : 1;
+    unsigned int _hasIncIrregFaces  : 1;
+    unsigned int _hasUnorderedVerts : 1;
+    unsigned int _hasVal2IntVerts   : 1;
 
     unsigned int _isInitialized : 1;
     unsigned int _isFinalized   : 1;

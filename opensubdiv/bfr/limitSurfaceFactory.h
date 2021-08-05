@@ -161,13 +161,22 @@ public:
     //
     //  Methods to create or re-populate an existing LimitSurface:
     //
-    //  Note that create/populate will fail if the face does not have a
-    //  corresponding limit surface, i.e. due to the face being tagged as
-    //  a hole, or due to boundary interpolation conditions when the face
-    //  lies on a boundary (typically the BOUNDARY_NONE case).  Failure is
-    //  also possible if the subclass cannot provide the full topological
-    //  description of the face.
+    //  The "has limit surface" query can be used to determine if a face
+    //  has an associated limit surface -- usually the case except when the
+    //  face is tagged as a hole, or due to boundary interpolation options
+    //  when the face lies on a boundary (only for VTX_BOUNDARY_NONE).
     //
+    //  But note that create/populate applies the same test and so also
+    //  fails when no limit surface exists -- so there is little point
+    //  using the test purely as a pre-condition to create/populate. The
+    //  separate test exists to detemine existence of a limit surface for
+    //  pre-processing needs when the surface is not actually needed.
+    //
+    //  Failure of create/populate is also possible if the subclass fails
+    //  to provide a valid topological description of the face.
+    //
+    bool FaceHasLimitSurface(Index baseFace) const;
+
     LimitSurface * Create(Index            baseFace,
                           EvaluatorOptions opts = EvaluatorOptions()) const;
 
@@ -262,15 +271,17 @@ private:
     Sdc::Options    _schemeOptions;
     Options         _limitOptions;
 
-    //  WIP - can easily these to a subclass, so may not be necessary
-    int _numFaces;
-    int _numFVarTopologies;
+    unsigned int _linearScheme      : 1;
+    unsigned int _linearFVarInterp  : 1;
+    unsigned int _testBoundaryLimit : 1;
 
     int  _regFaceSize;
-    bool _linearScheme;
-    bool _linearFVarInterp;
 
     TopologyCache mutable *  _topologyCache;
+
+    //  WIP - can easily move these to a subclass, so may not be necessary
+    int _numFaces;
+    int _numFVarTopologies;
 };
 
 } // end namespace Bfr

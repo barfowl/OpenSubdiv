@@ -25,6 +25,7 @@
 #include <cstring>
 #include <cstdio>
 
+#include "../sdc/crease.h"
 #include "../bfr/vertexTopology.h"
 
 namespace OpenSubdiv {
@@ -38,18 +39,23 @@ namespace Bfr {
 void
 VertexTopology::Initialize(int numFaces) {
 
+    assert(numFaces > 0);
+
     _isInitialized = true;
     _isFinalized   = false;
 
-    _isOrdered    = false;
-    _isBoundary   = false;
-    _isInterior   = false;
-    _hasSharpVert = false;
-    _hasSharpEdge = false;
+    _isOrdered       = false;
+    _isBoundary      = false;
+    _isInfSharp      = false;
+    _isSemiSharp     = false;
+    _hasSharpEdge    = false;
+    _hasUnSharpBound = false;
 
     _numFaces = numFaces;
     _commonFaceSize = 0;
     _numFaceVerts = 0;
+
+    _vertSharpness = 0.0f;
 }
 
 void
@@ -61,6 +67,8 @@ VertexTopology::Finalize() {
     //  WIP - most of this is likely moving to a class that either
     //  is-a or has-a VertexTopology instance.  A little more tagging
     //  will be done for val-2 verts and degenerate faces.
+    //
+    //  Deal with face sizes first -- ignore array if common:
     //
     if (_commonFaceSize) {
         _numFaceVerts = _numFaces * _commonFaceSize;
@@ -80,13 +88,31 @@ VertexTopology::Finalize() {
         _numFaceVerts = _faceSizeOffsets[_numFaces];
     }
 
+    //
+    //  Deal with vertex sharpness -- simply assign tags
+    //
+    _isInfSharp  = Sdc::Crease::IsInfinite(_vertSharpness);
+    _isSemiSharp = (_vertSharpness > 0.0f) && !_isInfSharp;
+
+    //
+    //  Deal with edge sharpness:
+    //
+    _hasUnSharpBound = _isBoundary;
+
     if (_hasSharpEdge) {
         int numSharpness = _numFaces * 2;
         if (_isBoundary) {
-            //  WIP - detect if boundary was sharpened before clearing
-            _faceEdgeSharpness[0] = 0.0f;
-            _faceEdgeSharpness[numSharpness-1] = 0.0f;
+            int last = numSharpness - 1;
+            _hasUnSharpBound =
+                    !Sdc::Crease::IsInfinite(_faceEdgeSharpness[0]) ||
+                    !Sdc::Crease::IsInfinite(_faceEdgeSharpness[last]);
+
+            _faceEdgeSharpness[0]    = 0.0f;
+            _faceEdgeSharpness[last] = 0.0f;
         }
+
+        //  WIP - note we need to look for 3 or more inf-sharp edges (only
+        //  one for a boundary) to tag this vertex as inf-sharp as a result
 
         //  Ignore assigned edge sharpness if all zero:
         _hasSharpEdge = false;

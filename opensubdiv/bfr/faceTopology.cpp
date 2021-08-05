@@ -57,12 +57,14 @@ FaceTopology::Initialize(int faceSize) {
 
     _faceSize = faceSize;
 
-    _hasBoundaryVerts = false;
-    _hasSharpVerts    = false;
-    _hasSharpEdges    = false;
-    _hasIncIrregFaces = (faceSize != _regFaceSize);
-    _hasNonManCorners = false;
-    _hasVal2IntVerts  = false;
+    _hasBoundaryVerts  = false;
+    _hasInfSharpVerts  = false;
+    _hasSemiSharpVerts = false;
+    _hasSharpEdges     = false;
+    _hasUnSharpBound   = false;
+    _hasIncIrregFaces  = (faceSize != _regFaceSize);
+    _hasUnorderedVerts = false;
+    _hasVal2IntVerts   = false;
 
     _isInitialized = true;
     _isFinalized   = false;
@@ -176,7 +178,7 @@ FaceTopology::InitializeVertexSubsets(Index const fvertIndices[]) {
 
     //  WIP - we eventually need the vertex indices to identify the
     //  adjacency/connectivity for unordered or non-manifold verts:
-    if (_hasNonManCorners) {
+    if (_hasUnorderedVerts) {
         //assert(fvertIndices != 0);
         if (fvertIndices == 0) {
         }
@@ -210,9 +212,9 @@ FaceTopology::InitializeVertexSubsets(Index const fvertIndices[]) {
                 C._numFacesAfter  = V._numFaces - 1;
             }
 
-            C._isSharp = false;
+            C._isSharp = V._isInfSharp;
             if (C._numFacesTotal == 1) {
-                C._isSharp = sharpenCorners;
+                C._isSharp |= sharpenCorners;
             }
         } else {
             //  Use a sharp corner for linear face for non-manifold for now:
@@ -246,27 +248,30 @@ FaceTopology::Finalize() {
     //
     //  Inspect all corner vertex topologies -- accumulating the presence
     //  of irregular features for the face and assigning other internal
-    //  members to help determine the limit surface:
+    //  members used to assemble the limit surface:
     //
     //  WIP - potentially want to identify presence of degenerate faces
     //  below too, i.e. face size < 3.  A subclass may specify these in
     //  an ordered set and that would mess up some of the topological
     //  traversals.  In such case, we can initialize the vertex subset
-    //  to excludes such faces.
+    //  to excludes such faces -- treating their edges as non-manifold.
     //
     assert(_isInitialized);
 
     for (int i = 0; i < _faceSize; ++i) {
         VertexTopology & vTop = _vertexTopology[i];
         assert(vTop._isFinalized);
-        assert(vTop._numFaces > 0);
 
-        _hasBoundaryVerts |=  vTop._isBoundary;
-        _hasSharpVerts    |=  vTop._hasSharpVert;
-        _hasSharpEdges    |=  vTop._hasSharpEdge;
-        _hasIncIrregFaces |= (vTop._commonFaceSize != _regFaceSize);
-        _hasNonManCorners |= !vTop._isOrdered;
-        _hasVal2IntVerts  |= (vTop._numFaces == 2) && vTop._isInterior;
+        if (vTop._commonFaceSize) assert(vTop._commonFaceSize == _faceSize);
+
+        _hasBoundaryVerts  |=  vTop._isBoundary;
+        _hasInfSharpVerts  |=  vTop._isInfSharp;
+        _hasSemiSharpVerts |=  vTop._isSemiSharp;
+        _hasSharpEdges     |=  vTop._hasSharpEdge;
+        _hasUnSharpBound   |=  vTop._hasUnSharpBound;
+        _hasIncIrregFaces  |= (vTop._commonFaceSize != _regFaceSize);
+        _hasUnorderedVerts |= !vTop._isOrdered;
+        _hasVal2IntVerts   |= (vTop._numFaces == 2) && !vTop._isBoundary;
 
         _numFaceVertsTotal += vTop._numFaceVerts;
     }
@@ -282,11 +287,11 @@ FaceTopology::IsRegular(CornerSubset const cornerSubsets[]) const {
     }
 
     //  WIP - beware, these FaceToplogy members reflect the topology of
-    //  the collection of vertices as a whole and not a subset -- so we
-    //  may be excluding regular subets (optimize later)...
+    //  the collection of vertices as a whole and not those of the given
+    //  subset -- so regular subets may be excluded here (optimize later)
     //
-    if (_hasIncIrregFaces || _hasSharpEdges    ||
-                             _hasNonManCorners || _hasVal2IntVerts) {
+    if (_hasIncIrregFaces  || _hasSharpEdges  || _hasSemiSharpVerts ||
+        _hasUnorderedVerts || _hasVal2IntVerts) {
         return false;
     }
 
@@ -296,53 +301,12 @@ FaceTopology::IsRegular(CornerSubset const cornerSubsets[]) const {
     for (int i = 0; i < _faceSize; ++i) {
         CornerSubset const & subset = cornerSubsets[i];
 
-        if (subset._numFacesTotal == regInteriorValence) {
-            if (subset._isBoundary || subset._isSharp) return false;
-        } else if (subset._numFacesTotal == regBoundaryValence) {
-            if (!subset._isBoundary || subset._isSharp) return false;
-        } else if (subset._numFacesTotal == 1) {
-            if (!subset._isSharp) return false;
+        if (subset._isSharp) {
+            if (subset._numFacesTotal != 1) return false;
+        } else if (subset._isBoundary) {
+            if (subset._numFacesTotal != regBoundaryValence) return false;
         } else {
-            return false;
-        }
-
-        //  WIP - workaround to tagging defficiency for sharpened verts
-        if (_vertexTopology[i]._hasSharpVert && !subset._isSharp) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool
-FaceTopology::HasLimit() const {
-
-    //  WIP - this will be greatly simplified once a "was boundary
-    //  sharpened" tag is initialized per-vertex and a corresponding
-    //  "has unsharpened boundaries" is added to the face.
-    if (_schemeOptions.GetVtxBoundaryInterpolation() ==
-                               Sdc::Options::VTX_BOUNDARY_NONE) {
-        //
-        //  With the "boundary none" case, a face with a boundary vertex
-        //  only has a limit surface if all boundary edges incident its
-        //  boundary vertices have been explicitly sharpened (inf-sharp):
-        //
-        if (!_hasBoundaryVerts) return true;
-
-        //
-        //  Boundary edges have been "unsharpened" to simplify processing,
-        //  but we need to know if they had been explicitly sharpened
-        //  for this purpose...
-        //
-        if (!_hasSharpEdges) {
-            //if (!_hasSharpEdges) return false;
-        } else {
-            for (int i = 0; i < _faceSize; ++i) {
-                if (_vertexTopology[i]._isBoundary) {
-                    //  Return true if all boundary edges made inf-sharp
-                    return true;
-                }
-            }
+            if (subset._numFacesTotal != regInteriorValence) return false;
         }
     }
     return true;
@@ -909,7 +873,7 @@ FaceTopology::GatherControlVertexSharpness(
             cornerVerts[nSharpVerts] = i;
             vertSharpness[nSharpVerts] = Sdc::Crease::SHARPNESS_INFINITE;
             ++ nSharpVerts;
-        } else if (vTop._hasSharpVert) {
+        } else if (vTop._isSemiSharp) {
             cornerVerts[nSharpVerts] = i;
             vertSharpness[nSharpVerts] = vTop._vertSharpness;
             ++ nSharpVerts;
@@ -1236,21 +1200,16 @@ FaceTopology::ComputeTopologyKey(CornerSubset const faceSubsets[]) const {
 
     CornerSubset const * C = faceSubsets;
     if (_hasIncIrregFaces) {
-        //  WIP - can still accept irregular but constant face size
+        //  WIP - the subset may not include the irregular faces
         return key;
     }
     if (_hasSharpEdges) {
+        //  WIP - the subset may not include the sharp edges
         return key;
     }
-    //  WIP - improve tagging here, i.e. "has semi-sharp verts"
-    if (_hasSharpVerts) {
-        for (int i = 0; i < _faceSize; ++i) {
-            if (!C[i]._isSharp) {
-                if (_vertexTopology[i]._vertSharpness > 0.0) {
-                    return key;
-                }
-            }
-        }
+    if (_hasSemiSharpVerts) {
+        //  WIP - the subset may not include the semi-sharp verts
+        return key;
     }
 
     //
@@ -1305,21 +1264,19 @@ FaceTopology::print(Index const faceIndices[], bool printVerts) const {
 
     FaceTopology const & f = *this;
 
-    bool faceHasLimit  = f.HasLimit();
     bool faceIsRegular = f.IsRegular();
 
     printf("    FaceTopology:\n");
-    if (!faceHasLimit) {
-        printf("        has limit       = FALSE\n");
-    }
     printf("        face size       = %d\n", _faceSize);
     printf("        is regular      = %d\n", faceIsRegular);
     if (!faceIsRegular) {
-        printf("        has sharp verts = %d\n", f._hasSharpVerts);
-        printf("        has sharp edges = %d\n", f._hasSharpEdges);
-        printf("        inc irreg faces = %d\n", f._hasIncIrregFaces);
-        printf("        non-man corners = %d\n", f._hasNonManCorners);
-        printf("        val-2 int verts = %d\n", f._hasVal2IntVerts);
+        printf("        has inf-sharp verts  = %d\n", f._hasInfSharpVerts);
+        printf("        has semi-sharp verts = %d\n", f._hasSemiSharpVerts);
+        printf("        has any sharp edges  = %d\n", f._hasSharpEdges);
+        printf("        has unsharp boundary = %d\n", f._hasUnSharpBound);
+        printf("        inc irregular faces  = %d\n", f._hasIncIrregFaces);
+        printf("        unordered verts      = %d\n", f._hasUnorderedVerts);
+        printf("        val-2 interior verts = %d\n", f._hasVal2IntVerts);
     }
     printf("        num-face-verts  = %d\n", f._numFaceVertsTotal);
 
@@ -1356,9 +1313,10 @@ void
 FaceTopology::printControlTopology(Index const faceIndices[]) const {
 
     printf("          FaceTopology properties:\n");
-    printf("              has inc irreg faces = %d\n", _hasIncIrregFaces);
-    printf("              has sharp verts     = %d\n", _hasSharpVerts);
-    printf("              has sharp edges     = %d\n", _hasSharpEdges);
+    printf("              has inc irreg faces  = %d\n", _hasIncIrregFaces);
+    printf("              has inf-sharp verts  = %d\n", _hasInfSharpVerts);
+    printf("              has semi-sharp verts = %d\n", _hasSemiSharpVerts);
+    printf("              has any sharp edges  = %d\n", _hasSharpEdges);
 
     int nVerts = GetNumControlVertices(0);
     int nFaces = GetNumControlFaces(0);
