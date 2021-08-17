@@ -43,7 +43,8 @@ namespace Bfr {
 
 //
 //  The FaceTopology class describes the full topological neighborhood
-//  of a base face that defines the limit surface for that face.
+//  of a base face that includes everything necessary to define the
+//  limit surface for that face.
 //
 //  It is used solely by the base LimitSurfaceFactory -- partially
 //  populated by subclasses and then analyzed to assemble the limit
@@ -68,19 +69,21 @@ namespace Bfr {
 //          - these are provided relative to the full FaceTopology
 //          - from which the relevant subset of points is identified
 //
-//  The Factory currently identifies and manages these components, but
-//  its a bit awkward and messy in its present form, and FaceTopology
-//  has a lot more functionality than is probably warranted -- given it
-//  is the only class involved here other than the Factory.
+//  These three components are now bundled into a SurfaceDescriptor,
+//  which is used to define both vertex and face-varying surfaces. So
+//  the Factory now assembles these and passes them on to be assembled
+//  into surfaces and assigned.
 //
-//  So a small "ecosystem" of classes are planned to improve this...
+//  SurfaceDescriptor is one addition to a small "ecosystem" of classes
+//  in the works...
 //
 //  VertexTopology:
-//      - this is our public-face class populated by Factory subclasses
+//      - this is our public-facing class populated by Factory subclasses
 //      - it will remain so but stripped down to serve only those needs
 //
 //  CornerTopology:
 //      - will either derive from or contain a VertexTopology to access
+//      - will include the existing "face-in-vertex" member for the corner
 //      - will contain tags reflecting collective properties of the vertex:
 //          - some may move here from VertexTopology, others will be new
 //      - will include additional members that correlate to the faces of
@@ -88,24 +91,24 @@ namespace Bfr {
 //          - an array of ints for "unordered face neighbors" is planned
 //            to deal with unordered faces in VertexTopology (which will
 //            allow support of non-manifold topology)
-//      - will include the "face-in-vertex" member for the corner
 //
 //  CornerSubset:
-//      - will remain unchanged -- still a very simple struct
-//
-//  FaceSubset:
-//      - will contain an array of CornerSubsets
-//      - also to contain tags reflecting collective properties of the array
-//      - instances of these collections will be managed by the Factory
-//      - may also include a reference to the FaceTopology which contains it
-//      - may also include (optionally) an assigned set of indices
+//      - will remain unchanged
+//      - should remain a very simple struct (no more than a few ints)
 //
 //  FaceTopology:
 //      - will contain an array of CornerTopology (rather than VertexTopology)
 //      - also to contain tags reflecting collective properties of the array
-//      - currently debating if a FaceSubset should be included:
-//          - this would replace the current array of CornerSubsets that
-//            reflect the vertex topology
+//      * this is where unordered and/or non-manifold topology will need to
+//        be dealt with but:
+//          - requires access to vertex indices to determine connectivity
+//          - ideally wants to define a subset when ordering
+//
+//  SurfaceDescriptor:
+//      - will contain a reference to an instance of FaceTopology
+//      - will contain an array of CornerSubsets
+//      - will contain a reference to an external array of indices
+//      - also to contain tags reflecting collective properties of subsets
 //
 //  All of these should remain light-weight and avoid any memory allocation
 //  from the heap (except for high-valence cases).  Simple methods --
@@ -127,10 +130,7 @@ struct CornerSubset {
 };
 
 class FaceTopology {
-protected:
-    friend class LimitSurfaceFactory;
-
-protected:
+public:
     FaceTopology(Sdc::SchemeType schemeType,
                  Sdc::Options    schemeOptions);
     ~FaceTopology() { }
@@ -140,9 +140,16 @@ protected:
 
     int GetFaceSize() const { return _faceSize; }
 
-    bool IsRegular(CornerSubset const cornerSubsets[] = 0) const;
+    //  WIP - will need some kind of public method to resolve unordered
+    //  (non-manifold) vertices using the indices for all vertices.
 
-    //  WIP - will be removed once all features supported
+    //  Debugging...
+    void print(Index const faceVertIndices[]) const;
+
+public:
+    //  Methods likely to be removed or replaced...
+
+    //  WIP - to be removed once all features supported
     //      - REMEMBER that Loop patches NOT fully supported:
     //          - regular patches also not complete for Loop
     bool IsUnsupported() const {
@@ -152,74 +159,7 @@ protected:
         return false;
     }
 
-protected:
-    //
-    //  More involved inspection and construction methods:
-    //
-    //  Initializing corner subsets for vertex and face-varying:
-    //
-    void initializeSubsetInventory(CornerSubset cornerSubsets[]) const;
-
-    void InitializeVertexSubsets(Index const fvtxIndices[] = 0);
-
-    bool IdentifyFaceVaryingSubsets(Index const  fvarIndices[],
-                                    CornerSubset fvarSubsets[]) const;
-
-    void findFaceVaryingSubset(int corner,
-                               Index const    fvarIndices[],
-                               CornerSubset & fvarSubset) const;
-
-    void sharpenFaceVaryingSubset(int corner,
-                                  Index const    fvarIndices[],
-                                  CornerSubset & fvarSubset) const;
-
-    //
-    //  Inspecting the overall topology:
-    //
-    int GetNumControlVertices(CornerSubset const faceSubsets[]) const;
-    int GetNumControlFaces(   CornerSubset const faceSubsets[]) const;
-
-    //
-    //  Gathering complete topology information for external use:
-    //
-    int GatherControlVertexIndices(CornerSubset const faceSubsets[],
-                                   Index        const faceIndices[],
-                                   Index              cvIndices[]) const;
-    int GatherControlFaceSizes(CornerSubset const faceSubsets[],
-                               int                faceSizes[]) const;
-    int GatherControlFaceVertices(CornerSubset const faceSubsets[],
-                                  int                numControlVertices,
-                                  int                faceVertices[]) const;
-    int GatherControlVertexSharpness(CornerSubset const faceSubsets[],
-                                     int                cornerVerts[],
-                                     float              vertSharpness[]) const;
-    int GatherControlEdgeSharpness(CornerSubset const faceSubsets[],
-                                   int                edgeVertPairs[],
-                                   float              edgeSharpness[]) const;
-
-    //
-    //  Gathering control vertex indices for regular patches:
-    //
-    void GatherRegularPatchPoints4(CornerSubset const faceSubsets[],
-                                   Index        const faceIndices[],
-                                   Index              patchPoints[]) const;
-    void GatherRegularPatchPoints3(CornerSubset const faceSubsets[],
-                                   Index        const faceIndices[],
-                                   Index              patchPoints[]) const;
-
-    //
-    //  Computing the hashing key for the TopologyCache:
-    //
-    TopologyCache::Key ComputeTopologyKey(CornerSubset const subsets[]) const;
-
-    //
-    //  Debugging...
-    //
-    void print(Index const faceIndices[], bool printVertInfo) const;
-    void printControlTopology(Index const faceIndices[]) const;
-    void printSubsets(CornerSubset const faceSubsets[]) const;
-
-private:
+public:
     Sdc::SchemeType _schemeType;
     Sdc::Options    _schemeOptions;
 
@@ -240,9 +180,8 @@ private:
 
     int _numFaceVertsTotal;
 
-    Vtr::internal::StackBuffer<VertexTopology,8>    _vertexTopology;
-    Vtr::internal::StackBuffer<int,8,true>          _faceInVertex;
-    Vtr::internal::StackBuffer<CornerSubset,8,true> _cornerSubsets;
+    Vtr::internal::StackBuffer<VertexTopology,8> _vertexTopology;
+    Vtr::internal::StackBuffer<int,8,true>       _faceInVertex;
 };
 
 } // end namespace Bfr

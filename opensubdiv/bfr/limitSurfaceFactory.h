@@ -40,9 +40,9 @@ namespace Bfr {
 //
 //  Forward declarations of classes used by the factories:
 //
-class FaceTopology;
-class CornerSubset;
 class VertexTopology;
+class FaceTopology;
+class SurfaceDescriptor;
 class TopologyCache;
 
 //
@@ -226,45 +226,28 @@ protected:
 private:
     //  Supporting internal methods:
     //
-    //  WIP - hide some of these from public header if possible
-    //
     //  Methods to assemble topology and corresponding indices for a face:
-    bool populateFaceTopology(Index          baseFace,
-                              FaceTopology & faceTopology) const;
+    bool gatherFaceNeighborhoodTopology(Index          baseFace,
+                                        FaceTopology & topology) const;
 
-    int gatherFaceTopologyIndices(Index                baseFace,
-                                  FaceTopology const & faceTopology,
-                                  Index                faceTopologyIndices[],
-                                  int fvarIndex = -1) const;
+    int gatherFaceNeighborhoodIndices(Index                baseFace,
+                                      FaceTopology const & topology,
+                                      Index                indices[],
+                                      int                  fvarIndex) const;
 
     //  Methods to assemble Evaluators for the different categories of patch:
     void assignLinearEvaluator(LimitSurface::Evaluator & evaluator,
-                               Index baseFace, int fvarIndex = -1) const;
+                               Index baseFace, int fvarIndex) const;
 
     void assignRegularEvaluator(LimitSurface::Evaluator & evaluator,
-                                FaceTopology const & faceTopology,
-                                Index        const   faceIndices[],
-                                CornerSubset const   faceSubsets[] = 0) const;
+                                SurfaceDescriptor const & surface) const;
 
     void assignIrregularEvaluator(LimitSurface::Evaluator & evaluator,
-                                  FaceTopology const & faceTopology,
-                                  Index        const   faceIndices[],
-                                  CornerSubset const   faceSubsets[] = 0) const;
+                                  SurfaceDescriptor const & surface) const;
 
     void copyNonLinearEvaluator(LimitSurface::Evaluator       & dstEvaluator,
                                 LimitSurface::Evaluator const & srcEvaluator,
-                                FaceTopology const & faceTopology,
-                                Index        const   fvarIndices[],
-                                CornerSubset const   fvarSubsets[]) const;
-
-    //  Methods to deal with construction and caching of irregular patches:
-    IrregPatchPtr findIrregularPatch(FaceTopology const & faceTopology,
-                                     CornerSubset const   faceSubsets[],
-                                     bool               & patchIsNew,
-                                     bool               & patchIsCached) const;
-
-    IrregPatchPtr buildIrregularPatch(FaceTopology const & faceTopology,
-                                      CornerSubset const   faceSubsets[]) const;
+                                SurfaceDescriptor const       & surface) const;
 
 private:
     Sdc::SchemeType _schemeType;

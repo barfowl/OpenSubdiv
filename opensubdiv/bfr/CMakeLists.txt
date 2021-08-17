@@ -28,10 +28,13 @@
 # source & headers
 set(SOURCE_FILES
      faceTopology.cpp
+     irregularPatchBuilder.cpp
      limitSurface.cpp
      limitSurfaceFactory.cpp
      parameterization.cpp
      refinerLimitSurfaceFactory.cpp
+     regularPatchBuilder.cpp
+     surfaceDescriptor.cpp
      tessellation.cpp
      topologyCache.cpp
      vertexTopology.cpp
@@ -39,6 +42,9 @@ set(SOURCE_FILES
 
 set(PRIVATE_HEADER_FILES
      faceTopology.h
+     irregularPatchBuilder.h
+     regularPatchBuilder.h
+     surfaceDescriptor.h
 )
 
 set(PUBLIC_HEADER_FILES

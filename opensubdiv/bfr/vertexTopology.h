@@ -158,6 +158,9 @@ protected:
     //  are inline will then be moved to a non-public header.
     //
     friend class LimitSurfaceFactory;
+    friend class RegularPatchBuilder;
+    friend class IrregularPatchBuilder;
+    friend class SurfaceDescriptor;
     friend class FaceTopology;
 
     //  Methods for inspection (many inlined below)

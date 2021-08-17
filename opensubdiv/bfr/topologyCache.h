@@ -57,30 +57,25 @@ public:
     TopologyCache();
     virtual ~TopologyCache();
 
-public:
-    //  WIP - This is currently exposed to the Descriptors/Builders used
-    //  by the LimitSurfaceFactory, but will be more restricted in the
-    //  near future -- it does not need to be publicly accessible:
-    struct Key {
-        //  WIP - An enum is being considered here to distinguish different
-        //  groups of topology (e.g. those containing semi-sharp creases)
-        //  that may warrant separate enabling or pruning from the cache,
-        //  and so potentially separate maps.
+    size_t Size() const { return _map.size(); }
 
+protected:
+    friend class IrregularPatchBuilder;
+
+    struct Key {
         Key() : hashBits(0) { }
 
         bool IsValid() const { return hashBits != 0; }
 
+        //  WIP - An enum is being considered here, in addition to the int,
+        //  to distinguish different groups of topology (e.g. the presence of
+        //  semi-sharp creases) that may warrant separate enabling or pruning
+        //  from the cache, and so potentially separate maps.
         unsigned long hashBits;
     };
 
-protected:
-    friend class LimitSurfaceFactory;
-
     typedef Key            key_type;
     typedef Far::PatchTree data_type;
-
-    size_t Size() const { return _map.size(); }
 
     virtual data_type const * Find(key_type const & key) const;
     virtual data_type const * Add(key_type const & key, data_type const * data);

@@ -30,6 +30,9 @@
 #include "../bfr/limitSurface.h"
 #include "../bfr/topologyCache.h"
 #include "../bfr/faceTopology.h"
+#include "../bfr/surfaceDescriptor.h"
+#include "../bfr/regularPatchBuilder.h"
+#include "../bfr/irregularPatchBuilder.h"
 
 #include <map>
 #include <cstdio>
@@ -144,7 +147,7 @@ LimitSurfaceFactory::FaceHasLimitSurface(Index faceIndex) const {
     if (_testBoundaryLimit) {
         FaceTopology faceTopology(_schemeType, _schemeOptions);
 
-        if (!populateFaceTopology(faceIndex, faceTopology)) {
+        if (!gatherFaceNeighborhoodTopology(faceIndex, faceTopology)) {
             return false;
         }
         if (faceTopology._hasUnorderedVerts) {
@@ -180,23 +183,25 @@ LimitSurfaceFactory::assignLinearEvaluator(LimitSurface::Evaluator & eval,
                        :  Far::PatchDescriptor::TRIANGLES;
     eval._regPatchParam.Clear();
 
+    //
+    //  Finally, gather patch control points from the appropriate indices:
+    //
     eval._numControlPoints = patchSize;
     eval._numPatchPoints   = patchSize;
 
-    //  Assign control points from face-vertices:
     eval._controlPoints.SetSize(eval._numControlPoints);
-    int * points = &eval._controlPoints[0];
-
     int count = 0;
     if (fvarIndex < 0) {
-        count = getFaceVertexIndices(faceIndex, points);
+        count = getFaceVertexIndices(faceIndex, &eval._controlPoints[0]);
     } else {
-        count = getFaceFVarValueIndices(faceIndex, points, fvarIndex);
+        count = getFaceFVarValueIndices(faceIndex, &eval._controlPoints[0], fvarIndex);
     }
-    assert(count == faceSize);
+    //  This premature return leaves the Evaluator invalid:
+    if (count < faceSize) return;
 
     //  Fill in missing indices for a degenerate face:
     if (faceSize < patchSize) {
+        int * points = &eval._controlPoints[0];
         for (int i = faceSize; i < patchSize; ++i) {
             points[i] = points[i % faceSize];
         }
@@ -209,56 +214,34 @@ __numLinearPatches ++;
 }
 
 void
-LimitSurfaceFactory::assignRegularEvaluator(LimitSurface::Evaluator & eval,
-        FaceTopology const & faceTopology,
-        Index        const   faceIndices[],
-        CornerSubset const   faceSubsets[]) const {
-
-    if (faceSubsets == 0) {
-        faceSubsets = faceTopology._cornerSubsets;
-    }
+LimitSurfaceFactory::assignRegularEvaluator(
+        LimitSurface::Evaluator & eval,
+        SurfaceDescriptor const & surface) const {
 
     //
-    //  Assign the topological fields of the patch first:
+    //  Assign the parameterization and discriminants first:
     //
     eval._param = Parameterization(_schemeType, _regFaceSize);
 
     eval._isRegular = true;
     eval._isLinear  = false;
 
-    int patchSize = 0;
-    int patchBoundaryMask = 0;
-    if (_regFaceSize == 4) {
-        patchSize = 16;
+    //
+    //  Assemble the regular patch:
+    //
+    RegularPatchBuilder builder(surface);
 
-        CornerSubset const * corner = faceSubsets;
-        patchBoundaryMask =
-            ((corner[0]._isBoundary & (corner[0]._numFacesBefore == 0)) << 0) |
-            ((corner[1]._isBoundary & (corner[1]._numFacesBefore == 0)) << 1) |
-            ((corner[2]._isBoundary & (corner[2]._numFacesBefore == 0)) << 2) |
-            ((corner[3]._isBoundary & (corner[3]._numFacesBefore == 0)) << 3);
-
-        eval._regPatchType = Far::PatchDescriptor::REGULAR;
-    } else {
-        patchSize = 12;
-
-        eval._regPatchType = Far::PatchDescriptor::LOOP;
-    }
-    eval._regPatchParam.Set(0, 0, 0, 0, 0, patchBoundaryMask, 0, true);
-
-    eval._numControlPoints = patchSize;
-    eval._numPatchPoints   = patchSize;
+    eval._regPatchType = builder.GetPatchType();
+    eval._regPatchParam.Set(0, 0, 0, 0, 0, builder.GetBoundaryMask(), 0, true);
 
     //
-    //  Now gather the patch control points from FaceTopology and indices:
+    //  Gather the patch control points from the given indices:
     //
-    eval._controlPoints.SetSize(patchSize);
-    int * P = &eval._controlPoints[0];
-    if (_regFaceSize == 4) {
-        faceTopology.GatherRegularPatchPoints4(faceSubsets, faceIndices, P);
-    } else {
-        faceTopology.GatherRegularPatchPoints3(faceSubsets, faceIndices, P);
-    }
+    eval._numControlPoints = builder.GetNumControlVertices();
+    eval._numPatchPoints   = eval._numControlPoints;
+
+    eval._controlPoints.SetSize(eval._numControlPoints);
+    builder.GatherControlVertexIndices(&eval._controlPoints[0]);
 
     eval._isValid = true;
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
@@ -267,58 +250,62 @@ __numRegularPatches ++;
 }
 
 void
-LimitSurfaceFactory::assignIrregularEvaluator(LimitSurface::Evaluator & eval,
-        FaceTopology const & faceTopology,
-        Index        const   faceIndices[],
-        CornerSubset const   faceSubsets[]) const {
-
-    if (faceSubsets == 0) faceSubsets = faceTopology._cornerSubsets;
-
-//bool debug = faceTopology._hasIncIrregFaces || faceTopology._hasSharpEdges;
-//if (debug) faceTopology.printControlTopology(faceIndices);
+LimitSurfaceFactory::assignIrregularEvaluator(
+        LimitSurface::Evaluator & eval,
+        SurfaceDescriptor const & surface) const {
 
     //
-    //  Identify the patch -- retrieved from the cache or newly constructed:
+    //  Assign the parameterization and discriminants first:
     //
-    bool patchIsNew    = false;
-    bool patchIsCached = false;
-    Far::PatchTree const * patch = findIrregularPatch(
-                faceTopology, faceSubsets, patchIsNew, patchIsCached);
-
-    //
-    //  Assign the topological fields of the patch first:
-    //
-    eval._param = Parameterization(_schemeType, faceTopology.GetFaceSize());
+    eval._param = Parameterization(_schemeType, surface.GetFaceSize());
 
     eval._isRegular = false;
     eval._isLinear  = false;
 
-    eval._irregPatch = patch;
-    eval._irregOwner = patchIsNew && !patchIsCached;
+    //
+    //  Construct a new irregular patch or identify one from the cache:
+    //
+    IrregularPatchBuilder::Options buildOptions;
+    buildOptions.sharpLevel  = _limitOptions.MaxLevelPrimary();
+    buildOptions.smoothLevel = _limitOptions.MaxLevelSecondary();
 
-    eval._numControlPoints = patch->GetNumControlPoints();
-    eval._numPatchPoints   = patch->GetNumPointsTotal();
+    IrregularPatchBuilder builder(surface, buildOptions);
+
+//bool debug = surface._topology._hasIncIrregFaces ||
+//             surface._topology._hasSharpEdges;
+//if (debug) builder.print();
+
+    if (_topologyCache == 0) {
+        eval._irregPatch = builder.Build();
+        eval._irregOwner = true;
+    } else {
+        bool isNew    = false;
+        bool isCached = false;
+        eval._irregPatch = builder.Find(*_topologyCache, isNew, isCached);
+        eval._irregOwner = isNew && !isCached;
+    }
 
     //
-    //  Now gather the patch control points from FaceTopology and indices:
+    //  Gather the patch control points from the given indices:
     //
+    eval._numControlPoints = eval._irregPatch->GetNumControlPoints();
+    eval._numPatchPoints   = eval._irregPatch->GetNumPointsTotal();
+
     eval._controlPoints.SetSize(eval._numControlPoints);
-    faceTopology.GatherControlVertexIndices(faceSubsets, faceIndices,
-                                            &eval._controlPoints[0]);
+    builder.GatherControlVertexIndices(&eval._controlPoints[0]);
 
     eval._isValid = true;
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numIrregularPatches ++;
-__numIrregularCreated += patchIsNew;
+__numIrregularCreated += eval._irregOwner;
 #endif
 }
 
 void
-LimitSurfaceFactory::copyNonLinearEvaluator(LimitSurface::Evaluator & dstEval,
+LimitSurfaceFactory::copyNonLinearEvaluator(
+        LimitSurface::Evaluator       & dstEval,
         LimitSurface::Evaluator const & srcEval,
-        FaceTopology const &            faceTopology,
-        Index        const              dstIndices[],
-        CornerSubset const              dstSubsets[]) const {
+        SurfaceDescriptor const       & surface) const {
 
     //  Should be creating a linear patch directly rather than copying:
     assert(!srcEval._isLinear);
@@ -337,19 +324,16 @@ LimitSurfaceFactory::copyNonLinearEvaluator(LimitSurface::Evaluator & dstEval,
     dstEval._controlPoints.SetSize(srcEval._numControlPoints);
 
     //
-    //  Assign regular vs irregular fields and gather control accordingly:
+    //  Assign regular/irregular fields and gather control points:
     //
     if (dstEval._isRegular) {
         dstEval._regPatchType  = srcEval._regPatchType;
         dstEval._regPatchParam = srcEval._regPatchParam;
 
-        if (_regFaceSize == 4) {
-            faceTopology.GatherRegularPatchPoints4(dstSubsets, dstIndices,
-                                                  &dstEval._controlPoints[0]);
-        } else {
-            faceTopology.GatherRegularPatchPoints3(dstSubsets, dstIndices,
-                                                  &dstEval._controlPoints[0]);
-        }
+        RegularPatchBuilder builder(surface);
+        assert(builder.GetNumControlVertices() == dstEval._numControlPoints);
+
+        builder.GatherControlVertexIndices(&dstEval._controlPoints[0]);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numRegularPatches ++;
 #endif
@@ -357,8 +341,10 @@ __numRegularPatches ++;
         dstEval._irregPatch = srcEval._irregPatch;
         dstEval._irregOwner = false;
 
-        faceTopology.GatherControlVertexIndices(dstSubsets, dstIndices,
-                                               &dstEval._controlPoints[0]);
+        IrregularPatchBuilder builder(surface);
+        assert(builder.GetNumControlVertices() == dstEval._numControlPoints);
+
+        builder.GatherControlVertexIndices(&dstEval._controlPoints[0]);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numIrregularPatches ++;
 __numIrregularCreated += dstEval._irregOwner;
@@ -368,176 +354,12 @@ __numIrregularCreated += dstEval._irregOwner;
     dstEval._isValid = true;
 }
 
-IrregPatchPtr
-LimitSurfaceFactory::findIrregularPatch(
-        FaceTopology const & faceTopology,
-        CornerSubset const   faceSubsets[],
-        bool               & patchIsNew,
-        bool               & patchIsCached) const {
-
-    //
-    //  Identify the irregular patch from the cache if specified:
-    //
-    patchIsNew    = false;
-    patchIsCached = false;
-
-    IrregPatchPtr      patch = 0;
-    TopologyCache::Key patchKey;
-
-    //  Try to retrieve the patch from the cache:
-    if (_topologyCache) {
-        patchKey = faceTopology.ComputeTopologyKey(faceSubsets);
-        if (patchKey.IsValid()) {
-            patch = _topologyCache->Find(patchKey);
-            patchIsCached = (patch != 0);
-        }
-    }
-
-    //  Create a new patch (no cache, no valid key or not cached):
-    if (patch == 0) {
-        patch = buildIrregularPatch(faceTopology, faceSubsets);
-        patchIsNew = true;
-    }
-
-    //  Update the cache with the new patch when necessary:
-    if (patchKey.IsValid() && !patchIsCached) {
-        //  Beware the race condition when adding to the cache:
-        IrregPatchPtr patchAdded = _topologyCache->Add(patchKey,patch);
-        if (patchAdded != patch) {
-            delete patch;
-            patch = patchAdded;
-        }
-        patchIsCached = true;
-    }
-    return patch;
-}
-
-//
-//  WIP - the construction of the irregular patch, i.e. the Far::PatchTree,
-//  will be moved elsewhere.  The Factory doesn't need to know the details
-//  of the IrregPatchType -- only that is support some minimal interface.
-//  So construction will be moved to some kind of IrregPatchBuilder that
-//  will assemble it from the FaceTopology and anything else required (i.e.
-//  options related to approximation passed to the Factory as Options).
-//
-IrregPatchPtr
-LimitSurfaceFactory::buildIrregularPatch(
-        FaceTopology const & faceTopology,
-        CornerSubset const   faceSubsets[]) const {
-
-    //
-    //  Gather all topology data the given topology container.  This will
-    //  be gathered on the stack as much as possible and referenced by a
-    //  Far::TopologyDescriptor -- an intermediate step towards creating
-    //  the irregular PatchTree.
-    //
-    //  WIP - the Far::TopologyDescriptor can be eliminated by defining
-    //  a factory to create a Far::TopologyDescriptor directly from an
-    //  instance of FaceTopology. Some of this intermediate buffering can
-    //  also be eliminated in that case.
-    //
-    int vertCount  = faceTopology.GetNumControlVertices(faceSubsets);
-    int faceCount  = faceTopology.GetNumControlFaces(faceSubsets);
-    int fVertCount = 0;
-
-    Vtr::internal::StackBuffer<int, 64,true> faceSizes(faceCount);
-    if (faceTopology._hasIncIrregFaces) {
-        fVertCount = faceTopology.GatherControlFaceSizes(faceSubsets,
-                                                         faceSizes);
-    } else {
-        fVertCount = faceCount * _regFaceSize;
-        std::fill(&faceSizes[0], &faceSizes[faceCount], _regFaceSize);
-    }
-
-    Vtr::internal::StackBuffer<int,256,true> faceVerts(fVertCount);
-    faceTopology.GatherControlFaceVertices(faceSubsets, vertCount, faceVerts);
-
-    //  Gather sharpness for corner vertices:
-    int faceSize = faceTopology.GetFaceSize();
-    Vtr::internal::StackBuffer<float,8,true> cornerWeights(faceSize);
-    Vtr::internal::StackBuffer<Index,8,true> cornerIndices(faceSize);
-
-    int nSharpVerts = faceTopology.GatherControlVertexSharpness(faceSubsets,
-                        cornerIndices, cornerWeights);
-
-    //  Gather sharpness for edges:
-    Vtr::internal::StackBuffer<float,8,true>  creaseWeights(vertCount);
-    Vtr::internal::StackBuffer<Index,16,true> creaseIndices(vertCount * 2);
-
-    int nSharpEdges = 0;
-    if (faceTopology._hasSharpEdges) {
-        nSharpEdges = faceTopology.GatherControlEdgeSharpness(faceSubsets,
-                        creaseIndices, creaseWeights);
-    }
-
-    //
-    //  Declare a TopologyDescriptor to reference the data gathered above:
-    //
-    Far::TopologyDescriptor topDescriptor;
-
-    topDescriptor.numVertices = vertCount;
-    topDescriptor.numFaces    = faceCount;
-
-    topDescriptor.numVertsPerFace    = faceSizes;
-    topDescriptor.vertIndicesPerFace = faceVerts;
-
-    if (nSharpVerts) {
-        topDescriptor.numCorners          = nSharpVerts;
-        topDescriptor.cornerVertexIndices = cornerIndices;
-        topDescriptor.cornerWeights       = cornerWeights;
-    }
-
-    if (nSharpEdges) {
-        topDescriptor.numCreases             = nSharpEdges;
-        topDescriptor.creaseVertexIndexPairs = creaseIndices;
-        topDescriptor.creaseWeights          = creaseWeights;
-    }
-
-    //
-    //  Important:
-    //      Override the scheme options for boundary interpolation: all
-    //  corners have already been explicitly sharpened where necessary,
-    //  so do not allow the user options assigned to the mesh to sharpen
-    //  those that do not warrant it (e.g. sharpening a corner for a
-    //  subset that should stay smooth):
-    //
-    Sdc::Options localSchemeOptions = _schemeOptions;
-    localSchemeOptions.SetVtxBoundaryInterpolation(
-                                Sdc::Options::VTX_BOUNDARY_EDGE_ONLY);
-
-    //  Construct a TopologyRefiner in order to create a PatchTree:
-    typedef Far::TopologyDescriptor Descriptor;
-    typedef Far::TopologyRefinerFactory<Descriptor> RefinerFactory;
-
-    RefinerFactory::Options refinerOptions;
-    refinerOptions.schemeType = _schemeType;
-    refinerOptions.schemeOptions = localSchemeOptions;
-    refinerOptions.validateFullTopology = true;  // WIP - remove when stable
-
-    Far::TopologyRefiner * refiner =
-            RefinerFactory::Create(topDescriptor, refinerOptions);
-
-    //  Create the PatchTree:
-    Far::PatchTreeFactory::Options patchTreeOptions;
-    patchTreeOptions.maxPatchDepthSharp = _limitOptions.MaxLevelPrimary();
-    patchTreeOptions.maxPatchDepthSmooth = _limitOptions.MaxLevelSecondary();
-    patchTreeOptions.includeInteriorPatches = false;
-
-    IrregPatchPtr patchTree =
-            Far::PatchTreeFactory::Create(*refiner, patchTreeOptions);
-
-    assert(patchTree->GetNumControlPoints() == vertCount);
-
-    delete refiner;
-    return patchTree;
-}
-
 
 //
 //  Methods to deal with topology assembly and inspection:
 //
 bool
-LimitSurfaceFactory::populateFaceTopology(Index faceIndex,
+LimitSurfaceFactory::gatherFaceNeighborhoodTopology(Index faceIndex,
         FaceTopology & faceTopology) const {
 
     int N = getFaceSize(faceIndex);
@@ -555,35 +377,18 @@ LimitSurfaceFactory::populateFaceTopology(Index faceIndex,
 
     faceTopology.Finalize();
 
-    //  WIP - eventually need face-vert indices here to fully initialize
-    //  manifold subsets at non-manifold vertices:
-    faceTopology.InitializeVertexSubsets();
-
-    //  Debugging output:
-    bool debugFace  = false;
-    if (debugFace) {
-        bool debugVerts = false;
-
-        Vtr::internal::StackBuffer<Index,1024,true> faceIndices;
-        faceIndices.SetSize(faceTopology._numFaceVertsTotal);
-        gatherFaceTopologyIndices(faceIndex, faceTopology, faceIndices);
-
-        printf("    populateFaceTopology(face = %d):\n", faceIndex);
-        faceTopology.print(faceIndices, debugVerts);
-    }
     return true;
 }
 
 int
-LimitSurfaceFactory::gatherFaceTopologyIndices(
-        Index                faceIndex,
+LimitSurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
         FaceTopology const & faceTopology,
-        Index                faceTopologyIndices[],
+        Index                controlIndices[],
         int                  fvarIndex) const {
 
     int faceSize = faceTopology.GetFaceSize();
 
-    Index * indices  = faceTopologyIndices;
+    Index * indices  = controlIndices;
     int     nIndices = 0;
 
     for (int i = 0; i < faceSize; ++i) {
@@ -592,7 +397,9 @@ LimitSurfaceFactory::gatherFaceTopologyIndices(
                 getFaceCornerFVarValueIndices(faceIndex, i, indices, fvarIndex);
 
         //  WIP - what should behavior be when not getting expected number?
-        assert(numFaceVerts == faceTopology._vertexTopology[i]._numFaceVerts);
+        if (numFaceVerts != faceTopology._vertexTopology[i]._numFaceVerts) {
+            return -1;
+        }
 
         indices  += numFaceVerts;
         nIndices += numFaceVerts;
@@ -668,15 +475,17 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
 
     //
     //  The main "buffers" for face topology and control vertex indices --
-    //  initialize below only when necessary:
+    //  declare but only initialize below when necessary:
     //
-    typedef Vtr::internal::StackBuffer<Index,96,true> IndexBuffer;
+    typedef Vtr::internal::StackBuffer<Index,72,true> IndexBuffer;
 
     FaceTopology faceTopology(_schemeType, _schemeOptions);
-    IndexBuffer  faceIndices;
+
+    SurfaceDescriptor vtxSurface(faceTopology);
+    IndexBuffer       vtxIndices;
 
     if (needTopology) {
-        if (!populateFaceTopology(baseFace, faceTopology)) {
+        if (!gatherFaceNeighborhoodTopology(baseFace, faceTopology)) {
             return false;
         }
 
@@ -689,12 +498,23 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
         bool needVertexIndices = hasNonLinearVtxEvaluator ||
                                  faceTopology._hasUnorderedVerts;
         if (needVertexIndices) {
-            faceIndices.SetSize(faceTopology._numFaceVertsTotal);
-            gatherFaceTopologyIndices(baseFace, faceTopology, faceIndices);
+            vtxIndices.SetSize(faceTopology._numFaceVertsTotal);
+            if (gatherFaceNeighborhoodIndices(baseFace, faceTopology,
+                    vtxIndices, -1) < 0) {
+                return false;
+            }
 
             if (faceTopology._hasUnorderedVerts) {
-                //faceTopology.ResolveUnorderedCornerTopology(faceIndices);
+                //faceTopology.ResolveUnorderedCornerTopology(vtxIndices);
             }
+
+            vtxSurface.Initialize(vtxIndices);
+        }
+
+        bool debugFaceTopology = false;
+        if (debugFaceTopology) {
+            printf("SurfaceDescriptor(face = %d):\n", baseFace);
+            vtxSurface.print();
         }
 
         //  WIP - this will be removed once all cases are supported
@@ -702,6 +522,7 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
             hasNonLinearVtxEvaluator  = false;
             hasNonLinearFVarEvaluator = false;
         }
+
     }
 
     //  Assign a parameterization (reverting to regular when degenerate)
@@ -720,52 +541,54 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
     }
 
     if (evalOptions.CreateVaryingEvaluator()) {
-        assignLinearEvaluator(s._varEval, baseFace);
+        assignLinearEvaluator(s._varEval, baseFace, -1);
     }
 
     if (evalOptions.CreateVertexEvaluator()) {
         if (!hasNonLinearVtxEvaluator) {
-            assignLinearEvaluator(s._vtxEval, baseFace);
-        } else if (faceTopology.IsRegular()) {
-            assignRegularEvaluator(s._vtxEval, faceTopology, faceIndices);
+            assignLinearEvaluator(s._vtxEval, baseFace, -1);
+        } else if (vtxSurface.IsRegular()) {
+            assignRegularEvaluator(s._vtxEval, vtxSurface);
         } else {
-            assignIrregularEvaluator(s._vtxEval, faceTopology, faceIndices);
+            assignIrregularEvaluator(s._vtxEval, vtxSurface);
         }
     }
 
     if (evalOptions.GetNumFVarEvaluators()) {
-        Vtr::internal::StackBuffer<CornerSubset,8,true> fvarCorners(faceSize);
+        //  We can re-use the vertex index buffer at this point:
+        IndexBuffer & fvarIndices = vtxIndices;
 
         int         numSpecified   = evalOptions.GetNumFVarEvaluators();
         int const * fvarsSpecified = evalOptions.GetFVarEvaluatorIndices();
 
         for (int i = 0; i < numSpecified; ++i) {
-            int fvarIndex = fvarsSpecified ? fvarsSpecified[i] : i;
-            if (fvarIndex >= _numFVarTopologies) continue;
+            int fvarID = fvarsSpecified ? fvarsSpecified[i] : i;
+            if (fvarID >= _numFVarTopologies) continue;
 
-            LimitSurface::Evaluator & fvarEval = s._fvarEval[fvarIndex];
+            LimitSurface::Evaluator & fvarEval = s._fvarEval[fvarID];
 
             if (!hasNonLinearFVarEvaluator) {
-                assignLinearEvaluator(fvarEval, baseFace, fvarIndex);
+                assignLinearEvaluator(fvarEval, baseFace, fvarID);
                 continue;
             }
 
-            //  Recall we can re-use the index buffer for face-varying:
-            gatherFaceTopologyIndices(baseFace,
-                    faceTopology, faceIndices, fvarIndex);
+            //  Skip if subclass fails to gather indices for given fvarID
+            if (gatherFaceNeighborhoodIndices(baseFace, faceTopology,
+                    fvarIndices, fvarID) < 0) {
+                continue;
+            }
 
-            bool fvarMatches = faceTopology.IdentifyFaceVaryingSubsets(
-                                                faceIndices, fvarCorners);
+            //  Detect matching topology or regular and dispatch accordingly:
+            SurfaceDescriptor fvarSurface(faceTopology);
 
-            if (fvarMatches && s._vtxEval._isValid) {
-                copyNonLinearEvaluator(fvarEval, s._vtxEval, faceTopology,
-                                       faceIndices, fvarCorners);
-            } else if (faceTopology.IsRegular(fvarCorners)) {
-                assignRegularEvaluator(fvarEval, faceTopology,
-                                       faceIndices, fvarCorners);
+            fvarSurface.InitializeFaceVarying(vtxSurface, fvarIndices);
+
+            if (fvarSurface.MatchesVertexTopology() && s._vtxEval._isValid) {
+                copyNonLinearEvaluator(fvarEval, s._vtxEval, fvarSurface);
+            } else if (fvarSurface.IsRegular()) {
+                assignRegularEvaluator(fvarEval, fvarSurface);
             } else {
-                assignIrregularEvaluator(fvarEval, faceTopology,
-                                         faceIndices, fvarCorners);
+                assignIrregularEvaluator(fvarEval, fvarSurface);
             }
         }
     }
