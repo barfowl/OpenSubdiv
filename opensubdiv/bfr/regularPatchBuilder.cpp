@@ -38,14 +38,14 @@ namespace Bfr {
 RegularPatchBuilder::RegularPatchBuilder(SurfaceDescriptor const & surface) :
         _surface(surface) {
 
-    if (_surface._topology._faceSize == 4) {
-        assert(_surface._topology._regFaceSize == 4);
+    if (_surface.GetTopology()._faceSize == 4) {
+        assert(_surface.GetTopology()._regFaceSize == 4);
 
         _patchSize = 16;
         _patchType = Far::PatchDescriptor::REGULAR;
     } else {
-        assert(_surface._topology._faceSize == 3);
-        assert(_surface._topology._regFaceSize == 3);
+        assert(_surface.GetTopology()._faceSize == 3);
+        assert(_surface.GetTopology()._regFaceSize == 3);
 
         _patchSize = 12;
         _patchType = Far::PatchDescriptor::LOOP;
@@ -62,7 +62,7 @@ RegularPatchBuilder::GetBoundaryMask() const {
 
     assert(_patchSize == 16);
 
-    CornerSubset const * C = _surface._corners;
+    CornerSubset const * C = _surface.GetSubsets();
     return ((C[0]._isBoundary & (C[0]._numFacesBefore == 0)) << 0) |
            ((C[1]._isBoundary & (C[1]._numFacesBefore == 0)) << 1) |
            ((C[2]._isBoundary & (C[2]._numFacesBefore == 0)) << 2) |
@@ -78,18 +78,18 @@ int
 RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
 
     //Index fvPhantom = -1;
-    Index fvPhantom = _surface._indices[0];
+    Index fvPhantom = _surface.GetIndices()[0];
 
     //  WIP - currently passing in full set of indices for all face
     //  corners, but may gather them locally in future:
-    Index const * fvIndices = &_surface._indices[0];
+    Index const * fvIndices = &_surface.GetIndices()[0];
 
     Index * P = patchPoints;
     for (int i = 0; i < 4; ++i) {
-        VertexTopology const & vTop = _surface._topology._vertexTopology[i];
-        CornerSubset   const & cSub = _surface._corners[i];
+        CornerTopology const & vTop = _surface.GetTopology().GetTopology(i);
+        CornerSubset   const & cSub = _surface.GetSubsets()[i];
 
-        int faceCorner = _surface._topology._faceInVertex[i];
+        int faceCorner = vTop.GetFaceInVertex();
         Index const *fvCorner = &fvIndices[faceCorner * 4];
 
         switch (i) {
@@ -103,8 +103,8 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
                 P[1] = fvOpposite[3];
             } else {
                 int faceOther = cSub._numFacesAfter ?
-                                vTop.getFaceNext(faceCorner) :
-                                vTop.getFacePrevious(faceCorner);
+                                vTop.GetFaceNext(faceCorner) :
+                                vTop.GetFacePrevious(faceCorner);
                 Index const *fvOther = &fvIndices[faceOther * 4];
                 P[4] = cSub._numFacesAfter  ? fvOther[3] : fvPhantom;
                 P[0] = fvPhantom;
@@ -121,8 +121,8 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
                 P[7] = fvOpposite[3];
             } else {
                 int faceOther = cSub._numFacesAfter ?
-                                vTop.getFaceNext(faceCorner) :
-                                vTop.getFacePrevious(faceCorner);
+                                vTop.GetFaceNext(faceCorner) :
+                                vTop.GetFacePrevious(faceCorner);
                 Index const *fvOther = &fvIndices[faceOther * 4];
                 P[2] = cSub._numFacesAfter  ? fvOther[3] : fvPhantom;
                 P[3] = fvPhantom;
@@ -139,8 +139,8 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
                 P[14] = fvOpposite[3];
             } else {
                 int faceOther = cSub._numFacesAfter ?
-                                vTop.getFaceNext(faceCorner) :
-                                vTop.getFacePrevious(faceCorner);
+                                vTop.GetFaceNext(faceCorner) :
+                                vTop.GetFacePrevious(faceCorner);
                 Index const *fvOther = &fvIndices[faceOther * 4];
                 P[11] = cSub._numFacesAfter  ? fvOther[3] : fvPhantom;
                 P[15] = fvPhantom;
@@ -157,8 +157,8 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
                 P[ 8] = fvOpposite[3];
             } else {
                 int faceOther = cSub._numFacesAfter ?
-                                vTop.getFaceNext(faceCorner) :
-                                vTop.getFacePrevious(faceCorner);
+                                vTop.GetFaceNext(faceCorner) :
+                                vTop.GetFacePrevious(faceCorner);
                 Index const *fvOther = &fvIndices[faceOther * 4];
                 P[13] = cSub._numFacesAfter  ? fvOther[3] : fvPhantom;
                 P[12] = fvPhantom;
@@ -166,7 +166,7 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
             }
             break;
         }
-        fvIndices += vTop._numFaceVerts;
+        fvIndices += vTop.GetNumFaceVertices();
     }
     return 16;
 }
@@ -194,7 +194,7 @@ RegularPatchBuilder::GatherControlVertexIndices(Index cvIndices[]) const {
 void
 RegularPatchBuilder::print() const {
 
-    assert(_surface._indices != 0);
+    assert(_surface.GetIndices() != 0);
 }
 
 } // end namespace Bfr

@@ -34,28 +34,26 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 
 //
-//  Main initialize/finalize methods used by clients to delimit assignment:
+//  Main initialize/finalize methods used by clients to delimit the
+//  assignment (most work is now handled by the containing class):
 //
 void
 VertexTopology::Initialize(int numFaces) {
 
     assert(numFaces > 0);
+    _numFaces = numFaces;
+
+    _vertSharpness = 0.0f;
+
+    _isOrdered  = false;
+    _isBoundary = false;
+
+    _hasFaceSizes     = true;
+    _hasEdgeSharpness = false;
+    _wasFaceSizesSet  = false;
 
     _isInitialized = true;
     _isFinalized   = false;
-
-    _isOrdered       = false;
-    _isBoundary      = false;
-    _isInfSharp      = false;
-    _isSemiSharp     = false;
-    _hasSharpEdge    = false;
-    _hasUnSharpBound = false;
-
-    _numFaces = numFaces;
-    _commonFaceSize = 0;
-    _numFaceVerts = 0;
-
-    _vertSharpness = 0.0f;
 }
 
 void
@@ -64,108 +62,31 @@ VertexTopology::Finalize() {
     assert(_isInitialized);
 
     //
-    //  WIP - most of this is likely moving to a class that either
-    //  is-a or has-a VertexTopology instance.  A little more tagging
-    //  will be done for val-2 verts and degenerate faces.
+    //  Should test for errors here and fail, e.g.:
+    //      - whether face sizes common not set (don't rely on default)
+    //      - face sizes expected but not present
+    //      - edge sharpness expected but not present
     //
-    //  Deal with face sizes first -- ignore array if common:
-    //
-    if (_commonFaceSize) {
-        _numFaceVerts = _numFaces * _commonFaceSize;
-    } else {
-        assert(_faceSizeOffsets.GetSize() > 0);
+    assert(_wasFaceSizesSet);
 
-        //  Convert N face sizes to N+1 offsets and assign face-verts:
+    if (_hasFaceSizes)     assert(_faceSizeOffsets.GetSize() > 0);
+    if (_hasEdgeSharpness) assert(_faceEdgeSharpness.GetSize() > 0);
+
+    //  Convert the N face sizes to N+1 offsets and assign face-verts:
+    if (_hasFaceSizes) {
+        //  WIP - worth testing if all same size and ignoring if so
         int sum = 0;
         for (int i = 0; i < _numFaces; ++i) {
             //  WIP - test face size for degenerate (< 3) here and tag
+            //      - may want to defer this conversion for this reason
             int nextSum = sum + _faceSizeOffsets[i];
             _faceSizeOffsets[i] = sum;
             sum = nextSum;
         }
         _faceSizeOffsets[_numFaces] = sum;
-
-        _numFaceVerts = _faceSizeOffsets[_numFaces];
-    }
-
-    //
-    //  Deal with vertex sharpness -- simply assign tags
-    //
-    _isInfSharp  = Sdc::Crease::IsInfinite(_vertSharpness);
-    _isSemiSharp = (_vertSharpness > 0.0f) && !_isInfSharp;
-
-    //
-    //  Deal with edge sharpness:
-    //
-    _hasUnSharpBound = _isBoundary;
-
-    if (_hasSharpEdge) {
-        int numSharpness = _numFaces * 2;
-        if (_isBoundary) {
-            int last = numSharpness - 1;
-            _hasUnSharpBound =
-                    !Sdc::Crease::IsInfinite(_faceEdgeSharpness[0]) ||
-                    !Sdc::Crease::IsInfinite(_faceEdgeSharpness[last]);
-
-            _faceEdgeSharpness[0]    = 0.0f;
-            _faceEdgeSharpness[last] = 0.0f;
-        }
-
-        //  WIP - note we need to look for 3 or more inf-sharp edges (only
-        //  one for a boundary) to tag this vertex as inf-sharp as a result
-
-        //  Ignore assigned edge sharpness if all zero:
-        _hasSharpEdge = false;
-        for (int i = 0; i < numSharpness; ++i) {
-            if (_faceEdgeSharpness[i] > 0.0f) {
-                _hasSharpEdge = true;
-                break;
-            }
-        }
     }
 
     _isFinalized = true;
-}
-
-bool
-VertexTopology::moreThanTwoUniqueCornerIndices(Index const indices[]) const {
-
-    //
-    //  This is primarily used for face-varying indices -- where any
-    //  more than three unique values is irrelant:
-
-    //  WIP - potentially streamline this to increment indices[] by
-    //  face sizes, especially when face-size is constant
-
-    Index index1 = getFaceVertexAtCorner(0, indices);
-    Index index2 = -1;
-
-    for (int i = 1; i < _numFaces; ++i) {
-        Index index = getFaceVertexAtCorner(i, indices);
-        if (index != index1) {
-            if (index2 < 0) {
-                index2 = index;
-            } else if (index != index2) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-int
-VertexTopology::getNumMatchingCornerIndices(Index indexToMatch,
-                                            Index const indices[]) const {
-
-    //  WIP - streamline this to increment indices[] by face sizes
-
-    int numMatches = 0;
-    for (int i = 0; i < _numFaces; ++i) {
-        if (getFaceVertexAtCorner(i, indices) == indexToMatch) {
-            numMatches ++;
-        }
-    }
-    return numMatches;
 }
 
 } // end namespace Bfr

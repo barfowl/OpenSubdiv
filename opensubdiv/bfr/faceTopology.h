@@ -28,7 +28,7 @@
 #include "../version.h"
 
 #include "../bfr/vertexTopology.h"
-#include "../bfr/topologyCache.h"
+#include "../bfr/cornerTopology.h"
 
 #include "../sdc/types.h"
 #include "../sdc/options.h"
@@ -93,7 +93,7 @@ namespace Bfr {
 //            allow support of non-manifold topology)
 //
 //  CornerSubset:
-//      - will remain unchanged
+//      - will remain unchanged, but moved elsewhere
 //      - should remain a very simple struct (no more than a few ints)
 //
 //  FaceTopology:
@@ -115,20 +115,6 @@ namespace Bfr {
 //  particularly accessors -- should be inline to additionally keep these
 //  efficient in terms of space and time.
 //
-struct CornerSubset {
-    unsigned short _isBoundary;
-    unsigned short _isSharp;
-
-    short _numFacesTotal;
-    short _numFacesBefore;
-    short _numFacesAfter;
-
-    //  These members place the corner relative to a particular collection
-    //  of subsets and so may be better off somewhere else...
-    short _numOuterVerts;
-    short _numOuterFaces;
-};
-
 class FaceTopology {
 public:
     FaceTopology(Sdc::SchemeType schemeType,
@@ -138,7 +124,20 @@ public:
     void Initialize(int faceSize);
     void Finalize();
 
-    int GetFaceSize() const { return _faceSize; }
+public:
+    Sdc::SchemeType GetSchemeType()    const { return _schemeType; }
+    Sdc::Options    GetSchemeOptions() const { return _schemeOptions; }
+
+    int GetFaceSize()    const { return _faceSize; }
+    int GetRegFaceSize() const { return _regFaceSize; }
+
+    CornerTopology       & GetTopology(int i)       { return _corner[i]; }
+    CornerTopology const & GetTopology(int i) const { return _corner[i]; }
+
+    CornerTags const GetTags() const { return _combinedTags; }
+
+    int GetNumFaceVertices() const { return _numFaceVertsTotal; }
+    int GetNumFaceVertices(int i) const{return _corner[i].GetNumFaceVertices();}
 
     //  WIP - will need some kind of public method to resolve unordered
     //  (non-manifold) vertices using the indices for all vertices.
@@ -153,7 +152,7 @@ public:
     //      - REMEMBER that Loop patches NOT fully supported:
     //          - regular patches also not complete for Loop
     bool IsUnsupported() const {
-        if (_hasVal2IntVerts || _hasUnorderedVerts) {
+        if (_combinedTags._unOrderedFaces || _combinedTags._interiorVal2Verts) {
             return true;
         }
         return false;
@@ -165,23 +164,14 @@ public:
 
     int _faceSize;
     int _regFaceSize;
-
-    unsigned int _hasBoundaryVerts  : 1;
-    unsigned int _hasInfSharpVerts  : 1;
-    unsigned int _hasSemiSharpVerts : 1;
-    unsigned int _hasSharpEdges     : 1;
-    unsigned int _hasUnSharpBound   : 1;
-    unsigned int _hasIncIrregFaces  : 1;
-    unsigned int _hasUnorderedVerts : 1;
-    unsigned int _hasVal2IntVerts   : 1;
-
-    unsigned int _isInitialized : 1;
-    unsigned int _isFinalized   : 1;
-
     int _numFaceVertsTotal;
 
-    Vtr::internal::StackBuffer<VertexTopology,8> _vertexTopology;
-    Vtr::internal::StackBuffer<int,8,true>       _faceInVertex;
+    CornerTags _combinedTags;
+
+    unsigned short _isInitialized : 1;
+    unsigned short _isFinalized   : 1;
+
+    Vtr::internal::StackBuffer<CornerTopology,4> _corner;
 };
 
 } // end namespace Bfr

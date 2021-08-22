@@ -27,6 +27,7 @@
 #-------------------------------------------------------------------------------
 # source & headers
 set(SOURCE_FILES
+     cornerTopology.cpp
      faceTopology.cpp
      irregularPatchBuilder.cpp
      limitSurface.cpp
@@ -41,6 +42,7 @@ set(SOURCE_FILES
 )
 
 set(PRIVATE_HEADER_FILES
+     cornerTopology.h
      faceTopology.h
      irregularPatchBuilder.h
      regularPatchBuilder.h

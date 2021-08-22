@@ -56,23 +56,14 @@ void
 FaceTopology::Initialize(int faceSize) {
 
     _faceSize = faceSize;
+    _numFaceVertsTotal = 0;
 
-    _hasBoundaryVerts  = false;
-    _hasInfSharpVerts  = false;
-    _hasSemiSharpVerts = false;
-    _hasSharpEdges     = false;
-    _hasUnSharpBound   = false;
-    _hasIncIrregFaces  = (faceSize != _regFaceSize);
-    _hasUnorderedVerts = false;
-    _hasVal2IntVerts   = false;
+    _combinedTags.Clear();
 
     _isInitialized = true;
     _isFinalized   = false;
 
-    _numFaceVertsTotal = 0;
-
-    _vertexTopology.SetSize(faceSize);
-    _faceInVertex.SetSize(faceSize);
+    _corner.SetSize(faceSize);
 }
 
 void
@@ -95,21 +86,12 @@ FaceTopology::Finalize() {
     assert(_isInitialized);
 
     for (int i = 0; i < _faceSize; ++i) {
-        VertexTopology & vTop = _vertexTopology[i];
-        assert(vTop._isFinalized);
+        CornerTopology & cTop  = GetTopology(i);
+        CornerTags       cTags = cTop.GetTags();
 
-        if (vTop._commonFaceSize) assert(vTop._commonFaceSize == _faceSize);
+        _combinedTags.BitwiseOr(cTags);
 
-        _hasBoundaryVerts  |=  vTop._isBoundary;
-        _hasInfSharpVerts  |=  vTop._isInfSharp;
-        _hasSemiSharpVerts |=  vTop._isSemiSharp;
-        _hasSharpEdges     |=  vTop._hasSharpEdge;
-        _hasUnSharpBound   |=  vTop._hasUnSharpBound;
-        _hasIncIrregFaces  |= (vTop._commonFaceSize != _regFaceSize);
-        _hasUnorderedVerts |= !vTop._isOrdered;
-        _hasVal2IntVerts   |= (vTop._numFaces == 2) && !vTop._isBoundary;
-
-        _numFaceVertsTotal += vTop._numFaceVerts;
+        _numFaceVertsTotal += cTop.GetNumFaceVertices();
     }
 
     _isFinalized = true;
@@ -121,13 +103,14 @@ FaceTopology::print(Index const faceVertIndices[]) const {
     printf("FaceTopology:\n");
     printf("    face size      = %d\n", _faceSize);
     printf("    num-face-verts = %d\n", _numFaceVertsTotal);
-    printf("    has inf-sharp verts  = %d\n", _hasInfSharpVerts);
-    printf("    has semi-sharp verts = %d\n", _hasSemiSharpVerts);
-    printf("    has any sharp edges  = %d\n", _hasSharpEdges);
-    printf("    has unsharp boundary = %d\n", _hasUnSharpBound);
-    printf("    inc irregular faces  = %d\n", _hasIncIrregFaces);
-    printf("    has unordered verts  = %d\n", _hasUnorderedVerts);
-    printf("    val-2 interior verts = %d\n", _hasVal2IntVerts);
+    printf("  Tags:\n");
+    printf("    inf-sharp verts  = %d\n", _combinedTags._infSharpVerts);
+    printf("    semi-sharp verts = %d\n", _combinedTags._semiSharpVerts);
+    printf("    any sharp edges  = %d\n", _combinedTags._anySharpEdges);
+    printf("    unsharp boundary = %d\n", _combinedTags._boundaryNonSharp);
+    printf("    irregular faces  = %d\n", _combinedTags._irregularFaceSizes);
+    printf("    unordered verts  = %d\n", _combinedTags._unOrderedFaces);
+    printf("    val-2 int verts  = %d\n", _combinedTags._interiorVal2Verts);
 
     if (faceVertIndices) {
         Index const * cornerFaceVertIndices = faceVertIndices;
@@ -135,21 +118,21 @@ FaceTopology::print(Index const faceVertIndices[]) const {
         for (int i = 0; i < _faceSize; ++i) {
             printf("    corner %d:\n", i);
 
-            VertexTopology const & vTop = _vertexTopology[i];
+            CornerTopology const & cTop = GetTopology(i);
             printf("        topology:  num faces  = %d, boundary = %d\n",
-                    vTop._numFaces, vTop._isBoundary);
+                    cTop.GetNumFaces(), cTop.IsBoundary());
 
             printf("        face-vert indices:\n");
 
-            for (int j = 0, n = 0; j < vTop._numFaces; ++j) {
+            for (int j = 0, n = 0; j < cTop.GetNumFaces(); ++j) {
                 printf("        face %d:  ", j);
-                int S = vTop.getFaceSize(j);
+                int S = cTop.GetFaceSize(j);
                 for (int k = 0; k < S; ++k, ++n) {
                     printf("%3d", cornerFaceVertIndices[n]);
                 }
                 printf("\n");
             }
-            cornerFaceVertIndices += vTop._numFaceVerts;
+            cornerFaceVertIndices += cTop.GetNumFaceVertices();
         }
     }
 }

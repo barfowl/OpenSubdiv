@@ -47,10 +47,10 @@ namespace Bfr {
 //
 //#define _BFR_DEBUG_TOP_TYPE_STATS
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
-static int __numLinearPatches    = 0;
-static int __numRegularPatches   = 0;
-static int __numIrregularPatches = 0;
-static int __numIrregularCreated = 0;
+static int __numLinearPatches     = 0;
+static int __numRegularPatches    = 0;
+static int __numIrregularPatches  = 0;
+static int __numIrregularUncached = 0;
 #endif
 
 //
@@ -97,24 +97,28 @@ LimitSurfaceFactory::~LimitSurfaceFactory() {
 bool debug = false;
 if (debug) {
 printf("LimitSurfaceFactory destructor:\n");
-printf(    " _numFaces            = %6d\n", _numFaces);
+printf("     _numFaces             = %6d\n", _numFaces);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
-printf(    "__numLinearPatches    = %6d\n", __numLinearPatches);
-printf(    "__numRegularPatches   = %6d\n", __numRegularPatches);
-printf(    "__numIrregularPatches = %6d\n", __numIrregularPatches);
-printf(    "__numIrregularCreated = %6d\n", __numIrregularCreated);
+printf("\n");
+printf("    __numLinearPatches     = %6d\n", __numLinearPatches);
+printf("    __numRegularPatches    = %6d\n", __numRegularPatches);
+printf("    __numIrregularPatches  = %6d\n", __numIrregularPatches);
+printf("\n");
 #endif
 if (_topologyCache) {
-printf(    " _topologyCache size  = %6d\n", (int) _topologyCache->Size());
+printf("     _topologyCache size   = %6d\n", (int) _topologyCache->Size());
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+printf("    __numIrregularUncached = %6d\n", __numIrregularUncached);
+#endif
 } else {
-printf(    " _topologyCache size  = %6d (disabled)\n", 0);
+printf("     _topologyCache size   = %6d (disabled)\n", 0);
 }
 }
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
-__numLinearPatches    = 0;
-__numRegularPatches   = 0;
-__numIrregularPatches = 0;
-__numIrregularCreated = 0;
+__numLinearPatches     = 0;
+__numRegularPatches    = 0;
+__numIrregularPatches  = 0;
+__numIrregularUncached = 0;
 #endif
 
     if (_limitOptions.ExternalTopologyCache() == 0) delete _topologyCache;
@@ -150,11 +154,11 @@ LimitSurfaceFactory::FaceHasLimitSurface(Index faceIndex) const {
         if (!gatherFaceNeighborhoodTopology(faceIndex, faceTopology)) {
             return false;
         }
-        if (faceTopology._hasUnorderedVerts) {
+        if (faceTopology.GetTags()._unOrderedFaces) {
             //  WIP - more here for potentially non-manifold vertices
             //      - need to gather indices to identify boundaries
         }
-        return faceTopology._hasUnSharpBound ? false : true;
+        return faceTopology.GetTags()._boundaryNonSharp ? false : true;
     }
     return true;
 }
@@ -271,8 +275,8 @@ LimitSurfaceFactory::assignIrregularEvaluator(
 
     IrregularPatchBuilder builder(surface, buildOptions);
 
-//bool debug = surface._topology._hasIncIrregFaces ||
-//             surface._topology._hasSharpEdges;
+//bool debug = surface._topology.GetTags()._irregularFaceSizes ||
+//             surface._topology.GetTags()._anySharpEdges;
 //if (debug) builder.print();
 
     if (_topologyCache == 0) {
@@ -296,8 +300,8 @@ LimitSurfaceFactory::assignIrregularEvaluator(
 
     eval._isValid = true;
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
-__numIrregularPatches ++;
-__numIrregularCreated += eval._irregOwner;
+__numIrregularPatches  ++;
+__numIrregularUncached += eval._irregOwner;
 #endif
 }
 
@@ -346,8 +350,8 @@ __numRegularPatches ++;
 
         builder.GatherControlVertexIndices(&dstEval._controlPoints[0]);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
-__numIrregularPatches ++;
-__numIrregularCreated += dstEval._irregOwner;
+__numIrregularPatches  ++;
+__numIrregularUncached += dstEval._irregOwner;
 #endif
     }
 
@@ -367,12 +371,17 @@ LimitSurfaceFactory::gatherFaceNeighborhoodTopology(Index faceIndex,
     faceTopology.Initialize(N);
 
     for (int i = 0; i < N; ++i) {
-        faceTopology._faceInVertex[i] = populateFaceCornerTopology(
-                faceIndex, i, faceTopology._vertexTopology[i]);
+        CornerTopology & cornerTop = faceTopology.GetTopology(i);
+        VertexTopology & vertexTop = cornerTop.GetVertexTopology();
+
+        cornerTop.Initialize(N);
 
         //  Subclass returning negative here indicates unsupported features
         //  or some other kind of failure:
-        if (faceTopology._faceInVertex[i] < 0) return false;
+        int faceInRing = populateFaceCornerTopology(faceIndex, i, vertexTop);
+        if (faceInRing < 0) return false;
+
+        cornerTop.Finalize(_regFaceSize, faceInRing);
     }
 
     faceTopology.Finalize();
@@ -397,7 +406,7 @@ LimitSurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
                 getFaceCornerFVarValueIndices(faceIndex, i, indices, fvarIndex);
 
         //  WIP - what should behavior be when not getting expected number?
-        if (numFaceVerts != faceTopology._vertexTopology[i]._numFaceVerts) {
+        if (numFaceVerts != faceTopology.GetNumFaceVertices(i)) {
             return -1;
         }
 
@@ -496,7 +505,7 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
         //  that we don't have to test later if they were already gathered:
         //  
         bool needVertexIndices = hasNonLinearVtxEvaluator ||
-                                 faceTopology._hasUnorderedVerts;
+                                 faceTopology.GetTags()._unOrderedFaces;
         if (needVertexIndices) {
             vtxIndices.SetSize(faceTopology._numFaceVertsTotal);
             if (gatherFaceNeighborhoodIndices(baseFace, faceTopology,
@@ -504,7 +513,7 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
                 return false;
             }
 
-            if (faceTopology._hasUnorderedVerts) {
+            if (faceTopology.GetTags()._unOrderedFaces) {
                 //faceTopology.ResolveUnorderedCornerTopology(vtxIndices);
             }
 

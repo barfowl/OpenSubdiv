@@ -124,18 +124,20 @@ RefinerLimitSurfaceFactory::populateFaceCornerTopology(
     {
         //  Assign ordering and boundary status:
         if (isManifold) {
-            vertexTopology.SetOrdered(vTag._boundary);
+            vertexTopology.SetOrdered(true);
+            vertexTopology.SetBoundary(vTag._boundary);
         }
 
-        //  Assign face sizes -- constant or variable:
-        if (!vTag._incidIrregFace) {
-            vertexTopology.SetCommonFaceSize(getRegularFaceSize());
-        } else {
-            int * faceSizes = vertexTopology.AccessFaceSizeBuffer();
+        //  Assign face sizes -- variable/explicit or constant/implicit:
+        if (vTag._incidIrregFace) {
+            vertexTopology.SetCommonFaceSize(false);
 
+            int * faceSizes = vertexTopology.AccessFaceSizeBuffer();
             for (int i = 0; i < nFaces; ++i) {
                 faceSizes[i] = baseLevel.getFaceVertices(vFaces[i]).size();
             }
+        } else {
+            vertexTopology.SetCommonFaceSize(true);
         }
 
         //  Assign vertex sharpness:

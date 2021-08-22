@@ -95,7 +95,6 @@ private:
 private:
     //  Private members:
     SurfaceDescriptor const & _surface;
-    FaceTopology      const & _topology;
     Options                   _options;
 
     int _numControlVerts;

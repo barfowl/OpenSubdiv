@@ -55,8 +55,9 @@ namespace Bfr {
 //      bool vertexOnBoundary = true;
 //
 //      vt.Initialize(numIncidentFaces);
-//          vt.SetOrdered(vertexOnBoundary);
-//          vt.SetCommonFaceSize(4);
+//          vt.SetOrdered(true);
+//          vt.SetBoundary(vertexOnBoundary);
+//          vt.SetCommonFaceSize();
 //      vt.Finalize();
 //
 //  For a more general example, to assign a valence-5 vertex with incident
@@ -67,7 +68,8 @@ namespace Bfr {
 //      bool vertexOnBoundary = false;
 //
 //      vt.Initialize(numIncidentFaces);
-//          vt.SetOrdered(vertexOnBoundary);
+//          vt.SetOrdered(true);
+//          vt.SetBoundary(vertexOnBoundary);
 //          int * incFaceSizes = vt.AccessFaceSizeBuffer();
 //
 //          for (int i = 0; i < numIncidentFaces; ++i) {
@@ -115,7 +117,7 @@ namespace Bfr {
 //  
 class VertexTopology {
 public:
-    VertexTopology() : _isInitialized(false) { }
+    VertexTopology() { }
     ~VertexTopology() { }
 
     //  The full declarartion must be enclosed by calls to these methods:
@@ -130,97 +132,101 @@ public:
     //      - sharpness of vertex and/or incident edges
     //
     //  Face ordering and manifold conditions:
-    void SetOrdered(bool isBoundaryVertex);
+    void SetOrdered(bool incidentFacesAreOrdered);
+    bool IsOrdered() const;
 
-    bool IsOrdered() const { return _isOrdered; }
-    bool IsBoundary() const { return _isBoundary; }
+    void SetBoundary(bool isOnBoundary);
+    bool IsBoundary() const;
 
     //  Sizes of incident faces -- must specify each if not common:
-    void SetCommonFaceSize(int size);
-    int  GetCommonFaceSize() const { return _commonFaceSize; }
+    void SetCommonFaceSize(bool incidentFacesHaveCommonSize);
+    bool HasCommonFaceSize() const;
 
     int * AccessFaceSizeBuffer();
 
-    //  Assigning vertex and edge sharpness:
-    void  SetVertexSharpness(float sharpness);
-    float GetVertexSharpness() const { return _vertSharpness; }
+    //  Assigning vertex sharpness:
+    void SetVertexSharpness(float sharpness);
+    bool HasVertexSharpness() const;
+
+    float GetVertexSharpness() const;
+
+    //  Assigning edge sharpness:
+    bool HasEdgeSharpness() const;
 
     float * AccessFaceEdgeSharpnessBuffer(bool clear);
 
 protected:
-    //
-    //  WIP - Protected access is currently given to LimitSurfaceFactory
-    //  to augment the description for its purposes, and to provide
-    //  frequently used methods to access it.  Current plans are to strip
-    //  this class down to a purely public class and moving all protected
-    //  members and methods to some other internal class that either "is-a"
-    //  or "has-a" instance of VertexTopology.  The protected methods that
-    //  are inline will then be moved to a non-public header.
-    //
-    friend class LimitSurfaceFactory;
-    friend class RegularPatchBuilder;
-    friend class IrregularPatchBuilder;
-    friend class SurfaceDescriptor;
-    friend class FaceTopology;
+    friend class CornerTopology;
 
-    //  Methods for inspection (many inlined below)
-    int getFaceSize(int faceIndex) const;
-
-    int getFaceNext(    int faceIndex) const;
-    int getFacePrevious(int faceIndex) const;
-
-    int getFaceAfter(int faceIndex, int step) const;
-    int getFaceBefore(int faceIndex, int step) const;
-
-    int getFaceVertexOffset(int faceIndex) const;
-
-    int getFaceVertexAtCorner(int faceIndex, Index const indices[]) const;
-    int getFaceVertexTrailing(int faceIndex, Index const indices[]) const;
-    int getFaceVertexLeading( int faceIndex, Index const indices[]) const;
-
-    //  Methods specific to inspection of face-varying indices:
-    int getNumMatchingCornerIndices(Index match, Index const indices[]) const;
-    bool moreThanTwoUniqueCornerIndices(Index const indices[]) const;
+    typedef Vtr::internal::StackBuffer<int,8,true>    IntBuffer;
+    typedef Vtr::internal::StackBuffer<float,16,true> FloatBuffer;
 
 protected:
-    //  WIP - full "int" size unnecessary for most members here, and since
-    //  we have local arrays of these, that may matter -- so use "short"
-    //  where possible internally but beware size conversion warnings
-    unsigned int _isInitialized   : 1;
-    unsigned int _isOrdered       : 1;
-    unsigned int _isBoundary      : 1;
-    unsigned int _isInfSharp      : 1;
-    unsigned int _isSemiSharp     : 1;
-    unsigned int _hasSharpEdge    : 1;
-    unsigned int _hasUnSharpBound : 1;
-    unsigned int _isFinalized     : 1;
+    //  Member variables assigned through the above interface:
+    unsigned short _isInitialized : 1;
+    unsigned short _isFinalized   : 1;
 
-    int _numFaces;
-    int _commonFaceSize;
+    unsigned short _isOrdered  : 1;
+    unsigned short _isBoundary : 1;
 
+    unsigned short _hasFaceSizes     : 1;
+    unsigned short _hasEdgeSharpness : 1;
+    unsigned short _wasFaceSizesSet  : 1;
+
+    short _numFaces;
     float _vertSharpness;
 
-    //  Use of cumulative offsets here inhibits use of short
-    Vtr::internal::StackBuffer<int,8,true>    _faceSizeOffsets;
-    Vtr::internal::StackBuffer<float,16,true> _faceEdgeSharpness;
-
-    //  WIP - not specified directly, so may be moved elsewhere
-    int _numFaceVerts;
+    FloatBuffer _faceEdgeSharpness;
+    IntBuffer   _faceSizeOffsets;
 };
 
 //
-//  Public inline methods for assignment:
+//  Public inline methods for simple assignment:
 //  
 inline void
-VertexTopology::SetOrdered(bool isBoundary) {
+VertexTopology::SetOrdered(bool isOrdered) {
+    _isOrdered  = isOrdered;
+}
+inline bool
+VertexTopology::IsOrdered() const {
+    return _isOrdered;
+}
 
-    _isOrdered  = true;
+inline void
+VertexTopology::SetBoundary(bool isBoundary) {
     _isBoundary = isBoundary;
 }
-inline void
-VertexTopology::SetCommonFaceSize(int size) {
+inline bool
+VertexTopology::IsBoundary() const {
+    return _isBoundary;
+}
 
-    _commonFaceSize = size;
+inline void
+VertexTopology::SetCommonFaceSize(bool common) {
+    _hasFaceSizes = !common;
+    _wasFaceSizesSet = true;
+}
+inline bool
+VertexTopology::HasCommonFaceSize() const {
+    return !_hasFaceSizes;
+}
+
+inline void
+VertexTopology::SetVertexSharpness(float vertSharpness) {
+    _vertSharpness = vertSharpness;
+}
+inline float
+VertexTopology::GetVertexSharpness() const {
+    return _vertSharpness;
+}
+
+inline bool
+VertexTopology::HasVertexSharpness() const {
+    return _vertSharpness > 0.0f;
+}
+inline bool
+VertexTopology::HasEdgeSharpness() const {
+    return _hasEdgeSharpness;
 }
 
 inline int *
@@ -229,13 +235,8 @@ VertexTopology::AccessFaceSizeBuffer() {
     if (_faceSizeOffsets.GetSize() == 0) {
         _faceSizeOffsets.SetSize(_numFaces + 1);
     }
+    _hasFaceSizes = true;
     return _faceSizeOffsets;
-}
-
-inline void
-VertexTopology::SetVertexSharpness(float sharpness) {
-
-    _vertSharpness = sharpness;
 }
 
 inline float *
@@ -247,61 +248,8 @@ VertexTopology::AccessFaceEdgeSharpnessBuffer(bool clear) {
     if (clear) {
         std::fill(&_faceEdgeSharpness[0], &_faceEdgeSharpness[_numFaces*2], 0);
     }
-    _hasSharpEdge = true;
+    _hasEdgeSharpness = true;
     return _faceEdgeSharpness;
-}
-
-//
-//  Non-public inline methods for traversing and gathering properties
-//  of the incident faces of the vertex:
-//  
-inline int
-VertexTopology::getFaceSize(int face) const {
-
-    return _commonFaceSize ? _commonFaceSize :
-            (_faceSizeOffsets[face+1] - _faceSizeOffsets[face]);
-}
-
-inline int
-VertexTopology::getFaceNext(int face) const {
-    assert(_isOrdered);
-    return ((face + 1) == _numFaces ) ? 0 : (face + 1);
-}
-inline int
-VertexTopology::getFacePrevious(int face) const {
-    assert(_isOrdered);
-    return face ? (face - 1) : (_numFaces - 1);
-}
-
-inline int
-VertexTopology::getFaceAfter(int face, int step) const {
-    assert(_isOrdered);
-    return (face + step) % _numFaces;
-}
-inline int
-VertexTopology::getFaceBefore(int face, int step) const {
-    assert(_isOrdered);
-    return (face - step + _numFaces) % _numFaces;
-}
-
-inline int
-VertexTopology::getFaceVertexOffset(int face) const {
-
-    return _commonFaceSize ? (face * _commonFaceSize) : _faceSizeOffsets[face];
-}
-
-inline int
-VertexTopology::getFaceVertexAtCorner(int face, Index const indices[]) const {
-    return indices[getFaceVertexOffset(face)];
-}
-inline int
-VertexTopology::getFaceVertexLeading(int face, Index const indices[]) const {
-    return indices[getFaceVertexOffset(face) + 1];
-}
-inline int
-VertexTopology::getFaceVertexTrailing(int face, Index const indices[]) const {
-    // There will be no index access issues using "face+1"
-    return indices[getFaceVertexOffset(face+1) - 1];
 }
 
 } // end namespace Bfr
