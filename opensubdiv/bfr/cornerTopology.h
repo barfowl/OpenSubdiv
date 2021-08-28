@@ -27,95 +27,30 @@
 
 #include "../version.h"
 
+#include "../bfr/cornerTag.h"
 #include "../bfr/vertexTopology.h"
-#include "../vtr/types.h"
-#include "../vtr/stackBuffer.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
 
-
-//
-//  CornerTags is a simple set of bits that identify exceptional properties
-//  at the corner vertices of a face that warrant closer inspection (and
-//  potential additional processing).  As with some bitfields in Far, this
-//  supports bitwise-OR so that tags for the corners of a face can quickly
-//  be combined to determine properties of the associated limit surface:
-//
-struct CornerTags {
-    CornerTags() { }
-
-    typedef unsigned short IntType;
-
-    IntType _boundaryVerts      : 1;
-    IntType _boundaryCorners    : 1;
-    IntType _boundaryNonSharp   : 1;
-    IntType _infSharpVerts      : 1;
-    IntType _semiSharpVerts     : 1;
-    IntType _anySharpEdges      : 1;
-    IntType _unCommonFaceSizes  : 1;
-    IntType _irregularFaceSizes : 1;
-    IntType _unOrderedFaces     : 1;
-    IntType _nonManifoldVerts   : 1;
-    IntType _interiorVal2Verts  : 1;
-
-    //  Integer/bit conversions and operations:
-    void Clear() {
-        std::memset(this, 0, sizeof(*this));
-    }
-    IntType GetBits() const {
-        IntType bits;
-        std::memcpy(&bits, this, sizeof(*this));
-        return bits;
-    }
-    void SetBits(IntType bits) {
-        std::memcpy(this, &bits, sizeof(*this));
-    }
-    void BitwiseOr(CornerTags const & tags) {
-        SetBits(GetBits() | tags.GetBits());
-    }
-};
-
-
-//
-//  CornerSubset is a simple struct that identifies a topological subset
-//  around a vertex (i.e. CornerTopology).  Such subsets are what define
-//  the limit surface around a face:
-//
-struct CornerSubset {
-    //  WIP - replace boundary and sharp bits with CornerTags
-    CornerTags _tags;
-    //bool IsBoundary() const { return _tags._boundaryVerts; }
-    //bool IsSharp()    const { return _tags._infSharpVerts; }
-
-    //  WIP - these two bits are now redundant -- consider removing
-    unsigned short _isBoundary;
-    unsigned short _isSharp;
-    bool IsBoundary() const { return _isBoundary; }
-    bool IsSharp() const { return _isSharp; }
-
-    short _numFacesTotal;
-    short _numFacesBefore;
-    short _numFacesAfter;
-
-    //  These members place the corner relative to a particular collection
-    //  of subsets and so may be better off somewhere else...
-    short _numOuterVerts;
-    short _numOuterFaces;
-};
-
 //
 //  The CornerTopology class wraps the public VertexTopology class.  It
 //  extends VertexTopology with additional topological information and
-//  makes it more widely available to internal classes.
+//  methods to make it more widely available to internal classes.
 //
-//  One noteworthy extension of CornerTopology is that it includes the
+//  One fundamental extension of CornerTopology is that it includes the
 //  location of the face in the ring of incident faces around the vertex.
 //  VertexTopology alone simple specifies the neighborhood of the vertex,
-//  but the CornerTopology provides context relative to the face for which
-//  all of this information is being gathered.
+//  but the CornerTopology provides context relative to the face for
+//  which all of this information is being gathered.
+//
+//  Several instances of CornerTopology (one for each corner of a face)
+//  are necessary to fully define the limit surface for a face, but in
+//  many cases, only a subset of the CornerTopology's incident faces will
+//  actually contribute to the surface. A companion class for defining
+//  that subset is defined elsewhere.
 //  
 class CornerTopology {
 public:
@@ -130,20 +65,8 @@ public:
 
 public:
     //  Methods to query properties after finalization:
-    CornerTags GetTags() const { return _tags; }
+    CornerTag GetTag() const { return _tag; }
 
-    //  WIP - consider removing some of these given public access to tags
-    bool IsOrdered() const { return !_tags._unOrderedFaces; }
-    bool IsBoundary() const { return _tags._boundaryVerts; }
-
-    bool IsVertexInfSharp() const { return _tags._infSharpVerts; }
-    bool IsVertexSemiSharp() const { return _tags._semiSharpVerts; }
-
-    bool HasEdgeSharpness() const { return _tags._anySharpEdges; }
-
-    bool HasUnSharpenedBoundary() const { return _tags._boundaryNonSharp; }
-
-    //  Queries for other members:
     int GetNumFaces() const { return _vTop._numFaces; }
 
     int GetFaceInVertex() const { return _faceInRing; }
@@ -174,9 +97,15 @@ public:
     float GetVertexSharpness() const;
     float GetFaceEdgeSharpness(int face, bool trailingEdge) const;
 
+    //  Methods for adjusting tags associated with subsets of the corner:
+    void ReviseSubsetTag(CornerTag & subsetTag) const;
+    void ReviseSubsetTag(CornerTag & subsetTag,
+                         int numFacesBefore, int numFacesAfter,
+                         int regFaceSize) const;
+
 private:
     VertexTopology _vTop;
-    CornerTags     _tags;
+    CornerTag      _tag;
 
     short _faceInRing;
     short _commonFaceSize;
@@ -194,23 +123,23 @@ CornerTopology::GetFaceSize(int face) const {
 
 inline int
 CornerTopology::GetFaceNext(int face) const {
-    assert(!_tags._unOrderedFaces);
+    assert(!_tag._unOrderedFaces);
     return ((face + 1) == _vTop._numFaces ) ? 0 : (face + 1);
 }
 inline int
 CornerTopology::GetFacePrevious(int face) const {
-    assert(!_tags._unOrderedFaces);
+    assert(!_tag._unOrderedFaces);
     return face ? (face - 1) : (_vTop._numFaces - 1);
 }
 
 inline int
 CornerTopology::GetFaceAfter(int step) const {
-    assert(!_tags._unOrderedFaces);
+    assert(!_tag._unOrderedFaces);
     return (_faceInRing + step) % _vTop._numFaces;
 }
 inline int
 CornerTopology::GetFaceBefore(int step) const {
-    assert(!_tags._unOrderedFaces);
+    assert(!_tag._unOrderedFaces);
     return (_faceInRing - step + _vTop._numFaces) % _vTop._numFaces;
 }
 

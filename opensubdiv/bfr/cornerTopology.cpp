@@ -41,7 +41,7 @@ namespace Bfr {
 void
 CornerTopology::Initialize(int faceSize) {
 
-    _tags.Clear();
+    _tag.Clear();
 
     _commonFaceSize = faceSize;
     _numFaceVerts   = 0;
@@ -57,20 +57,17 @@ CornerTopology::Finalize(int regFaceSize, int faceInVertex) {
     //
     assert(_vTop._isFinalized);
 
-    _tags._unOrderedFaces  = !_vTop.IsOrdered();
+    _tag._unOrderedFaces  = !_vTop.IsOrdered();
 
-    _tags._boundaryVerts = _vTop.IsBoundary();
-    if (_tags._boundaryVerts) {
-        _tags._boundaryCorners = (_vTop._numFaces == 1);
-    } else {
-        _tags._interiorVal2Verts = (_vTop._numFaces == 2);
-    }
+    _tag._boundaryVerts = _vTop.IsBoundary();
+
+    _tag._interiorVal2Verts = !_vTop.IsBoundary() && (_vTop._numFaces == 2);
 
     //
     //  Deal with face sizes and number of face-vertices first:
     //
-    _tags._unCommonFaceSizes = !_vTop.HasCommonFaceSize();
-    if (_tags._unCommonFaceSizes) {
+    _tag._unCommonFaceSizes = !_vTop.HasCommonFaceSize();
+    if (_tag._unCommonFaceSizes) {
         //  WIP - consider testing for degenerate faces (< 3) here and tag
         //      - may want to convert sizes to offsets here to combine
         _numFaceVerts = _vTop._faceSizeOffsets[_vTop._numFaces];
@@ -79,25 +76,25 @@ CornerTopology::Finalize(int regFaceSize, int faceInVertex) {
         _numFaceVerts = _vTop._numFaces * _commonFaceSize;
     }
 
-    _tags._irregularFaceSizes = (_commonFaceSize != regFaceSize);
+    _tag._irregularFaceSizes = (_commonFaceSize != regFaceSize);
 
     //
     //  Deal with vertex sharpness -- simply assign tags
     //
-    _tags._infSharpVerts  = Sdc::Crease::IsInfinite(_vTop._vertSharpness);
-    _tags._semiSharpVerts = (_vTop._vertSharpness > 0) && !_tags._infSharpVerts;
+    _tag._infSharpVerts  = Sdc::Crease::IsInfinite(_vTop._vertSharpness);
+    _tag._semiSharpVerts = (_vTop._vertSharpness > 0) && !_tag._infSharpVerts;
 
     //
     //  Deal with edge sharpness:
     //
-    _tags._boundaryNonSharp = _tags._boundaryVerts;
+    _tag._boundaryNonSharp = _tag._boundaryVerts;
 
-    _tags._anySharpEdges = _vTop.HasEdgeSharpness();
-    if (_tags._anySharpEdges) {
+    _tag._anySharpEdges = _vTop.HasEdgeSharpness();
+    if (_tag._anySharpEdges) {
         int numSharpness = _vTop._numFaces * 2;
-        if (_tags._boundaryVerts) {
+        if (_tag._boundaryVerts) {
             int last = numSharpness - 1;
-            _tags._boundaryNonSharp =
+            _tag._boundaryNonSharp =
                     !Sdc::Crease::IsInfinite(_vTop._faceEdgeSharpness[0]) ||
                     !Sdc::Crease::IsInfinite(_vTop._faceEdgeSharpness[last]);
 
@@ -109,16 +106,98 @@ CornerTopology::Finalize(int regFaceSize, int faceInVertex) {
         //  one for a boundary) to tag this vertex as inf-sharp as a result
 
         //  Ignore assigned edge sharpness if all zero:
-        _tags._anySharpEdges = false;
+        _tag._anySharpEdges = false;
         for (int i = 0; i < numSharpness; ++i) {
             if (_vTop._faceEdgeSharpness[i] > 0.0f) {
-                _tags._anySharpEdges = true;
+                _tag._anySharpEdges = true;
                 break;
             }
         }
     }
 
     _faceInRing = faceInVertex;
+}
+
+//
+//  Method to revise the tags for a subset of the corner, which may no
+//  longer include properties that trigger exceptional behavior:
+//
+void
+CornerTopology::ReviseSubsetTag(CornerTag & subsetTag) const {
+
+    //  Adjust simple bits for change in boundary or sharpness:
+    if (subsetTag.IsBoundary()) {
+        subsetTag._interiorVal2Verts = false;
+    }
+    if (subsetTag.IsInfSharp()) {
+        subsetTag._semiSharpVerts = false;
+    }
+    subsetTag._nonManifoldVerts = false;
+}
+
+void
+CornerTopology::ReviseSubsetTag(CornerTag & subsetTag,
+        int numFacesBefore, int numFacesAfter, int regFaceSize) const {
+
+    //  Adjust simple bits for change in boundary or sharpness:
+    ReviseSubsetTag(subsetTag);
+
+    //
+    //  There are two cases to deal with:
+    //      - possibility of irregular faces within the subset
+    //      - possibility of sharp edges within the subset
+    //  Both are subject to conditions that can quickly reject
+    //  the full iteration through the faces of the subset.
+    //
+    int  numFacesInSubset = numFacesBefore + 1 + numFacesAfter;
+    bool numFacesIsFewer  = (numFacesInSubset < GetNumFaces());
+
+    if (subsetTag._irregularFaceSizes) {
+        if (numFacesIsFewer) {
+            if (subsetTag._unCommonFaceSizes) {
+                subsetTag._irregularFaceSizes = false;
+
+                //  Search for faces with irregular size:
+                int face = GetFaceBefore(numFacesBefore);
+
+                for (int i = 0; i < numFacesInSubset; ++i) {
+                    if (GetFaceSize(face) != regFaceSize) {
+                        subsetTag._irregularFaceSizes = true;
+                        break;
+                    }
+                    face = GetFaceNext(face);
+                }
+            } else {
+                subsetTag._irregularFaceSizes = true;
+            }
+        }
+    }
+
+    if (subsetTag._anySharpEdges) {
+        if (numFacesIsFewer || !_tag.IsBoundary()) {
+            if (numFacesInSubset > 1) {
+                subsetTag._anySharpEdges = false;
+
+                //  Search for faces whose leading edges were sharpened,
+                //  skipping the first face of a boundary subset (whose
+                //  leading edge is a boundary):
+                int face = GetFaceBefore(numFacesBefore);
+
+                bool isBoundary = subsetTag.IsBoundary();
+                if (isBoundary) face = GetFaceNext(face);
+
+                for (int i = isBoundary; i < numFacesInSubset; ++i) {
+                    if (GetFaceEdgeSharpness(face,0) > 0.0f) {
+                        subsetTag._anySharpEdges = true;
+                        break;
+                    }
+                    face = GetFaceNext(face);
+                }
+            } else {
+                subsetTag._anySharpEdges = false;
+            }
+        }
+    }
 }
 
 } // end namespace Bfr

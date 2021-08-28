@@ -41,16 +41,16 @@ class PatchTree;
 namespace Bfr {
 
 //
-//  TopologyCache is a container for storing/caching the internal
-//  representation of complex patches (currently via PatchTrees) so
-//  that they can be quickly identified and retrieved by some topology
+//  TopologyCache is a container for storing/caching instances of the
+//  internal representation of complex patches (currently via PatchTrees)
+//  so that they can be quickly identified and retrieved by some topology
 //  hashing mechanism.
 //
-//  Initial/expected use requires simple searches of and additions to
-//  the Cache by the LimitSurfaceFactory.  Longer term, with Caches
-//  being shared between meshes and factories, additional options and/or
-//  methods may be warranted to limit what is cached or to prune the
-//  cache if it gets too large.
+//  Initial/expected use requires simple searches of and additions to the
+//  Cache by the LimitSurfaceFactory or its helpers.  Longer term, with
+//  the possibility of instances of caches being shared between meshes and
+//  factories, additional options and/or methods may be warranted to limit
+//  what is cached or to prune the cache if it gets too large.
 //
 class TopologyCache {
 public:
@@ -67,10 +67,13 @@ protected:
 
         bool IsValid() const { return hashBits != 0; }
 
-        //  WIP - An enum is being considered here, in addition to the int,
-        //  to distinguish different groups of topology (e.g. the presence of
-        //  semi-sharp creases) that may warrant separate enabling or pruning
-        //  from the cache, and so potentially separate maps.
+        //  WIP - an enum is planned here, in addition to the int, to
+        //        to distinguish different groups of topology
+        //      - "simple hashing" just fills a 64-bit field for common cases
+        //      - "complex hashing" will use a hashing function applied to
+        //        buffers assembling creasing information, sizes of incident
+        //        faces, etc. to capture the full topology
+        //      - so two separate maps are planned for these two categories
         unsigned long hashBits;
     };
 

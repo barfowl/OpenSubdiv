@@ -33,282 +33,71 @@ namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
 
-namespace {
-    //
-    //  Utility function to adjust a set of CornerTags for a CornerSubset
-    //  based on the presence/absence of features within that subset.
-    //
-    //  WIP - consider moving this to CornerTopology or FaceTopology
-    //
-    void
-    reviseSubsetTagsFromTopology(CornerSubset & cSub,
-                                 CornerTopology const & cTop,
-                                 int regFaceSize) {
-
-        //
-        //  WIP - beware this assignment when transitioning to pure tags
-        //        (i.e. replacing the _isBoundary and _isSharp members)
-        //      - eventually the boundary & sharp status needs to be in tags
-        //      - so will not want to copy tags here (bitwise OR?)
-        //      - may be expecting a previous copy/init/OR of subset tags
-        //
-        bool isBoundary = cSub._isBoundary;
-        bool isSharp    = cSub._isSharp;
-
-        cSub._tags = cTop.GetTags();
-
-        if (isBoundary) {
-            cSub._tags._boundaryVerts     = true;
-            cSub._tags._boundaryCorners   = (cSub._numFacesTotal == 1);
-            cSub._tags._interiorVal2Verts = false;
-        } else {
-            cSub._tags._boundaryVerts     = false;
-            cSub._tags._boundaryCorners   = false;
-            cSub._tags._interiorVal2Verts = (cSub._numFacesTotal == 2);
-        }
-        cSub._tags._nonManifoldVerts = false;
-
-        if (isSharp) {
-            cSub._tags._infSharpVerts  = true;
-            cSub._tags._semiSharpVerts = false;
-        }
-
-        if (cSub._tags._irregularFaceSizes) {
-            if (cSub._tags._unCommonFaceSizes) {
-                cSub._tags._irregularFaceSizes = false;
-
-                //  Search for faces with irregular size:
-                int face = cTop.GetFaceBefore(cSub._numFacesBefore);
-                for (int i = 0; i < cSub._numFacesTotal; ++i) {
-                    if (cTop.GetFaceSize(face) != regFaceSize) {
-                        cSub._tags._irregularFaceSizes = true;
-                        break;
-                    }
-                    face = cTop.GetFaceNext(face);
-                }
-            } else {
-                cSub._tags._irregularFaceSizes = true;
-            }
-        }
-
-        if (cSub._tags._anySharpEdges) {
-            cSub._tags._anySharpEdges = false;
-
-            if (cSub._numFacesTotal > 1) {
-                //  Search for faces whose leading edges were sharpened,
-                //  skipping the first face of a boundary subset (whose
-                //  leading edge is a boundary):
-                int face = cTop.GetFaceBefore(cSub._numFacesBefore);
-                if (isBoundary) face = cTop.GetFaceNext(face);
-                for (int i = isBoundary; i < cSub._numFacesTotal; ++i) {
-                    if (cTop.GetFaceEdgeSharpness(face,0) > 0.0f) {
-                        cSub._tags._anySharpEdges = true;
-                        break;
-                    }
-                    face = cTop.GetFaceNext(face);
-                }
-            }
-        }
-    }
-}
-
 //
-//  Main initialization methods -- one for vertex topology and the other
-//  for face-varying topology (a subset of the vertex topology):
+//  Minor methods supporting initialization:
 //
 void
-SurfaceDescriptor::Initialize(Index const vtxIndices[]) {
+SurfaceDescriptor::initialize(int faceSize, Index const indices[]) {
 
-    assert(_topology._isFinalized);
+    assert(!_topology.IsUnsupported());
 
-    //  WIP - we eventually need the vertex indices to identify the
-    //        adjacency/connectivity for unordered or non-manifold verts
-    //      - but that may be dealt with as part of FaceTopology and its
-    //        associated indices, so action here may not be necessary
-    assert(!_topology.GetTags()._unOrderedFaces);
-
-    //  Consider making this a member flag with other scheme/option
-    //  related members:
-    bool sharpenCorners =
-            (_topology._schemeOptions.GetVtxBoundaryInterpolation() ==
-                Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
-
-    _corners.SetSize(_topology._faceSize);
-
-    _combinedTags.Clear();
-
-    for (int i = 0; i < _topology._faceSize; ++i) {
-        CornerTopology const & V = _topology.GetTopology(i);
-        CornerSubset         & C = _corners[i];
-
-        //
-        //  If the vertex topology was unordered (potentially non-manifold)
-        //  this will have to be determined later from the face-vertex
-        //  indices -- in which case, other FaceTopology members will need
-        //  updating.
-        //
-        bool vtxMatchesTopology = true;
-
-        if (V.IsOrdered()) {
-            C._isBoundary = V.IsBoundary();
-
-            C._numFacesTotal = V.GetNumFaces();
-            if (C._isBoundary) {
-                C._numFacesBefore = V.GetFaceInVertex();
-                C._numFacesAfter  = V.GetNumFaces() - 1 - V.GetFaceInVertex();
-            } else {
-                C._numFacesBefore = 0;
-                C._numFacesAfter  = V.GetNumFaces() - 1;
-            }
-
-            C._isSharp = V.IsVertexInfSharp();
-            if ((C._numFacesTotal == 1) && !C._isSharp && sharpenCorners) {
-                C._isSharp = true;
-                //  Consider sharpening the CornerTopology to avoid this
-                vtxMatchesTopology = false;
-            }
-        } else {
-            //  Use a sharp corner for linear face for non-manifold for now:
-            C._isBoundary     = true;
-            C._numFacesTotal  = 1;
-            C._numFacesBefore = 0;
-            C._numFacesAfter  = 0;
-            C._isSharp        = false;
-
-            vtxMatchesTopology = false;
-        }
-
-        C._numOuterFaces = -1;
-        C._numOuterVerts = -1;
-
-        if (vtxMatchesTopology) {
-            C._tags = V.GetTags();
-        } else {
-            reviseSubsetTagsFromTopology(C, V, _topology._regFaceSize);
-        }
-        _combinedTags.BitwiseOr(C._tags);
-    }
-    initializeSubsetInventory();
-
-    //
-    //  WIP - valence-2 interior vertices created the awkward situation
-    //        where neighboring vertices in the ring of each corner fold
-    //        over and overlap the base face -- not just at the valence-2
-    //        corner itself but its neighbors
-    //      - it may help to tag the corners here so that we can detect
-    //        and deal with this situation appropriately
-    //      - but this could also be deferred to the Builder class to 
-    //        deal with
-    //
-    assert(!_topology.GetTags()._interiorVal2Verts);
-
-    //  Assign all member variables before returning:
-    _indices = vtxIndices;
-
-    _isFaceVarying = false;
-    _matchesVertex = true;
-    _isInitialized = true;
-}
-
-void
-SurfaceDescriptor::InitializeFaceVarying(
-        SurfaceDescriptor const & vtxSurface,
-        Index             const   fvarIndices[]) {
-
-    assert(&_topology == &vtxSurface._topology);
-    assert(_topology._isFinalized);
-
-    CornerSubset const * vtxCorners = &vtxSurface._corners[0];
-
-    bool fvarSubsetsAllMatch = true;
-
-    int faceSize =  _topology._faceSize;
+    _indices = indices;
 
     _corners.SetSize(faceSize);
 
-    _combinedTags.Clear();
+    _combinedTag.Clear();
 
-    Index const * fvarCornerIndices = fvarIndices;
-
-    for (int corner = 0; corner < faceSize; ++corner) {
-        CornerTopology const & vtxTop    = _topology.GetTopology(corner);
-        CornerSubset const   & vtxCorner = vtxCorners[corner];
-
-        //
-        //  Initialize the extent of the face-varying subset then determine
-        //  its sharpness -- initially inherited from the vertex subset
-        //  (which takes precedence) but which may be applied to boundary
-        //  subsets in other circumstances (typically the fvar interpolation
-        //  option)
-        //
-        CornerSubset & fvarCorner = _corners[corner];
-
-        initializeFVarSubset(vtxSurface, corner, fvarCornerIndices);
-
-        if (fvarCorner._isBoundary && !fvarCorner._isSharp) {
-            sharpenFVarSubset(vtxSurface, corner, fvarCornerIndices);
-        }
-
-        bool fvarSubsetMatches =
-                (fvarCorner._isBoundary     == vtxCorner._isBoundary) &&
-                (fvarCorner._isSharp        == vtxCorner._isSharp) &&
-                (fvarCorner._numFacesBefore == vtxCorner._numFacesBefore) &&
-                (fvarCorner._numFacesAfter  == vtxCorner._numFacesAfter);
-
-        fvarSubsetsAllMatch &= fvarSubsetMatches;
-
-        if (fvarSubsetMatches) {
-            fvarCorner._tags = vtxCorner._tags;
-        } else {
-            reviseSubsetTagsFromTopology(fvarCorner, vtxTop,
-                                         _topology._regFaceSize);
-        }
-        _combinedTags.BitwiseOr(fvarCorner._tags);
-
-        fvarCornerIndices += vtxTop.GetNumFaceVertices();
-    }
-
-    if (fvarSubsetsAllMatch) {
-        //  Copy the vertex subsets to initialize any other members:
-        std::memcpy(_corners, vtxCorners, faceSize * sizeof(CornerSubset));
-    } else {
-        initializeSubsetInventory();
-    }
-
-    //  Assign all member variables before returning:
-    _indices = fvarIndices;
-
-    _isFaceVarying = true;
-    _matchesVertex = fvarSubsetsAllMatch;
     _isInitialized = true;
+    _isRegular     = false;
+    _isFaceVarying = false;
+    _matchesVertex = true;
 }
 
-//
-//  Topological queries:
-//
 bool
-SurfaceDescriptor::IsRegular() const {
+SurfaceDescriptor::isRegular() const {
 
     //
-    //  WIP - beware, these tags are copied from FaceTopology rather than
-    //  being composed from the CornerSubsets -- so regular subets may be
-    //  excluded here (optimize later)
+    //  Immediate reject features from the combined tags (semi-sharp
+    //  vertices, any sharp edges, any irregular face sizes) before
+    //  testing valence and topology at each corner:
     //
-    if (_combinedTags._irregularFaceSizes ||
-        _combinedTags._anySharpEdges      || _combinedTags._semiSharpVerts ||
-        _combinedTags._unOrderedFaces     || _combinedTags._interiorVal2Verts) {
+    if (_combinedTag.HasSharpEdges() ||
+        _combinedTag.HasSemiSharpVertices() ||
+        _combinedTag.HasIrregularFaceSizes()) {
         return false;
     }
 
+    //
+    //  If no boundaries, the interior case can be quickly determined:
+    //
+    if (!_combinedTag.HasBoundaryVertices()) {
+        if (_combinedTag.HasInfSharpVertices()) return false;
+
+        if (_topology._regFaceSize == 4) {
+            //  Can use bitwise-OR here for reg valence of 4:
+            return (_corners[0]._numFacesTotal |
+                    _corners[1]._numFacesTotal |
+                    _corners[2]._numFacesTotal |
+                    _corners[3]._numFacesTotal) == 4;
+        } else {
+            return (_corners[0]._numFacesTotal == 6) &&
+                   (_corners[1]._numFacesTotal == 6) &&
+                   (_corners[2]._numFacesTotal == 6);
+        }
+    }
+
+    //
+    //  Test all corners for appropriate interior or boundary valence:
+    //
     int regInteriorValence = (_topology._regFaceSize == 4) ? 4 : 6;
     int regBoundaryValence = (regInteriorValence / 2);
 
-    for (int i = 0; i < _topology._faceSize; ++i) {
+    for (int i = 0; i < _topology.GetFaceSize(); ++i) {
         CornerSubset const & corner = _corners[i];
 
-        if (corner._isSharp) {
+        if (corner.IsSharp()) {
             if (corner._numFacesTotal != 1) return false;
-        } else if (corner._isBoundary) {
+        } else if (corner.IsBoundary()) {
             if (corner._numFacesTotal != regBoundaryValence) return false;
         } else {
             if (corner._numFacesTotal != regInteriorValence) return false;
@@ -317,107 +106,148 @@ SurfaceDescriptor::IsRegular() const {
     return true;
 }
 
-
 //
-//  Internal methods supporting initialization:
+//  Main initialization methods -- one for vertex topology and the other
+//  for face-varying topology (a subset of the vertex topology):
 //
 void
-SurfaceDescriptor::initializeSubsetInventory() {
+SurfaceDescriptor::InitializeVertex(Index const vtxIndices[]) {
+
+    assert(_topology._isFinalized);
+
+    //  Initialize members:
+    initialize(_topology.GetFaceSize(), vtxIndices);
+
+    //  Sharpen boundary vertices when warranted:
+    bool applyVtxBoundaryInterpolation =
+            (_topology._schemeOptions.GetVtxBoundaryInterpolation() ==
+                Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
 
     //
-    //  This is not done locally (in isolation) for each corner as there
-    //  are some pathological cases where the inventory of one corner
-    //  depends on one or more others:
+    //  Inspect each corner and initialize the subset for vertex topology:
     //
-    int nVal3IntAdjTris = 0;
+    for (int i = 0; i < _topology.GetFaceSize(); ++i) {
+        CornerTopology const & cTop = GetCornerTopology(i);
+        CornerSubset         & cSub = _corners[i];
 
-    for (int corner = 0; corner < _topology._faceSize; ++corner) {
-        CornerTopology const & V = _topology.GetTopology(corner);
-        CornerSubset         & C = _corners[corner];
+        int cornerFace = cTop.GetFaceInVertex();
 
         //
-        //  RECONSIDER -- the counting and gathering of the "after" faces
-        //  may be better handled as follows:
-        //      - include "trailing" edge/vert of first "after" face
-        //      - include interior and "trailing" edge/vert (i.e. S - 2)
-        //        of all other "after" faces
-        //  * the gathering (of both control verts and control face-verts)
-        //  may benefit from this more than the simple counting here...
+        //  If the vertex topology was unordered (potentially non-manifold)
+        //  the topology for the corners should have been amended with the
+        //  neighboring faces, but the specific subset will not have been
+        //  determined.
         //
+        if (cTop.GetTag().IsOrdered()) {
+            //  Boundary and sharpness bits copied from topology here:
+            cSub._tag = cTop.GetTag();
 
-        int nVerts = 0;
-        if (V.GetCommonFaceSize()) {
-            int S = V.GetCommonFaceSize();
+            cSub._numFacesTotal = cTop.GetNumFaces();
+            cSub._numFacesBefore = cSub.IsBoundary() ? cornerFace : 0;
+            cSub._numFacesAfter = cSub._numFacesTotal - cSub._numFacesBefore -1;
 
-            if (!C._isBoundary) {
-                if ((C._numFacesTotal == 3) && (S == 3)) {
-                    nVerts += (++nVal3IntAdjTris == _topology._faceSize);
-                } else {
-                    nVerts += (C._numFacesTotal - 2) * (S - 2) - 1;
-                }
-            } else {
-                if (C._numFacesAfter) {
-                    nVerts += (C._numFacesAfter - 1) * (S - 2) + 1;
-                }
-                if (C._numFacesBefore) {
-                    nVerts += C._numFacesBefore * (S - 2) - 1;
+            if (!cSub.IsSharp() && (cSub._numFacesTotal == 1)) {
+                if (applyVtxBoundaryInterpolation) {
+                    cSub.SetSharp(true);
+                    cTop.ReviseSubsetTag(cSub._tag);
                 }
             }
         } else {
-            int cornerFace = V.GetFaceInVertex();
+            //  WIP - will need a forward/backward search here
+            //      - use a sharp single-face corner for now
+            cSub._numFacesTotal  = 1;
+            cSub._numFacesBefore = 0;
+            cSub._numFacesAfter  = 0;
 
-            if (!C._isBoundary) {
-                assert(C._numFacesTotal == V.GetNumFaces());
+            cSub._tag = cTop.GetTag();
+            cSub.SetBoundary(true);
+            cSub.SetSharp(true);
 
-                int nextFace = V.GetFaceAfter(2);
-                if ((C._numFacesTotal == 3) && (V.GetFaceSize(nextFace) == 3)) {
-                    nVerts += (++nVal3IntAdjTris == _topology._faceSize);
-                } else {
-                    for (int i = 2; i < C._numFacesTotal; ++i) {
-                        int S = V.GetFaceSize(nextFace);
-                        nVerts += S - 2;
-                        nextFace = V.GetFaceNext(nextFace);
-                    }
-                    nVerts --;
-                }
-            } else {
-                if (C._numFacesAfter) {
-                    int nextFace = V.GetFaceNext(cornerFace);
-                    for (int i = 1; i < C._numFacesAfter; ++i) {
-                        nextFace = V.GetFaceNext(nextFace);
-                        int S = V.GetFaceSize(nextFace);
-                        nVerts += S - 2;
-                    }
-                    nVerts ++;
-                }
-                if (C._numFacesBefore) {
-                    int nextFace = V.GetFaceBefore(C._numFacesBefore);
-                    for (int i = 0; i < C._numFacesBefore; ++i) {
-                        int S = V.GetFaceSize(nextFace);
-                        nVerts += S - 2;
-                        nextFace = V.GetFaceNext(nextFace);
-                    }
-                    nVerts --;
-                }
-            }
+            cTop.ReviseSubsetTag(cSub._tag,
+                                 cSub._numFacesBefore, cSub._numFacesAfter,
+                                 _topology._regFaceSize);
         }
-
-        int nFaces = 0;
-        if (!C._isBoundary) {
-            nFaces += C._numFacesTotal - 2;
-        } else {
-            nFaces += C._numFacesAfter ? (C._numFacesAfter - 1) : 0;
-            nFaces += C._numFacesBefore;
-        }
-
-        C._numOuterVerts = (short) nVerts;
-        C._numOuterFaces = (short) nFaces;
+        _combinedTag.Combine(cSub._tag);
     }
+
+    _isRegular = isRegular();
 }
 
 void
-SurfaceDescriptor::initializeFVarSubset(SurfaceDescriptor const & vtxSurface,
-        int corner, Index const fvarIndices[]) {
+SurfaceDescriptor::InitializeFaceVarying(Index const fvarIndices[],
+        SurfaceDescriptor const & vtxSurface) {
+
+    assert(_topology._isFinalized);
+    assert(&_topology == &vtxSurface._topology);
+
+    //  Initialize members:
+    initialize(_topology.GetFaceSize(), fvarIndices);
+
+    _isFaceVarying = true;
+    _matchesVertex = true;  // to be adjusted when mismatch detected below
+
+    //
+    //  Inspect each corner and initialize its face-varying subset relative
+    //  to the corresponding vertex subset:
+    //
+    Index const * cornerIndices = fvarIndices;
+
+    for (int corner = 0; corner < _topology.GetFaceSize(); ++corner) {
+        CornerTopology const & cornerTop = GetCornerTopology(corner);
+
+        CornerSubset const & vtxSub  = vtxSurface.GetCornerSubset(corner);
+        CornerSubset       & fvarSub = _corners[corner];
+
+        //
+        //  Determine the extent of the fvar subset then determine its
+        //  sharpness (according the local face-varying topology and the
+        //  assigned interpolation option):
+        //
+        extendFVarSubset(fvarSub, vtxSub, cornerTop, cornerIndices);
+
+        if (!fvarSub.IsSharp() && fvarSub.IsBoundary()) {
+            sharpenFVarSubset(fvarSub, vtxSub, cornerTop, cornerIndices);
+        }
+
+        //
+        //  If fvar subset matches vertex, all tags copied from vertex
+        //  subset will apply, otherwise they will need to be revised to
+        //  reflect the reduced extent of the fvar subset:
+        //
+        bool fvarExtentMatches =
+                (fvarSub.IsBoundary()    == vtxSub.IsBoundary()) &&
+                (fvarSub._numFacesBefore == vtxSub._numFacesBefore) &&
+                (fvarSub._numFacesAfter  == vtxSub._numFacesAfter);
+
+        bool fvarSubsetMatches = fvarExtentMatches &&
+                (fvarSub.IsSharp() == vtxSub.IsSharp());
+
+        if (!fvarExtentMatches) {
+            cornerTop.ReviseSubsetTag(fvarSub._tag,
+                             fvarSub._numFacesBefore, fvarSub._numFacesAfter,
+                             _topology._regFaceSize);
+        } else if (!fvarSubsetMatches) {
+            cornerTop.ReviseSubsetTag(fvarSub._tag);
+        }
+        _combinedTag.Combine(fvarSub._tag);
+
+        _matchesVertex &= fvarSubsetMatches;
+
+        cornerIndices += cornerTop.GetNumFaceVertices();
+    }
+
+    _isRegular = isRegular();
+}
+
+
+//
+//  Internal methods supporting face-varying initialization:
+//
+void
+SurfaceDescriptor::extendFVarSubset(CornerSubset         & fvarSub,
+                                    CornerSubset   const & vtxSub,
+                                    CornerTopology const & cornerTop,
+                                    Index          const   fvarIndices[]) {
 
     //
     //  Initialize the face-varying subset by seeking forward and backward
@@ -430,29 +260,20 @@ SurfaceDescriptor::initializeFVarSubset(SurfaceDescriptor const & vtxSurface,
     //      - testing if a periodic subset is continuous at its end
     //      - seeking clockwise from the corner face
     //
-    CornerSubset const & vtxCorner  = vtxSurface._corners[corner];
-    CornerSubset       & fvarCorner = _corners[corner];
-
-    CornerTopology const & vtxTop = _topology.GetTopology(corner);
-
-    bool vtxCornerIsPeriodic = !vtxCorner._isBoundary;
-
-    int faceInVertex = vtxTop.GetFaceInVertex();
 
     //
     //  Initialize as boundary until determined otherwise (periodic)
     //
-    fvarCorner._isBoundary = true;
+    fvarSub._numFacesAfter = 0;
+    fvarSub._numFacesTotal = 0;
+    fvarSub._numFacesBefore = 0;
 
-    fvarCorner._numFacesAfter = 0;
-    fvarCorner._numFacesTotal = 0;
-    fvarCorner._numFacesBefore = 0;
-
-    fvarCorner._isSharp = vtxCorner._isSharp;
+    fvarSub._tag = vtxSub._tag;
+    fvarSub.SetBoundary(true);
 
     //  Skip the following search if only one face:
-    if (vtxCorner._numFacesTotal == 1) {
-        fvarCorner._numFacesTotal = 1;
+    if (vtxSub._numFacesTotal == 1) {
+        fvarSub._numFacesTotal = 1;
         return;
     }
 
@@ -461,34 +282,36 @@ SurfaceDescriptor::initializeFVarSubset(SurfaceDescriptor const & vtxSurface,
     //  the corner face.  If all are included and the vtx subset is
     //  periodic, check the seam for the fvar subset.
     //
-    int numFacesAfterToVisit = vtxCorner._numFacesAfter;
-    if (numFacesAfterToVisit) {
-        int thisFace = faceInVertex;
-        for (int i = 0; i < numFacesAfterToVisit; ++i) {
-            int nextFace = vtxTop.GetFaceNext(thisFace);
+    int cornerFace = cornerTop.GetFaceInVertex();
 
-            if (vtxTop.GetFaceVertexAtCorner(thisFace, fvarIndices) != 
-                vtxTop.GetFaceVertexAtCorner(nextFace, fvarIndices)) {
+    int numFacesAfterToVisit = vtxSub._numFacesAfter;
+    if (numFacesAfterToVisit) {
+        int thisFace = cornerFace;
+        for (int i = 0; i < numFacesAfterToVisit; ++i) {
+            int nextFace = cornerTop.GetFaceNext(thisFace);
+
+            if (cornerTop.GetFaceVertexAtCorner(thisFace, fvarIndices) != 
+                cornerTop.GetFaceVertexAtCorner(nextFace, fvarIndices)) {
                 break;
             }
-            if (vtxTop.GetFaceVertexTrailing(thisFace, fvarIndices) != 
-                vtxTop.GetFaceVertexLeading(nextFace, fvarIndices)) {
+            if (cornerTop.GetFaceVertexTrailing(thisFace, fvarIndices) != 
+                cornerTop.GetFaceVertexLeading(nextFace, fvarIndices)) {
                 break;
             }
-            ++ fvarCorner._numFacesAfter;
+            ++ fvarSub._numFacesAfter;
 
             thisFace = nextFace;
         }
     }
-    int numFacesAfterUnvisited = vtxCorner._numFacesAfter -
-                                 fvarCorner._numFacesAfter;
-    if (vtxCornerIsPeriodic && (numFacesAfterUnvisited == 0)) {
-        assert(vtxCorner._numFacesBefore == 0);
-        int prevFace = vtxTop.GetFacePrevious(faceInVertex);
+    int numFacesAfterUnvisited = vtxSub._numFacesAfter -
+                                 fvarSub._numFacesAfter;
+    if (!vtxSub.IsBoundary() && (numFacesAfterUnvisited == 0)) {
+        assert(vtxSub._numFacesBefore == 0);
+        int prevFace = cornerTop.GetFacePrevious(cornerFace);
 
-        if (vtxTop.GetFaceVertexLeading(faceInVertex, fvarIndices) == 
-            vtxTop.GetFaceVertexTrailing(prevFace, fvarIndices)) {
-            fvarCorner._isBoundary = false;
+        if (cornerTop.GetFaceVertexLeading(cornerFace, fvarIndices) == 
+            cornerTop.GetFaceVertexTrailing(prevFace, fvarIndices)) {
+            fvarSub.SetBoundary(false);
         }
     }
 
@@ -497,31 +320,30 @@ SurfaceDescriptor::initializeFVarSubset(SurfaceDescriptor const & vtxSurface,
     //  face.  Include any faces "after" in the periodic case that were
     //  interrupted by a discontinuity:
     //
-    int numFacesBeforeToVisit = vtxCorner._numFacesBefore;
-    if (vtxCornerIsPeriodic) {
+    int numFacesBeforeToVisit = vtxSub._numFacesBefore;
+    if (!vtxSub.IsBoundary()) {
         numFacesBeforeToVisit += numFacesAfterUnvisited;
     }
     if (numFacesBeforeToVisit) {
-        int thisFace = faceInVertex;
+        int thisFace = cornerFace;
         for (int i = 0; i < numFacesBeforeToVisit; ++i) {
-            int prevFace = vtxTop.GetFacePrevious(thisFace);
+            int prevFace = cornerTop.GetFacePrevious(thisFace);
 
-            if (vtxTop.GetFaceVertexAtCorner(thisFace, fvarIndices) != 
-                vtxTop.GetFaceVertexAtCorner(prevFace, fvarIndices)) {
+            if (cornerTop.GetFaceVertexAtCorner(thisFace, fvarIndices) != 
+                cornerTop.GetFaceVertexAtCorner(prevFace, fvarIndices)) {
                 break;
             }
-            if (vtxTop.GetFaceVertexLeading(thisFace, fvarIndices) != 
-                vtxTop.GetFaceVertexTrailing(prevFace, fvarIndices)) {
+            if (cornerTop.GetFaceVertexLeading(thisFace, fvarIndices) != 
+                cornerTop.GetFaceVertexTrailing(prevFace, fvarIndices)) {
                 break;
             }
-            ++ fvarCorner._numFacesBefore;
+            ++ fvarSub._numFacesBefore;
 
             thisFace = prevFace;
         }
     }
 
-    fvarCorner._numFacesTotal = 1 + fvarCorner._numFacesBefore +
-                                    fvarCorner._numFacesAfter;
+    fvarSub._numFacesTotal=fvarSub._numFacesBefore + fvarSub._numFacesAfter + 1;
 }
 
 
@@ -531,10 +353,12 @@ SurfaceDescriptor::initializeFVarSubset(SurfaceDescriptor const & vtxSurface,
 namespace {
     int
     getNumMatchingCornerIndices(CornerTopology const & corner,
-                                Index                  indexToMatch,
                                 Index          const   indices[]) {
 
         //  WIP - streamline this to increment indices[] by face sizes
+
+        int   cornerFace   = corner.GetFaceInVertex();
+        Index indexToMatch = corner.GetFaceVertexAtCorner(cornerFace, indices);
 
         int numMatches = 0;
         for (int i = 0; i < corner.GetNumFaces(); ++i) {
@@ -574,84 +398,66 @@ namespace {
 }
 
 void
-SurfaceDescriptor::sharpenFVarSubset(SurfaceDescriptor const & vtxSurface,
-        int corner, Index const fvarIndices[]) {
-
-    CornerSubset const & vtxCorner  = vtxSurface._corners[corner];
-    CornerSubset       & fvarCorner = _corners[corner];
-
-    assert(!fvarCorner._isSharp);
-    assert(fvarCorner._isBoundary);
+SurfaceDescriptor::sharpenFVarSubset(CornerSubset         & fvarSub,
+                                     CornerSubset   const & vtxSub,
+                                     CornerTopology const & cTop,
+                                     Index          const   fvarIndices[]) {
 
     //
-    //  Determine sharpness for a given (unsharpened) fvar subset in
-    //  the following cases:
+    //  Sharpen if the face-varying topology is non-manifold (i.e. the fvar
+    //  index at the corner occurs outside the subset):
     //
-    //      - the face-varying topology is non-manifold, i.e. the fvar
-    //        corner value occurs outside the subset
-    //
-    //      - according to the face-varying interpolation option
-    //
-    //  where the non-manifold case takes precedence.
-    //
-    CornerTopology const & vtxTop = _topology.GetTopology(corner);
+    int fvarCount = getNumMatchingCornerIndices(cTop, fvarIndices);
 
-    int faceInVertex = vtxTop.GetFaceInVertex();
-
-    Index fvarIndex = vtxTop.GetFaceVertexAtCorner(faceInVertex, fvarIndices);
-
-    int fvarCount = getNumMatchingCornerIndices(vtxTop, fvarIndex, fvarIndices);
-
-    bool fvarIsManifold = (fvarCount == fvarCorner._numFacesTotal);
-    if (!fvarIsManifold) {
-        fvarCorner._isSharp = true;
+    if (fvarCount > fvarSub._numFacesTotal) {
+        fvarSub.SetSharp(true);
         return;
     }
 
     //
-    //  Sharpen according to the face-varying interpolation option:
+    //  Sharpen according to the face-varying linear interpolation option:
     //
-    bool singleFaceSubset = (fvarCorner._numFacesTotal == 1);
+    bool isSharp = false;
+
+    bool fvarIndexIsUnique = (fvarCount == cTop.GetNumFaces());
 
     switch (_topology._schemeOptions.GetFVarLinearInterpolation()) {
     case Sdc::Options::FVAR_LINEAR_NONE:
         break;
 
     case Sdc::Options::FVAR_LINEAR_CORNERS_ONLY:
-        fvarCorner._isSharp = singleFaceSubset;
+        //  Sharpen corners only:
+        isSharp = (fvarSub._numFacesTotal == 1);
         break;
 
     case Sdc::Options::FVAR_LINEAR_CORNERS_PLUS1:
-        fvarCorner._isSharp = singleFaceSubset;
-        if (!fvarCorner._isSharp) {
-            bool fvarDiffersAtVertex = (fvarCount != vtxTop.GetNumFaces());
-            bool moreThanTwoCornerFVars = fvarDiffersAtVertex &&
-                    moreThanTwoUniqueCornerIndices(vtxTop, fvarIndices);
-
-            fvarCorner._isSharp = moreThanTwoCornerFVars;
+        //  Sharpen corners and vertices with three or more fvar indices:
+        isSharp = (fvarSub._numFacesTotal == 1);
+        if (!fvarSub.IsSharp() && !fvarIndexIsUnique) {
+            isSharp = moreThanTwoUniqueCornerIndices(cTop, fvarIndices);
         }
         break;
 
     case Sdc::Options::FVAR_LINEAR_CORNERS_PLUS2:
-        fvarCorner._isSharp = singleFaceSubset;
-        if (!fvarCorner._isSharp) {
-            bool fvarDiffersAtVertex = (fvarCount != vtxTop.GetNumFaces());
-            bool moreThanTwoCornerFVars = fvarDiffersAtVertex &&
-                    moreThanTwoUniqueCornerIndices(vtxTop, fvarIndices);
-            bool concaveCornerSubset = fvarDiffersAtVertex &&
-                (fvarCorner._numFacesTotal == (vtxTop.GetNumFaces()-1));
-            bool singleEdgeDartSubset =
-                (fvarCorner._numFacesTotal == vtxTop.GetNumFaces()) &&
-                (fvarCorner._isBoundary != vtxCorner._isBoundary);
-
-            fvarCorner._isSharp = moreThanTwoCornerFVars ||
-                                  concaveCornerSubset ||
-                                  singleEdgeDartSubset;
+        //  Sharpen corners, vertices with three or more fvar indices (plus1),
+        //  concave corners (two indices with the other unique to one face) and
+        //  darts (one discontinuous edge of a periodic set of faces):
+        isSharp = (fvarSub._numFacesTotal == 1);
+        if (!fvarSub.IsSharp()) {
+            if (!fvarIndexIsUnique) {
+                isSharp =
+                        moreThanTwoUniqueCornerIndices(cTop, fvarIndices) ||
+                        (fvarSub._numFacesTotal == (cTop.GetNumFaces() - 1));
+            } else {
+                isSharp = !vtxSub.IsBoundary() &&
+                        (fvarSub._numFacesTotal == cTop.GetNumFaces());
+            }
         }
         break;
 
     case Sdc::Options::FVAR_LINEAR_BOUNDARIES:
-        fvarCorner._isSharp = true;
+        //  Sharpen all boundaries:
+        isSharp = true;
         break;
 
     case Sdc::Options::FVAR_LINEAR_ALL:
@@ -662,6 +468,8 @@ SurfaceDescriptor::sharpenFVarSubset(SurfaceDescriptor const & vtxSurface,
         assert("Unknown FVarLinearInterpolation value" == 0);
         break;
     }
+
+    fvarSub.SetSharp(isSharp);
 }
 
 //
@@ -670,51 +478,48 @@ SurfaceDescriptor::sharpenFVarSubset(SurfaceDescriptor const & vtxSurface,
 void
 SurfaceDescriptor::print(bool printVerts) const {
 
-    FaceTopology const & top = _topology;
-
-    bool isRegular = IsRegular();
+    CombinedTag const & tag = _combinedTag;
 
     printf("    FaceTopology:\n");
-    printf("       face size       = %d\n", top._faceSize);
-    printf("       num-face-verts  = %d\n", top.GetNumFaceVertices());
+    printf("       face size       = %d\n", _topology.GetFaceSize());
+    printf("       num-face-verts  = %d\n", _topology.GetNumFaceVertices());
     printf("    Properties:\n");
-    printf("       is regular      = %d\n", isRegular);
+    printf("       is regular      = %d\n", IsRegular());
     printf("    Combined tags:\n");
-    printf("       inf-sharp verts  = %d\n", _combinedTags._infSharpVerts);
-    printf("       semi-sharp verts = %d\n", _combinedTags._semiSharpVerts);
-    printf("       any sharp edges  = %d\n", _combinedTags._anySharpEdges);
-    printf("       unsharp boundary = %d\n", _combinedTags._boundaryNonSharp);
-    printf("       irregular faces  = %d\n", _combinedTags._irregularFaceSizes);
-    printf("       unordered verts  = %d\n", _combinedTags._unOrderedFaces);
-    printf("       val-2 int verts  = %d\n", _combinedTags._interiorVal2Verts);
+    printf("       inf-sharp verts  = %d\n", tag.HasInfSharpVertices());
+    printf("       semi-sharp verts = %d\n", tag.HasSemiSharpVertices());
+    printf("       any sharp edges  = %d\n", tag.HasSharpEdges());
+    printf("       unsharp boundary = %d\n", tag.HasNonSharpBoundary());
+    printf("       irregular faces  = %d\n", tag.HasIrregularFaceSizes());
+    printf("       unordered verts  = %d\n", tag.HasUnOrderedVertices());
+    printf("       val-2 int verts  = %d\n", tag.HasInteriorVal2Vertices());
 
     if (printVerts) {
         Index const * indices = _indices;
 
-        for (int i = 0; i < top._faceSize; ++i) {
+        for (int i = 0; i < _topology.GetFaceSize(); ++i) {
+            CornerTopology const & top = GetCornerTopology(i);
+            CornerSubset   const & sub = GetCornerSubset(i);
+
             printf("        corner %d:\n", i);
-
-            CornerTopology const & vTop = top.GetTopology(i);
             printf("            topology:  num faces  = %d, boundary = %d\n",
-                    vTop.GetNumFaces(), vTop.IsBoundary());
-
-            CornerSubset const & cSub = _corners[i];
+                    top.GetNumFaces(), top.GetTag().IsBoundary());
             printf("            subset:    num faces  = %d, boundary = %d\n",
-                    cSub._numFacesTotal, cSub._isBoundary);
+                    sub._numFacesTotal, sub.IsBoundary());
             printf("                       num before = %d, num after = %d\n",
-                    cSub._numFacesBefore, cSub._numFacesAfter);
+                    sub._numFacesBefore, sub._numFacesAfter);
 
             printf("            face-vert indices:\n");
 
-            for (int j = 0, n = 0; j < vTop.GetNumFaces(); ++j) {
+            for (int j = 0, n = 0; j < top.GetNumFaces(); ++j) {
                 printf("            face %d:  ", j);
-                int S = vTop.GetFaceSize(j);
+                int S = top.GetFaceSize(j);
                 for (int k = 0; k < S; ++k, ++n) {
                     printf("%3d", indices[n]);
                 }
                 printf("\n");
             }
-            indices += vTop.GetNumFaceVertices();
+            indices += top.GetNumFaceVertices();
         }
     }
 }

@@ -93,28 +93,19 @@ LimitSurfaceFactory::LimitSurfaceFactory(
 
 LimitSurfaceFactory::~LimitSurfaceFactory() {
 
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
 //  DEBUG - report and reset inventory:
-bool debug = false;
-if (debug) {
 printf("LimitSurfaceFactory destructor:\n");
 printf("     _numFaces             = %6d\n", _numFaces);
-#ifdef _BFR_DEBUG_TOP_TYPE_STATS
 printf("\n");
 printf("    __numLinearPatches     = %6d\n", __numLinearPatches);
 printf("    __numRegularPatches    = %6d\n", __numRegularPatches);
 printf("    __numIrregularPatches  = %6d\n", __numIrregularPatches);
-printf("\n");
-#endif
 if (_topologyCache) {
-printf("     _topologyCache size   = %6d\n", (int) _topologyCache->Size());
-#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+printf("\n");
 printf("    __numIrregularUncached = %6d\n", __numIrregularUncached);
-#endif
-} else {
-printf("     _topologyCache size   = %6d (disabled)\n", 0);
+printf("    num irregular in cache = %6d\n", (int)_topologyCache->Size());
 }
-}
-#ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numLinearPatches     = 0;
 __numRegularPatches    = 0;
 __numIrregularPatches  = 0;
@@ -154,11 +145,11 @@ LimitSurfaceFactory::FaceHasLimitSurface(Index faceIndex) const {
         if (!gatherFaceNeighborhoodTopology(faceIndex, faceTopology)) {
             return false;
         }
-        if (faceTopology.GetTags()._unOrderedFaces) {
+        if (faceTopology.GetTag().HasUnOrderedVertices()) {
             //  WIP - more here for potentially non-manifold vertices
             //      - need to gather indices to identify boundaries
         }
-        return faceTopology.GetTags()._boundaryNonSharp ? false : true;
+        return faceTopology.GetTag().HasNonSharpBoundary() ? false : true;
     }
     return true;
 }
@@ -275,8 +266,8 @@ LimitSurfaceFactory::assignIrregularEvaluator(
 
     IrregularPatchBuilder builder(surface, buildOptions);
 
-//bool debug = surface._topology.GetTags()._irregularFaceSizes ||
-//             surface._topology.GetTags()._anySharpEdges;
+//bool debug = surface._topology.GetTag().HasIrregularFaceSizes() ||
+//             surface._topology.GetTag().HasSharpEdges();
 //if (debug) builder.print();
 
     if (_topologyCache == 0) {
@@ -505,7 +496,7 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
         //  that we don't have to test later if they were already gathered:
         //  
         bool needVertexIndices = hasNonLinearVtxEvaluator ||
-                                 faceTopology.GetTags()._unOrderedFaces;
+                                 faceTopology.GetTag().HasUnOrderedVertices();
         if (needVertexIndices) {
             vtxIndices.SetSize(faceTopology._numFaceVertsTotal);
             if (gatherFaceNeighborhoodIndices(baseFace, faceTopology,
@@ -513,11 +504,11 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
                 return false;
             }
 
-            if (faceTopology.GetTags()._unOrderedFaces) {
+            if (faceTopology.GetTag().HasUnOrderedVertices()) {
                 //faceTopology.ResolveUnorderedCornerTopology(vtxIndices);
             }
 
-            vtxSurface.Initialize(vtxIndices);
+            vtxSurface.InitializeVertex(vtxIndices);
         }
 
         bool debugFaceTopology = false;
@@ -590,7 +581,7 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
             //  Detect matching topology or regular and dispatch accordingly:
             SurfaceDescriptor fvarSurface(faceTopology);
 
-            fvarSurface.InitializeFaceVarying(vtxSurface, fvarIndices);
+            fvarSurface.InitializeFaceVarying(fvarIndices, vtxSurface);
 
             if (fvarSurface.MatchesVertexTopology() && s._vtxEval._isValid) {
                 copyNonLinearEvaluator(fvarEval, s._vtxEval, fvarSurface);

@@ -44,7 +44,7 @@ namespace Far {
 }
 
 namespace Bfr {
-//  WIP - eventually will hide this explicit reference
+//  WIP - hope to eventually hide this explicit reference
 typedef Far::PatchTree const * IrregPatchPtr;
 
 //
@@ -81,8 +81,6 @@ public:
 
     int   GetFaceSize() const  { return _param.GetFaceSize(); }
     Index GetFaceIndex() const { return _faceIndex; }
-
-    //  WIP - Consider making the face-vertex indices available.
 
     Parameterization const & GetParameterization() const   { return _param; }
 
@@ -161,7 +159,7 @@ public:
         bool isValid() const { return _isValid; }
 
         //  WIP - internal support of overloaded eval methods (this may yet
-        //  replace them as the primary public eval method)
+        //        replace them as the primary public eval method)
         template <class T, class U>
         void evaluate(float u, float v, T const & patchPoints,
                 U * P, U * Du = 0, U * Dv = 0) const;
@@ -275,8 +273,8 @@ void
 Evaluator::GatherControlVertexValues(T const & meshPoints,
                                      U       & controlPoints) const {
     for (int i = 0; i < _numControlPoints; ++i) {
-        //  WIP - Cannot guarantee that type T is copyable here, so must
-        //  use Clear() and AddWithWeight():
+        //  WIP - cannot guarantee that type T is copyable here, so must
+        //        use Clear() and AddWithWeight():
         controlPoints[i].Clear();
         controlPoints[i].AddWithWeight(meshPoints[_controlPoints[i]], 1.0f);
     }

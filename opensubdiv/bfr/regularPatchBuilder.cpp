@@ -63,10 +63,10 @@ RegularPatchBuilder::GetBoundaryMask() const {
     assert(_patchSize == 16);
 
     CornerSubset const * C = _surface.GetSubsets();
-    return ((C[0]._isBoundary & (C[0]._numFacesBefore == 0)) << 0) |
-           ((C[1]._isBoundary & (C[1]._numFacesBefore == 0)) << 1) |
-           ((C[2]._isBoundary & (C[2]._numFacesBefore == 0)) << 2) |
-           ((C[3]._isBoundary & (C[3]._numFacesBefore == 0)) << 3);
+    return ((C[0].IsBoundary() & (C[0]._numFacesBefore == 0)) << 0) |
+           ((C[1].IsBoundary() & (C[1]._numFacesBefore == 0)) << 1) |
+           ((C[2].IsBoundary() & (C[2]._numFacesBefore == 0)) << 2) |
+           ((C[3].IsBoundary() & (C[3]._numFacesBefore == 0)) << 3);
 }
 
 //
@@ -86,16 +86,16 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
 
     Index * P = patchPoints;
     for (int i = 0; i < 4; ++i) {
-        CornerTopology const & vTop = _surface.GetTopology().GetTopology(i);
-        CornerSubset   const & cSub = _surface.GetSubsets()[i];
+        CornerTopology const & cTop = _surface.GetCornerTopology(i);
+        CornerSubset   const & cSub = _surface.GetCornerSubset(i);
 
-        int faceCorner = vTop.GetFaceInVertex();
+        int faceCorner = cTop.GetFaceInVertex();
         Index const *fvCorner = &fvIndices[faceCorner * 4];
 
         switch (i) {
         case 0:
             P[5] = fvCorner[0];
-            if (!cSub._isBoundary) {
+            if (!cSub.IsBoundary()) {
                 int faceOpposite = (faceCorner + 2) & 3;
                 Index const *fvOpposite = &fvIndices[faceOpposite * 4];
                 P[4] = fvOpposite[1];
@@ -103,8 +103,8 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
                 P[1] = fvOpposite[3];
             } else {
                 int faceOther = cSub._numFacesAfter ?
-                                vTop.GetFaceNext(faceCorner) :
-                                vTop.GetFacePrevious(faceCorner);
+                                cTop.GetFaceNext(faceCorner) :
+                                cTop.GetFacePrevious(faceCorner);
                 Index const *fvOther = &fvIndices[faceOther * 4];
                 P[4] = cSub._numFacesAfter  ? fvOther[3] : fvPhantom;
                 P[0] = fvPhantom;
@@ -113,7 +113,7 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
             break;
         case 1:
             P[6] = fvCorner[0];
-            if (!cSub._isBoundary) {
+            if (!cSub.IsBoundary()) {
                 int faceOpposite = (faceCorner + 2) & 3;
                 Index const *fvOpposite = &fvIndices[faceOpposite * 4];
                 P[2] = fvOpposite[1];
@@ -121,8 +121,8 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
                 P[7] = fvOpposite[3];
             } else {
                 int faceOther = cSub._numFacesAfter ?
-                                vTop.GetFaceNext(faceCorner) :
-                                vTop.GetFacePrevious(faceCorner);
+                                cTop.GetFaceNext(faceCorner) :
+                                cTop.GetFacePrevious(faceCorner);
                 Index const *fvOther = &fvIndices[faceOther * 4];
                 P[2] = cSub._numFacesAfter  ? fvOther[3] : fvPhantom;
                 P[3] = fvPhantom;
@@ -131,7 +131,7 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
             break;
         case 2:
             P[10] = fvCorner[0];
-            if (!cSub._isBoundary) {
+            if (!cSub.IsBoundary()) {
                 int faceOpposite = (faceCorner + 2) & 3;
                 Index const *fvOpposite = &fvIndices[faceOpposite * 4];
                 P[11] = fvOpposite[1];
@@ -139,8 +139,8 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
                 P[14] = fvOpposite[3];
             } else {
                 int faceOther = cSub._numFacesAfter ?
-                                vTop.GetFaceNext(faceCorner) :
-                                vTop.GetFacePrevious(faceCorner);
+                                cTop.GetFaceNext(faceCorner) :
+                                cTop.GetFacePrevious(faceCorner);
                 Index const *fvOther = &fvIndices[faceOther * 4];
                 P[11] = cSub._numFacesAfter  ? fvOther[3] : fvPhantom;
                 P[15] = fvPhantom;
@@ -149,7 +149,7 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
             break;
         case 3:
             P[9] = fvCorner[0];
-            if (!cSub._isBoundary) {
+            if (!cSub.IsBoundary()) {
                 int faceOpposite = (faceCorner + 2) & 3;
                 Index const *fvOpposite = &fvIndices[faceOpposite * 4];
                 P[13] = fvOpposite[1];
@@ -157,8 +157,8 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
                 P[ 8] = fvOpposite[3];
             } else {
                 int faceOther = cSub._numFacesAfter ?
-                                vTop.GetFaceNext(faceCorner) :
-                                vTop.GetFacePrevious(faceCorner);
+                                cTop.GetFaceNext(faceCorner) :
+                                cTop.GetFacePrevious(faceCorner);
                 Index const *fvOther = &fvIndices[faceOther * 4];
                 P[13] = cSub._numFacesAfter  ? fvOther[3] : fvPhantom;
                 P[12] = fvPhantom;
@@ -166,7 +166,7 @@ RegularPatchBuilder::gatherPatchPoints4(Index patchPoints[]) const {
             }
             break;
         }
-        fvIndices += vTop.GetNumFaceVertices();
+        fvIndices += cTop.GetNumFaceVertices();
     }
     return 16;
 }

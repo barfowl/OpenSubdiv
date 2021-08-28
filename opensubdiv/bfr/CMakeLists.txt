@@ -42,6 +42,7 @@ set(SOURCE_FILES
 )
 
 set(PRIVATE_HEADER_FILES
+     cornerTag.h
      cornerTopology.h
      faceTopology.h
      irregularPatchBuilder.h

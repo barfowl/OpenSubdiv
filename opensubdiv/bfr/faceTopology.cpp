@@ -58,7 +58,7 @@ FaceTopology::Initialize(int faceSize) {
     _faceSize = faceSize;
     _numFaceVertsTotal = 0;
 
-    _combinedTags.Clear();
+    _combinedTag.Clear();
 
     _isInitialized = true;
     _isFinalized   = false;
@@ -87,9 +87,8 @@ FaceTopology::Finalize() {
 
     for (int i = 0; i < _faceSize; ++i) {
         CornerTopology & cTop  = GetTopology(i);
-        CornerTags       cTags = cTop.GetTags();
 
-        _combinedTags.BitwiseOr(cTags);
+        _combinedTag.Combine(cTop.GetTag());
 
         _numFaceVertsTotal += cTop.GetNumFaceVertices();
     }
@@ -100,17 +99,19 @@ FaceTopology::Finalize() {
 void
 FaceTopology::print(Index const faceVertIndices[]) const {
 
+    CombinedTag const & tag = _combinedTag;
+
     printf("FaceTopology:\n");
     printf("    face size      = %d\n", _faceSize);
     printf("    num-face-verts = %d\n", _numFaceVertsTotal);
     printf("  Tags:\n");
-    printf("    inf-sharp verts  = %d\n", _combinedTags._infSharpVerts);
-    printf("    semi-sharp verts = %d\n", _combinedTags._semiSharpVerts);
-    printf("    any sharp edges  = %d\n", _combinedTags._anySharpEdges);
-    printf("    unsharp boundary = %d\n", _combinedTags._boundaryNonSharp);
-    printf("    irregular faces  = %d\n", _combinedTags._irregularFaceSizes);
-    printf("    unordered verts  = %d\n", _combinedTags._unOrderedFaces);
-    printf("    val-2 int verts  = %d\n", _combinedTags._interiorVal2Verts);
+    printf("    inf-sharp verts  = %d\n", tag.HasInfSharpVertices());
+    printf("    semi-sharp verts = %d\n", tag.HasSemiSharpVertices());
+    printf("    any sharp edges  = %d\n", tag.HasSharpEdges());
+    printf("    unsharp boundary = %d\n", tag.HasNonSharpBoundary());
+    printf("    irregular faces  = %d\n", tag.HasIrregularFaceSizes());
+    printf("    unordered verts  = %d\n", tag.HasUnOrderedVertices());
+    printf("    val-2 int verts  = %d\n", tag.HasInteriorVal2Vertices());
 
     if (faceVertIndices) {
         Index const * cornerFaceVertIndices = faceVertIndices;
@@ -120,7 +121,7 @@ FaceTopology::print(Index const faceVertIndices[]) const {
 
             CornerTopology const & cTop = GetTopology(i);
             printf("        topology:  num faces  = %d, boundary = %d\n",
-                    cTop.GetNumFaces(), cTop.IsBoundary());
+                    cTop.GetNumFaces(), cTop.GetTag().IsBoundary());
 
             printf("        face-vert indices:\n");
 

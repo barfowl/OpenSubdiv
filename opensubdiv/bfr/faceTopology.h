@@ -27,12 +27,10 @@
 
 #include "../version.h"
 
-#include "../bfr/vertexTopology.h"
 #include "../bfr/cornerTopology.h"
 
 #include "../sdc/types.h"
 #include "../sdc/options.h"
-#include "../vtr/types.h"
 #include "../vtr/stackBuffer.h"
 
 
@@ -43,77 +41,32 @@ namespace Bfr {
 
 //
 //  The FaceTopology class describes the full topological neighborhood
-//  of a base face that includes everything necessary to define the
-//  limit surface for that face.
+//  around a base face of a mesh, which includes everything topologically
+//  necessary to define the limit surface for that face.
 //
-//  It is used solely by the base LimitSurfaceFactory -- partially
-//  populated by subclasses and then analyzed to assemble the limit
-//  surface for the face.
+//  It is used solely by the base LimitSurfaceFactory class -- partially
+//  populated by subclasses before being inspected and augmented to help
+//  assemble the limit surface for the face. Its members include some of
+//  the members of the Factory class (e.g. the subdivision scheme and
+//  options) to make them more available for its purposes.
 //
+//  The primary component of FaceTopology is an array of instances of the
+//  CornerTopology class (one for each vertex of the face), which is a
+//  lightweight wrapper around the public VertexTopology class that users
+//  populate from a subclass of LimitSurfaceFactor.
 //
-//  WIP - both the FaceTopology and VertexTopology classes are about
-//  to get a facelift...
+//  FaceTopology is one of three key components in defining the limit
+//  surface around a face.  The others are a set of CornerSubsets (one for
+//  each CornerTopology) that specify the subset of the neighborhood of
+//  the corners of the face that actually do contribute to its surface,
+//  and the indices associated with vertices that FaceTopology describes
+//  (which become the control points of the limit surface).
 //
-//  FaceTopology encapsulates the full topology around a particular
-//  face independent of vertex or face-varying data, but the limit
-//  surface is often defined by a subset (delimited by inf-sharp
-//  creases, a manifold subset of a non-manifold set, a face-varying
-//  subset, etc.)
-//
-//  The full definition of the limit surface -- both its topology and
-//  control point indices -- currently requires the following:
-//
-//      - an instance of FaceTopology provide all topological information
-//      - an array of CornerSubsets describing the topological subset
-//      - an array of control point indices:
-//          - these are provided relative to the full FaceTopology
-//          - from which the relevant subset of points is identified
-//
-//  These three components are now bundled into a SurfaceDescriptor,
-//  which is used to define both vertex and face-varying surfaces. So
-//  the Factory now assembles these and passes them on to be assembled
-//  into surfaces and assigned.
-//
-//  SurfaceDescriptor is one addition to a small "ecosystem" of classes
-//  in the works...
-//
-//  VertexTopology:
-//      - this is our public-facing class populated by Factory subclasses
-//      - it will remain so but stripped down to serve only those needs
-//
-//  CornerTopology:
-//      - will either derive from or contain a VertexTopology to access
-//      - will include the existing "face-in-vertex" member for the corner
-//      - will contain tags reflecting collective properties of the vertex:
-//          - some may move here from VertexTopology, others will be new
-//      - will include additional members that correlate to the faces of
-//        VertexTopology for additional processing:
-//          - an array of ints for "unordered face neighbors" is planned
-//            to deal with unordered faces in VertexTopology (which will
-//            allow support of non-manifold topology)
-//
-//  CornerSubset:
-//      - will remain unchanged, but moved elsewhere
-//      - should remain a very simple struct (no more than a few ints)
-//
-//  FaceTopology:
-//      - will contain an array of CornerTopology (rather than VertexTopology)
-//      - also to contain tags reflecting collective properties of the array
-//      * this is where unordered and/or non-manifold topology will need to
-//        be dealt with but:
-//          - requires access to vertex indices to determine connectivity
-//          - ideally wants to define a subset when ordering
-//
-//  SurfaceDescriptor:
-//      - will contain a reference to an instance of FaceTopology
-//      - will contain an array of CornerSubsets
-//      - will contain a reference to an external array of indices
-//      - also to contain tags reflecting collective properties of subsets
-//
-//  All of these should remain light-weight and avoid any memory allocation
-//  from the heap (except for high-valence cases).  Simple methods --
-//  particularly accessors -- should be inline to additionally keep these
-//  efficient in terms of space and time.
+//  WIP - still need some kind of public method to resolve unordered
+//        (non-manifold) vertices using the indices for all vertices.
+//      - until this and other cases are fully supported, a temporary
+//        method exists (bool IsUnsupported()) to detect and avoid
+//        those cases if desired.
 //
 class FaceTopology {
 public:
@@ -134,25 +87,20 @@ public:
     CornerTopology       & GetTopology(int i)       { return _corner[i]; }
     CornerTopology const & GetTopology(int i) const { return _corner[i]; }
 
-    CornerTags const GetTags() const { return _combinedTags; }
+    CombinedTag const GetTag() const { return _combinedTag; }
 
     int GetNumFaceVertices() const { return _numFaceVertsTotal; }
     int GetNumFaceVertices(int i) const{return _corner[i].GetNumFaceVertices();}
-
-    //  WIP - will need some kind of public method to resolve unordered
-    //  (non-manifold) vertices using the indices for all vertices.
 
     //  Debugging...
     void print(Index const faceVertIndices[]) const;
 
 public:
-    //  Methods likely to be removed or replaced...
-
     //  WIP - to be removed once all features supported
-    //      - REMEMBER that Loop patches NOT fully supported:
-    //          - regular patches also not complete for Loop
     bool IsUnsupported() const {
-        if (_combinedTags._unOrderedFaces || _combinedTags._interiorVal2Verts) {
+        if (_combinedTag.HasUnOrderedVertices() ||
+            _combinedTag.HasInteriorVal2Vertices() ||
+            (_regFaceSize == 3)) {
             return true;
         }
         return false;
@@ -166,7 +114,7 @@ public:
     int _regFaceSize;
     int _numFaceVertsTotal;
 
-    CornerTags _combinedTags;
+    CombinedTag _combinedTag;
 
     unsigned short _isInitialized : 1;
     unsigned short _isFinalized   : 1;

@@ -27,10 +27,11 @@
 
 #include "../version.h"
 
-#include "../sdc/options.h"
-#include "../sdc/types.h"
 #include "../bfr/types.h"
 #include "../bfr/limitSurface.h"
+
+#include "../sdc/options.h"
+#include "../sdc/types.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -56,8 +57,11 @@ class TopologyCache;
 //  constructed consistently.  An instance of such a Factory may also manage
 //  its own topology cache internally for all faces of the mesh.
 //
-//  WIP - The nature of the virtual methods required by subclasses warrants
-//  close inspection and review.
+//  WIP - the nature of the virtual methods required by subclasses warrants
+//        close inspection and review.
+//      - the nature of subclass construction is also in transition:
+//          - prefer initializing base members in subclass constructor
+//            via methods rather than initializer lists
 //
 class LimitSurfaceFactory {
 public:
@@ -216,7 +220,7 @@ protected:
         Sdc::SchemeType schemeType,
         Sdc::Options    schemeOptions,
         Options         limitOptions,
-        //  WIP - these may not be necessary in the base class
+        //  WIP - these will be removed, deferred to subclass to add or not
         int             numFaces,
         int             numFVarTopologies);
     virtual ~LimitSurfaceFactory();
@@ -262,7 +266,7 @@ private:
 
     TopologyCache mutable *  _topologyCache;
 
-    //  WIP - can easily move these to a subclass, so may not be necessary
+    //  WIP - these will be removed, deferred to subclass to add or not
     int _numFaces;
     int _numFVarTopologies;
 };

@@ -28,7 +28,6 @@
 #include "../version.h"
 
 #include "../bfr/types.h"
-#include "../vtr/types.h"
 #include "../vtr/stackBuffer.h"
 
 namespace OpenSubdiv {
@@ -41,7 +40,8 @@ namespace Bfr {
 //  a vertex (the valence, size of incident faces, sharpness values, etc.).
 //
 //  It is used by subclasses of LimitSurfaceFactory to provide a complete
-//  topological description for each vertex of a face, i.e. via the method:
+//  topological description for each vertex of a face, i.e. invoked vi the
+//  virtual method:
 //
 //      int populateFaceCornerTopology(Index baseFace, int cornerVertex,
 //                                     VertexTopology & vt) const;

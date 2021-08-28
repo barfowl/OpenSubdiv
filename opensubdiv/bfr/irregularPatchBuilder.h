@@ -27,9 +27,10 @@
 
 #include "../version.h"
 
-#include "../bfr/types.h"
 #include "../bfr/surfaceDescriptor.h"
 #include "../bfr/topologyCache.h"
+
+#include "../vtr/stackBuffer.h"
 
 
 namespace OpenSubdiv {
@@ -42,12 +43,27 @@ namespace Far {
 namespace Bfr {
 
 //
-//  IrregularPatchBuilder ...
+//  IrregularPatchBuilder takes a SurfaceDescriptor (that has been flagged
+//  as not regular) and builds a representation for the limit surface it
+//  defines.
+//
+//  It is intended to hide the construction details and final representation
+//  of the limit surface from its clients, i.e. the LimitSurfaceFactory.  If
+//  the preferred representation changes, or more than one is made available,
+//  it should have minimal impact on its clients (ideally none).
+//
+//  In addition to building and providing a representation of an irregular
+//  surface, it also deals with the hashing and caching of the instances
+//  that it creates.  It computes the hashing keys from the topology and
+//  coordinates with a given cache to find or add new instances.
+//
+//  WIP - the nature of the approximating options needs more work...
+//      - we need some way of specifying the options of Far::PatchTree in
+//        a way that's more in line with the Factory's public interface
 //
 class IrregularPatchBuilder {
 public:
-    //  WIP - we need some way of specifying the approximating options
-    //  of Far::PatchTree in a way that's more general...
+    //  WIP - see note above
     struct Options {
         Options() : sharpLevel(6), smoothLevel(2) { }
         Options(int sharp, int smooth) :
@@ -85,6 +101,10 @@ public:
 
 private:
     //  Private methods to assemble the topology of the control hull:
+    //  WIP - revisit the need for these separate methods (and repeated
+    //        iteration) now that we can put results in member buffers
+    void initializeControlCounts();
+
     int gatherControlFaceSizes(int faceSizes[]) const;
     int gatherControlFaceVertices(int faceVertices[]) const;
     int gatherControlVertexSharpness(int   vertIndices[],
@@ -101,6 +121,8 @@ private:
     int _numControlFaces;
 
     //  Buffers use for both hashing and assembly:
+    Vtr::internal::StackBuffer<int,8,true> _cornerControlVerts;
+    Vtr::internal::StackBuffer<int,8,true> _cornerControlFaces;
 };
 
 } // end namespace Bfr
