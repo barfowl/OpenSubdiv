@@ -261,6 +261,7 @@ private:
     unsigned int _linearScheme      : 1;
     unsigned int _linearFVarInterp  : 1;
     unsigned int _testBoundaryLimit : 1;
+    unsigned int _testTriangleLimit : 1;
 
     int  _regFaceSize;
 

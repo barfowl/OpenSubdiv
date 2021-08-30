@@ -83,6 +83,8 @@ LimitSurfaceFactory::LimitSurfaceFactory(
                        (_schemeOptions.GetVtxBoundaryInterpolation() ==
                                  Sdc::Options::VTX_BOUNDARY_NONE);
 
+    _testTriangleLimit = !_linearScheme && (_regFaceSize == 3);
+
     //  Assign the topology cache -- externally or to an internal instance:
     if (_limitOptions.ExternalTopologyCache()) {
         _topologyCache = _limitOptions.ExternalTopologyCache();
@@ -116,40 +118,76 @@ __numIrregularUncached = 0;
 }
 
 //
-//  The "has limit surface" query for a face is a bit more complicated than
-//  may be expected... There are two cases when a face will not have a limit
-//  surface:
+//  Notes on presence/absence of a limit surface...
 //
-//      - the face is a hole
-//      - the boundary interpolation option VTX_BOUNDARY_NONE is assigned:
-//          - in which case some, not all, boundary faces have no surface
+//  Unfortunately it is not trivial to detect when a face does not have
+//  an associated limit surface.  There are a few cases when a face will
+//  not have a limit surface -- divided into simple and complex cases:
 //
-//  Dealing with holes is trivial.  But dealing with boundary faces when
-//  "boundary none" is set (which is rarely used) is awkward.  It is not
-//  enough to test if a face is on the boundary, i.e. one of its vertices
-//  is on a boundary, and return false.  If a boundary face has all of its
-//  incident boundary edges (i.e. including all boundary edges incident all
-//  of its vertices) then the boundary face has a limit.
+//      - simple:
+//          - the face is a hole
+//          - the face is degenerate (< 3 edges)
+//      - complex:
+//          - boundary interpolation option "none" is assigned:
+//              - in which case some, not all, boundary faces have no limit
+//          - Loop subdivision is applied to non-triangles
 //
-//  This potentially requires that a full topological description of the
-//  face, including all explicitly assigned edge sharpness, be provided.
+//  The simple cases are, as the name suggests, simple.  But the complex
+//  cases require a greater inspection of the topological neighborhood of
+//  the face.
+//
+//  With boundary faces when "boundary none" is set (not very often) it is
+//  not enough to test if a face is a boundary -- if a boundary face has all
+//  of its incident boundary edges (i.e. all boundary edges incident to all
+//  of its face-vertices) then the boundary face has a limit surface.  This
+//  requires a complete topological description of each corner of the face.
+//
+//  Similarly, the case of Loop subdivision in the presence of non-triangles
+//  required determining if any corner of the face has an incidendent face
+//  that is not a triangle.
+//
+//  The method here inspects a corner at a time and tries to reject a face
+//  without a limit surface as soon as possible. But most cases are going to
+//  require inspection of all corners -- and that same inspection is likely
+//  to be applied later when constructing the limit.
 //
 bool
 LimitSurfaceFactory::FaceHasLimitSurface(Index faceIndex) const {
 
+    int faceSize = getFaceSize(faceIndex);
+
+    if (faceSize < 3) return false;
+
     if (isFaceHole(faceIndex)) return false;
 
-    if (_testBoundaryLimit) {
-        FaceTopology faceTopology(_schemeType, _schemeOptions);
+    bool inspectTopology = _testBoundaryLimit || _testTriangleLimit;
+    if (inspectTopology) {
+        CornerTopology   cTop;
+        VertexTopology & vTop = cTop.GetVertexTopology();
 
-        if (!gatherFaceNeighborhoodTopology(faceIndex, faceTopology)) {
-            return false;
+        for (int i = 0; i < faceSize; ++i) {
+            //  Have the subclass load VertexTopology and finalize:
+            cTop.Initialize(faceSize);
+
+            int faceInRing = populateFaceCornerTopology(faceIndex, i, vTop);
+            if (faceInRing < 0) return false;
+
+            cTop.Finalize(_regFaceSize, faceInRing);
+
+            //  Inspect the tag tod reject cases with no limit surface:
+            CornerTag cTag = cTop.GetTag();
+
+            if (_testBoundaryLimit) {
+                if (cTag.IsUnOrdered()) {
+                    //  WIP - more needed here to fully resolve topology
+                    //      - need to gather indices to identify boundaries
+                }
+                if (cTag.HasNonSharpBoundary()) return false;
+            }
+            if (_testTriangleLimit) {
+                if (cTag.HasIrregularFaceSizes()) return false;
+            }
         }
-        if (faceTopology.GetTag().HasUnOrderedVertices()) {
-            //  WIP - more here for potentially non-manifold vertices
-            //      - need to gather indices to identify boundaries
-        }
-        return faceTopology.GetTag().HasNonSharpBoundary() ? false : true;
     }
     return true;
 }
@@ -162,15 +200,12 @@ void
 LimitSurfaceFactory::assignLinearEvaluator(LimitSurface::Evaluator & eval,
         Index faceIndex, int fvarIndex) const {
 
-    //  Use a regular patch if faces is degenerate:
+    //  Initialize instance members from the associated irregular patch:
     int faceSize  = getFaceSize(faceIndex);
 
-    int patchSize = (faceSize < 3) ? _regFaceSize : faceSize;
+    eval._param = Parameterization(_schemeType, faceSize);
 
-    //  Initialize instance members from the associated irregular patch:
-    eval._param = Parameterization(_schemeType, patchSize);
-
-    eval._isRegular = (patchSize == _regFaceSize);
+    eval._isRegular = (faceSize == _regFaceSize);
     eval._isLinear  = true;
 
     eval._regPatchType = (_regFaceSize == 4)
@@ -181,26 +216,19 @@ LimitSurfaceFactory::assignLinearEvaluator(LimitSurface::Evaluator & eval,
     //
     //  Finally, gather patch control points from the appropriate indices:
     //
-    eval._numControlPoints = patchSize;
-    eval._numPatchPoints   = patchSize;
+    eval._numControlPoints = faceSize;
+    eval._numPatchPoints   = faceSize;
 
     eval._controlPoints.SetSize(eval._numControlPoints);
     int count = 0;
     if (fvarIndex < 0) {
         count = getFaceVertexIndices(faceIndex, &eval._controlPoints[0]);
     } else {
-        count = getFaceFVarValueIndices(faceIndex, &eval._controlPoints[0], fvarIndex);
+        count = getFaceFVarValueIndices(faceIndex, &eval._controlPoints[0],
+                                                   fvarIndex);
     }
-    //  This premature return leaves the Evaluator invalid:
+    //  If subclass fails to get indices, Evaluator will remain invalid
     if (count < faceSize) return;
-
-    //  Fill in missing indices for a degenerate face:
-    if (faceSize < patchSize) {
-        int * points = &eval._controlPoints[0];
-        for (int i = faceSize; i < patchSize; ++i) {
-            points[i] = points[i % faceSize];
-        }
-    }
 
     eval._isValid = true;
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
@@ -396,7 +424,6 @@ LimitSurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
                 getFaceCornerVertexIndices(faceIndex, i, indices) :
                 getFaceCornerFVarValueIndices(faceIndex, i, indices, fvarIndex);
 
-        //  WIP - what should behavior be when not getting expected number?
         if (numFaceVerts != faceTopology.GetNumFaceVertices(i)) {
             return -1;
         }
@@ -409,31 +436,6 @@ LimitSurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
 
 //
 //  Main method to populate an instance of LimitSurface:
-//
-//  Notes on presence/absence of a limit surface:
-//      Unfortunately it is not trivial to detect when a face does not
-//  have an associated limit surface.  There are two cases when a face
-//  will not have a limit surface:
-//
-//      - the face is a hole
-//      - boundary interpolation option "none" is assigned:
-//          - in which case some, not all, boundary faces have no limit
-//
-//  Dealing with holes is trivial.  But dealing with boundary faces when
-// "boundary none" is set (not very often) is difficult.  It's not enough
-//  to test if a face is a boundary -- if a boundary face has all of its
-//  incident boundary edges (i.e. all boundary edges incident to all of
-//  its face-vertices) then the boundary face has a limit surface.
-//
-//  So a near full description -- sharpness included -- of each face-vertex
-//  is necessary. Given that is the case, we might as well forge ahead and
-//  simply gather all information for the base face, and -- only in the
-//  case of "boundary none" being set -- abort if a boundary vertex with
-//  unsharpened boundary edges is encountered.
-//
-//  WIP - deal with above with assisted tagging of the vertex topology,
-//  i.e. when first inspected, detect if a boundary vertex was explicitly
-//  sharpened.
 //
 bool
 LimitSurfaceFactory::Populate(LimitSurface & s,
@@ -448,34 +450,32 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
 
     s._faceIndex = baseFace;
 
-    //
     //  Make sure we have a limit surface before proceeding:
-    //
-    if (isFaceHole(baseFace)) return false;
-
-    if (_testBoundaryLimit) {
-        //  WIP - factor this later to avoid repeated topology gathering
-        if (!FaceHasLimitSurface(baseFace)) return false;
+    //  WIP - factor this later to avoid repeated topology inspection
+    if (!FaceHasLimitSurface(baseFace)) {
+        return false;
     }
 
     //
-    //  Determine if we need to gather the topological neighborhood of the
-    //  face -- which is required for any non-linear limit surface:
+    //  Determine if we need to gather the topological neighborhood --
+    //  required for any non-linear limit surface:
     //
-    int faceSize = getFaceSize(baseFace);
-
-    bool isFaceDegenerate = (faceSize < 3);
-
+    //  WIP - consider splitting the rest of this into two separate methods:
+    //        one to initialize the linear Evaluators and the other for the
+    //        non-linear Evaluators
+    //      - that will separate all the topological analysis from the
+    //        simpler linear cases and make both much clearer
+    //
     bool hasNonLinearVtxEvaluator  = evalOptions.CreateVertexEvaluator() &&
-                                     !_linearScheme && !isFaceDegenerate;
+                                     !_linearScheme;
     bool hasNonLinearFVarEvaluator = evalOptions.GetNumFVarEvaluators() &&
-                                     !_linearFVarInterp && !isFaceDegenerate;
+                                     !_linearFVarInterp;
 
     bool needTopology = hasNonLinearVtxEvaluator || hasNonLinearFVarEvaluator;
 
     //
-    //  The main "buffers" for face topology and control vertex indices --
-    //  declare but only initialize below when necessary:
+    //  Local "buffers" for the face topology, control vertex indices,
+    //  and complete description of the limit surface:
     //
     typedef Vtr::internal::StackBuffer<Index,72,true> IndexBuffer;
 
@@ -489,56 +489,45 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
             return false;
         }
 
-        //  It may additionally be necessary to gather control vertex indices
-        //  to identify the topology around vertices that did not specify an
-        //  ordering to their incident faces (possibly non-manifold).  Do so
-        //  to resolve this, and also gather them here if needed otherwise so
-        //  that we don't have to test later if they were already gathered:
-        //  
-        bool needVertexIndices = hasNonLinearVtxEvaluator ||
-                                 faceTopology.GetTag().HasUnOrderedVertices();
-        if (needVertexIndices) {
-            vtxIndices.SetSize(faceTopology._numFaceVertsTotal);
-            if (gatherFaceNeighborhoodIndices(baseFace, faceTopology,
+        vtxIndices.SetSize(faceTopology._numFaceVertsTotal);
+        if (gatherFaceNeighborhoodIndices(baseFace, faceTopology,
                     vtxIndices, -1) < 0) {
-                return false;
-            }
-
-            if (faceTopology.GetTag().HasUnOrderedVertices()) {
-                //faceTopology.ResolveUnorderedCornerTopology(vtxIndices);
-            }
-
-            vtxSurface.InitializeVertex(vtxIndices);
+            return false;
         }
 
-        bool debugFaceTopology = false;
-        if (debugFaceTopology) {
-            printf("SurfaceDescriptor(face = %d):\n", baseFace);
-            vtxSurface.print();
+        if (faceTopology.GetTag().HasUnOrderedVertices()) {
+            //  WIP - use indices to resolve unordered topology
+            //faceTopology.ResolveUnorderedCornerTopology(vtxIndices);
         }
 
-        //  WIP - this will be removed once all cases are supported
+        vtxSurface.InitializeVertex(vtxIndices);
+
+        //  WIP - revert to linear for temporarily unsupported cases:
         if (faceTopology.IsUnsupported()) {
             hasNonLinearVtxEvaluator  = false;
             hasNonLinearFVarEvaluator = false;
         }
 
+        //  WIP - debugging
+        bool debugFaceTopology = false;
+        if (debugFaceTopology) {
+            printf("SurfaceDescriptor(face = %d):\n", baseFace);
+            vtxSurface.print();
+        }
     }
 
-    //  Assign a parameterization (reverting to regular when degenerate)
-    //  then assign the varying Evaluator first (trivial) followed by the
-    //  vertex Evaluator and face-varying Evaluators last.
+    //  Assign a parameterization then assign the varying Evaluator first
+    //  (trivial) followed by the vertex Evaluator and face-varying
+    //  Evaluators last.
     //
-    //  It is important to process the vertex Evaluator before the
-    //  face-varying Evaluators as its patch representation may be
-    //  shared by them, and the buffer used to gather control point
-    //  indices can then also be re-used for face-varying.
+    //  It is important to process the vertex Evaluator before the face-
+    //  varying Evaluators as its patch representation may be shared by
+    //  them, and the buffer used to gather control point indices can then
+    //  also be re-used for face-varying.
     //
-    if (!isFaceDegenerate) {
-        s.parameterize(Parameterization(_schemeType, faceSize));
-    } else {
-        s.parameterize(Parameterization(_schemeType, _regFaceSize));
-    }
+    int faceSize = getFaceSize(baseFace);
+
+    s.parameterize(Parameterization(_schemeType, faceSize));
 
     if (evalOptions.CreateVaryingEvaluator()) {
         assignLinearEvaluator(s._varEval, baseFace, -1);
