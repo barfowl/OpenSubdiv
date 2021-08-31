@@ -28,6 +28,7 @@
 #include "../version.h"
 
 #include "../bfr/limitSurfaceFactory.h"
+#include "../bfr/topologyCache.h"
 
 
 namespace OpenSubdiv {
@@ -40,26 +41,30 @@ namespace Far {
 namespace Bfr {
 
 //
-//  Subclass of LimitSurfaceFactory using Far::TopologyRefiner as the mesh
-//  class:
+//  Subclass of LimitSurfaceFactory using Far::TopologyRefiner as the
+//  connected mesh class:
 //
 class RefinerLimitSurfaceFactory : public LimitSurfaceFactory {
 public:
     //
-    //  Subclass-specific constructor/destructor and queries:
+    //  Subclass-specific constructor:
     //
     RefinerLimitSurfaceFactory(Far::TopologyRefiner const & mesh,
                                Options options = Options());
     virtual ~RefinerLimitSurfaceFactory();
 
+    //  Additional subclass-specific public queries:
     Far::TopologyRefiner const & GetMesh() const { return _mesh; }
 
+    int GetNumFaces() const { return _numFaces; }
+
+    int GetNumFVarChannels() const { return _numFVarChannels; }
+
 public:
-    //
-    //  TEMPORARY methods for development and debugging -- all of these
-    //  "unsupported" cases will eventually be supported:
-    //
-    bool IsFaceUnsupported(Index baseFace) const;
+    //  WIP - temporary public methods for development and debugging
+    //      - all of these "unsupported" cases will eventually be
+    //        supported and the associated methods removed.
+    bool IsFaceUnsupported(Index faceIndex) const;
 
     bool HasUnsupportedFaces() const;
     int  GetNumUnsupportedFaces() const;
@@ -71,32 +76,39 @@ protected:
     //
     //  Virtual methods required by the base class:
     //
-    bool isFaceHole( Index baseFace) const;
-    int  getFaceSize(Index baseFace) const;
+    bool isFaceHole( Index faceIndex) const;
+    int  getFaceSize(Index faceIndex) const;
 
-    int getFaceVertexIndices(   Index baseFace,
-                                Index indices[]) const;
-    int getFaceFVarValueIndices(Index baseFace,
-                                Index indices[], int fvar) const;
+    int getFaceVertexIndices(   Index faceIndex,
+                                Index vertexIndices[]) const;
+    int getFaceFVarValueIndices(Index faceIndex,
+                                Index fvarValueIndices[], int fvarID) const;
 
-    int populateFaceCornerTopology(Index baseFace, int cornerVertex,
+    int populateFaceVertexTopology(Index faceIndex, int faceVertex,
                                    VertexTopology & vertexTopology) const;
 
-    int getFaceCornerVertexIndices(Index baseFace, int cornerVertex,
-                                   Index indices[]) const;
-    int getFaceCornerFVarValueIndices(Index baseFace, int cornerVertex,
-                                      Index indices[], int fvar) const;
+    int getFaceVertexIncidentFaceVertexIndices(
+                            Index faceIndex, int faceVertex,
+                            Index vertexIndices[]) const;
+    int getFaceVertexIncidentFaceFVarValueIndices(
+                            Index faceIndex, int faceVertex,
+                            Index fvarValueIndices[], int fvarID) const;
 
 private:
     //
     //  Additional supporting methods:
     //
-    int getFaceCornerIndices(Index baseFace, int corner,
-                             Index indices[], int fvarIndex) const;
+    int getFaceVertexIndices(Index faceIndex, int faceVertex,
+                             Index indices[], int vertexOrFVarChannel) const;
 
 private:
     //  Additional members for the subclass:
     Far::TopologyRefiner const & _mesh;
+
+    Bfr::TopologyCache _localTopologyCache;
+
+    int _numFaces;
+    int _numFVarChannels;
 };
 
 } // end namespace Bfr

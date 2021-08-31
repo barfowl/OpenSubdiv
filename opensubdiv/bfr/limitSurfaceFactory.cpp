@@ -56,18 +56,16 @@ static int __numIrregularUncached = 0;
 //
 //  Main constructor and destructor:
 //
-LimitSurfaceFactory::LimitSurfaceFactory(
-    Sdc::SchemeType schemeType,
-    Sdc::Options    schemeOptions,
-    Options         limitOptions,
-    int             numFaces,
-    int             numFVarTopologies) :
-        _schemeType(schemeType),
-        _schemeOptions(schemeOptions),
-        _limitOptions(limitOptions),
+LimitSurfaceFactory::LimitSurfaceFactory() :
+        _schemeType(),
+        _schemeOptions(),
+        _limitOptions(),
         _topologyCache(0),
-        _numFaces(numFaces),
-        _numFVarTopologies(numFVarTopologies) {
+        _isSchemeTypeInitialized(false),
+        _isSchemeOptionsInitialized(false),
+        _isLimitOptionsInitialized(false),
+        _isTopologyCacheInitialized(false),
+        _isFinalized(false) {
 
     //  Initialize members dependent on mesh topology:
     _regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(_schemeType);
@@ -75,7 +73,7 @@ LimitSurfaceFactory::LimitSurfaceFactory(
     _linearScheme =
         (Sdc::SchemeTypeTraits::GetLocalNeighborhoodSize(_schemeType) == 0);
 
-    _linearFVarInterp = _linearScheme || (_numFVarTopologies == 0) ||
+    _linearFVarInterp = _linearScheme ||
                        (_schemeOptions.GetFVarLinearInterpolation() ==
                                  Sdc::Options::FVAR_LINEAR_ALL);
 
@@ -84,13 +82,66 @@ LimitSurfaceFactory::LimitSurfaceFactory(
                                  Sdc::Options::VTX_BOUNDARY_NONE);
 
     _testTriangleLimit = !_linearScheme && (_regFaceSize == 3);
+}
 
-    //  Assign the topology cache -- externally or to an internal instance:
-    if (_limitOptions.ExternalTopologyCache()) {
+void
+LimitSurfaceFactory::initializeSubdivisionScheme(Sdc::SchemeType subdScheme) {
+
+    _schemeType = subdScheme;
+    _isSchemeTypeInitialized = true;
+}
+void
+LimitSurfaceFactory::initializeSubdivisionOptions(Sdc::Options subdOptions) {
+
+    _schemeOptions = subdOptions;
+    _isSchemeOptionsInitialized = true;
+}
+void
+LimitSurfaceFactory::initializeFactoryOptions(Options factoryOptions) {
+
+    _limitOptions = factoryOptions;
+    _isLimitOptionsInitialized = true;
+}
+void
+LimitSurfaceFactory::initializeTopologyCache(TopologyCache * localCache) {
+
+    //  Note that options may override use of the local cache:
+    _topologyCache = localCache;
+    _isTopologyCacheInitialized = true;
+}
+
+void
+LimitSurfaceFactory::finalize() {
+
+    //  assert() that all members initialized before continuing...
+    assert(_isSchemeTypeInitialized);
+    assert(_isSchemeOptionsInitialized);
+    assert(_isLimitOptionsInitialized);
+    assert(_isTopologyCacheInitialized);
+    _isFinalized = true;
+
+    //  Override the topology cache if options require it:
+    if (_limitOptions.DisableTopologyCache()) {
+        _topologyCache = 0;
+    } else if (_limitOptions.ExternalTopologyCache()) {
         _topologyCache = _limitOptions.ExternalTopologyCache();
-    } else if (!_limitOptions.DisableTopologyCache()) {
-        _topologyCache = new TopologyCache();
     }
+
+    //  Initialize members dependent on subdivision topology:
+    _regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(_schemeType);
+
+    _linearScheme =
+        (Sdc::SchemeTypeTraits::GetLocalNeighborhoodSize(_schemeType) == 0);
+
+    _linearFVarInterp = _linearScheme ||
+                       (_schemeOptions.GetFVarLinearInterpolation() ==
+                                 Sdc::Options::FVAR_LINEAR_ALL);
+
+    _testBoundaryLimit = !_linearScheme &&
+                       (_schemeOptions.GetVtxBoundaryInterpolation() ==
+                                 Sdc::Options::VTX_BOUNDARY_NONE);
+
+    _testTriangleLimit = !_linearScheme && (_regFaceSize == 3);
 }
 
 LimitSurfaceFactory::~LimitSurfaceFactory() {
@@ -98,23 +149,18 @@ LimitSurfaceFactory::~LimitSurfaceFactory() {
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 //  DEBUG - report and reset inventory:
 printf("LimitSurfaceFactory destructor:\n");
-printf("     _numFaces             = %6d\n", _numFaces);
-printf("\n");
 printf("    __numLinearPatches     = %6d\n", __numLinearPatches);
 printf("    __numRegularPatches    = %6d\n", __numRegularPatches);
 printf("    __numIrregularPatches  = %6d\n", __numIrregularPatches);
 if (_topologyCache) {
 printf("\n");
 printf("    __numIrregularUncached = %6d\n", __numIrregularUncached);
-printf("    num irregular in cache = %6d\n", (int)_topologyCache->Size());
 }
 __numLinearPatches     = 0;
 __numRegularPatches    = 0;
 __numIrregularPatches  = 0;
 __numIrregularUncached = 0;
 #endif
-
-    if (_limitOptions.ExternalTopologyCache() == 0) delete _topologyCache;
 }
 
 //
@@ -169,7 +215,7 @@ LimitSurfaceFactory::FaceHasLimitSurface(Index faceIndex) const {
             //  Have the subclass load VertexTopology and finalize:
             cTop.Initialize(faceSize);
 
-            int faceInRing = populateFaceCornerTopology(faceIndex, i, vTop);
+            int faceInRing = populateFaceVertexTopology(faceIndex, i, vTop);
             if (faceInRing < 0) return false;
 
             cTop.Finalize(_regFaceSize, faceInRing);
@@ -397,7 +443,7 @@ LimitSurfaceFactory::gatherFaceNeighborhoodTopology(Index faceIndex,
 
         //  Subclass returning negative here indicates unsupported features
         //  or some other kind of failure:
-        int faceInRing = populateFaceCornerTopology(faceIndex, i, vertexTop);
+        int faceInRing = populateFaceVertexTopology(faceIndex, i, vertexTop);
         if (faceInRing < 0) return false;
 
         cornerTop.Finalize(_regFaceSize, faceInRing);
@@ -421,8 +467,10 @@ LimitSurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
 
     for (int i = 0; i < faceSize; ++i) {
         int numFaceVerts = (fvarIndex < 0) ?
-                getFaceCornerVertexIndices(faceIndex, i, indices) :
-                getFaceCornerFVarValueIndices(faceIndex, i, indices, fvarIndex);
+                getFaceVertexIncidentFaceVertexIndices(faceIndex, i,
+                        indices) :
+                getFaceVertexIncidentFaceFVarValueIndices(faceIndex, i,
+                        indices, fvarIndex);
 
         if (numFaceVerts != faceTopology.GetNumFaceVertices(i)) {
             return -1;
@@ -439,20 +487,22 @@ LimitSurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
 //
 bool
 LimitSurfaceFactory::Populate(LimitSurface & s,
-        Index baseFace,
+        Index faceIndex,
         EvaluatorOptions evalOptions) const {
 
     //
     //  Clear and re-initialize the existing instance before re-populating.
     //
-    s.clear();
-    s.initialize(_numFVarTopologies);
+    int numFVarEvaluators = evalOptions.GetNumFVarEvaluators();
 
-    s._faceIndex = baseFace;
+    s.clear();
+    s.initialize(numFVarEvaluators);
+
+    s._faceIndex = faceIndex;
 
     //  Make sure we have a limit surface before proceeding:
     //  WIP - factor this later to avoid repeated topology inspection
-    if (!FaceHasLimitSurface(baseFace)) {
+    if (!FaceHasLimitSurface(faceIndex)) {
         return false;
     }
 
@@ -485,12 +535,12 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
     IndexBuffer       vtxIndices;
 
     if (needTopology) {
-        if (!gatherFaceNeighborhoodTopology(baseFace, faceTopology)) {
+        if (!gatherFaceNeighborhoodTopology(faceIndex, faceTopology)) {
             return false;
         }
 
         vtxIndices.SetSize(faceTopology._numFaceVertsTotal);
-        if (gatherFaceNeighborhoodIndices(baseFace, faceTopology,
+        if (gatherFaceNeighborhoodIndices(faceIndex, faceTopology,
                     vtxIndices, -1) < 0) {
             return false;
         }
@@ -511,7 +561,7 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
         //  WIP - debugging
         bool debugFaceTopology = false;
         if (debugFaceTopology) {
-            printf("SurfaceDescriptor(face = %d):\n", baseFace);
+            printf("SurfaceDescriptor(face = %d):\n", faceIndex);
             vtxSurface.print();
         }
     }
@@ -525,17 +575,17 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
     //  them, and the buffer used to gather control point indices can then
     //  also be re-used for face-varying.
     //
-    int faceSize = getFaceSize(baseFace);
+    int faceSize = getFaceSize(faceIndex);
 
     s.parameterize(Parameterization(_schemeType, faceSize));
 
     if (evalOptions.CreateVaryingEvaluator()) {
-        assignLinearEvaluator(s._varEval, baseFace, -1);
+        assignLinearEvaluator(s._varEval, faceIndex, -1);
     }
 
     if (evalOptions.CreateVertexEvaluator()) {
         if (!hasNonLinearVtxEvaluator) {
-            assignLinearEvaluator(s._vtxEval, baseFace, -1);
+            assignLinearEvaluator(s._vtxEval, faceIndex, -1);
         } else if (vtxSurface.IsRegular()) {
             assignRegularEvaluator(s._vtxEval, vtxSurface);
         } else {
@@ -547,22 +597,20 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
         //  We can re-use the vertex index buffer at this point:
         IndexBuffer & fvarIndices = vtxIndices;
 
-        int         numSpecified   = evalOptions.GetNumFVarEvaluators();
         int const * fvarsSpecified = evalOptions.GetFVarEvaluatorIndices();
 
-        for (int i = 0; i < numSpecified; ++i) {
-            int fvarID = fvarsSpecified ? fvarsSpecified[i] : i;
-            if (fvarID >= _numFVarTopologies) continue;
+        for (int i = 0; i < numFVarEvaluators; ++i) {
+            LimitSurface::Evaluator & fvarEval = s._fvarEval[i];
 
-            LimitSurface::Evaluator & fvarEval = s._fvarEval[fvarID];
+            int fvarID = fvarsSpecified ? fvarsSpecified[i] : i;
 
             if (!hasNonLinearFVarEvaluator) {
-                assignLinearEvaluator(fvarEval, baseFace, fvarID);
+                assignLinearEvaluator(fvarEval, faceIndex, fvarID);
                 continue;
             }
 
             //  Skip if subclass fails to gather indices for given fvarID
-            if (gatherFaceNeighborhoodIndices(baseFace, faceTopology,
+            if (gatherFaceNeighborhoodIndices(faceIndex, faceTopology,
                     fvarIndices, fvarID) < 0) {
                 continue;
             }
@@ -585,7 +633,7 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
 }
 
 LimitSurface *
-LimitSurfaceFactory::Create(Index baseFace,
+LimitSurfaceFactory::Create(Index faceIndex,
         EvaluatorOptions evalOptions) const {
 
     //
@@ -593,11 +641,11 @@ LimitSurfaceFactory::Create(Index baseFace,
     //  Still need to return 0 if face has no limit surface due to
     //  more complex conditions (e.g. unsharpened boundary faces):
     //
-    if (isFaceHole(baseFace)) return 0;
+    if (isFaceHole(faceIndex)) return 0;
 
     LimitSurface * limitSurface = new LimitSurface();
 
-    if (!Populate(*limitSurface, baseFace, evalOptions)) {
+    if (!Populate(*limitSurface, faceIndex, evalOptions)) {
         delete limitSurface;
         return 0;
     }

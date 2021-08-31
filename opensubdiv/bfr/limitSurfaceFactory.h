@@ -48,20 +48,19 @@ class TopologyCache;
 
 //
 //  LimitSurfaceFactory is an abstract class that provides the construction
-//  of instances of LimitSurface from the faces of a mesh -- whose type is
-//  determined by a subclass.
+//  of instances of LimitSurface from the faces of a mesh.
+//
+//  LimitSurfaceFactory provides both the public interface for construction
+//  as well as the implementation for its subclasses -- each defined to
+//  support a specific mesh class.  A subclass implements a small suite of
+//  virtual methods to provide topological information about faces of that
+//  mesh -- for which LimitSurface instances are created.
 //
 //  Unlike stateless factory classes with static methods in Far, we want to
 //  create instances of this Factory class for specific instances of meshes
 //  and construction options so that LimitSurface instances for all faces are
 //  constructed consistently.  An instance of such a Factory may also manage
 //  its own topology cache internally for all faces of the mesh.
-//
-//  WIP - the nature of the virtual methods required by subclasses warrants
-//        close inspection and review.
-//      - the nature of subclass construction is also in transition:
-//          - prefer initializing base members in subclass constructor
-//            via methods rather than initializer lists
 //
 class LimitSurfaceFactory {
 public:
@@ -116,9 +115,6 @@ public:
 
     Sdc::SchemeType GetSchemeType() const    { return _schemeType; }
     Sdc::Options    GetSchemeOptions() const { return _schemeOptions; }
-
-    int GetNumFaces() const { return _numFaces; }
-    int GetNumFVarChannels() const { return _numFVarTopologies; }
 
     int GetRegFaceSize() const { return _regFaceSize; }
 
@@ -179,69 +175,130 @@ public:
     //  Failure of create/populate is also possible if the subclass fails
     //  to provide a valid topological description of the face.
     //
-    bool FaceHasLimitSurface(Index baseFace) const;
+    bool FaceHasLimitSurface(Index faceIndex) const;
 
-    LimitSurface * Create(Index            baseFace,
+    LimitSurface * Create(Index            faceIndex,
                           EvaluatorOptions opts = EvaluatorOptions()) const;
 
     bool Populate(LimitSurface &   instance,
-                  Index            baseFace,
+                  Index            faceIndex,
                   EvaluatorOptions opts = EvaluatorOptions()) const;
 
 protected:
+    //  (REVIEW 1.1)
     //
     //  Virtual methods required to support LimitSurface construction:
     //
-    virtual bool isFaceHole( Index baseFace) const = 0;
-    virtual int  getFaceSize(Index baseFace) const = 0;
+    //  These methods require a subclass to provide a complete description
+    //  of the topology around a base face, as well as indices associated
+    //  with it (both vertex and face-varying).  A goal here is to keep
+    //  the number of methods required to a minimum, and also that these
+    //  methods be invoked minimally by the base class as part of the
+    //  construction process.
+    //
+    //  With the need to support both linear and non-linear cases (for
+    //  which linear is trivial by comparison) and the limit surface for
+    //  both vertex and face-varying topologies, the result is a small set
+    //  of methods covering this matrix of functionality.
+    //
+    //  Trivial queries:
+    virtual bool isFaceHole(Index faceIndex) const = 0;
 
-    virtual int getFaceVertexIndices(Index baseFace,
-                                     Index indices[]) const = 0;
-    virtual int getFaceFVarValueIndices(Index baseFace,
-                                        Index indices[],
-                                        int   fvarIndex) const = 0;
+    virtual int  getFaceSize(Index faceIndex) const = 0;
 
-    //  WIP - naming here, i.e. use of "FaceCorner", is questionable
-    //      - see notes in header for VertexTopology for details/examples
-    virtual int populateFaceCornerTopology(Index baseFace, int cornerVertex,
-                                           VertexTopology & vt) const = 0;
+    //  Identifying indices for a single base face (for linear cases):
+    //
+    //  (Note use of "face vertex" vs "face fvar-value" for face-varying
+    //  is consistent with Far topology queries and used elsewhere here.)
+    virtual int getFaceVertexIndices(Index faceIndex,
+                     Index vertexIndices[]) const = 0;
 
-    virtual int getFaceCornerVertexIndices(Index baseFace, int cornerVertex,
-                                           Index indices[]) const = 0;
-    virtual int getFaceCornerFVarValueIndices(Index baseFace, int cornerVertex,
-                                              Index indices[],
-                                              int fvarIndex) const = 0;
+    virtual int getFaceFVarValueIndices(Index faceIndex,
+                     Index fvarValueIndices[], int   fvarID) const = 0;
+
+    //  Identifying topology and associated indices for the complete set
+    //  of incident faces surrounding a face-vertex (corner) of a face
+    //  (to support non-linear cases):
+    //
+    //  Populating the VertexTopology describes a set of incident faces
+    //  and any related sharpness at our around the specific face-vertex.
+    //  The associated methods to identify indices for the incident faces
+    //  expect values for those faces to be ordered consistent with the
+    //  specification in VertexTopology.
+    //
+    //  Notes:
+    //      - naming here is a bit of a challenge -- terser names being
+    //        too vague but more specific names becoming too verbose
+    //      - all are prefaced with "face vertex" to indicate a specific
+    //        corner vertex of a face
+    //      - the index queries can be interpreted by parsing the names
+    //        backward as "get the indices for the incident faces around
+    //        the given face vertex"
+    //      - introducing a term such as "neighborhood" may help here.
+    //
+    virtual int populateFaceVertexTopology(
+                    Index faceIndex, int faceVertex,
+                    VertexTopology & vt) const = 0;
+
+    virtual int getFaceVertexIncidentFaceVertexIndices(
+                    Index faceIndex, int faceVertex,
+                    Index vertexIndices[]) const = 0;
+
+    virtual int getFaceVertexIncidentFaceFVarValueIndices(
+                    Index faceIndex, int faceVertex,
+                    Index fvarValueIndices[], int fvarID) const = 0;
 
 protected:
+    //  (REVIEW 1.2)
     //
-    //  Fully qualified constructor -- to be used by subclass constructors:
+    //  Protected constructor/destructor and explicit initializers for use
+    //  by constructors of subclasses:
     //
-    LimitSurfaceFactory(
-        Sdc::SchemeType schemeType,
-        Sdc::Options    schemeOptions,
-        Options         limitOptions,
-        //  WIP - these will be removed, deferred to subclass to add or not
-        int             numFaces,
-        int             numFVarTopologies);
+    //  Note the use of explicit methods to initialize base class members
+    //  is preferred here over use of base class constructor with arguments
+    //  in an initialization list.  This is done as variables to initialize
+    //  the base class members are often not trivially retrievable from the
+    //  mesh class for which the subclass is written (consider gathering
+    //  all of the subdivision options from UsdGeomMesh).  So a subclass
+    //  is free to do whatever is necessary within its constructor as long
+    //  it satisfies initialization requirements of the base class.
+    //
+    //  Subclasses are also responsible for providing both the type and an
+    //  instance of a TopologyCache for internal use (an external cache of
+    //  any type can be optionally provided on construction and will always
+    //  override it).  Thread-safe cache types can be easily declared for
+    //  specific threading models (tbb, std, etc.) and so the subclass is
+    //  free to declare any as a member and specify it to the base class to
+    //  complete its initialization.
+    //
+    //  All initialization methods must be called (order not important) and
+    //  followed by a call to finalize() -- which will verify that each has
+    //  been called.  Any explicit use of base class members in a subclass
+    //  constructor is expected to follow these initialize/finalize calls.
+    //
+    LimitSurfaceFactory();
     virtual ~LimitSurfaceFactory();
 
-    int getRegularFaceSize() const { return _regFaceSize; }
+    void initializeSubdivisionScheme( Sdc::SchemeType schemeType);
+    void initializeSubdivisionOptions(Sdc::Options    schemeOptions);
+    void initializeFactoryOptions(    Options         factoryOptions);
+    void initializeTopologyCache(     TopologyCache * localTopologyCache);
+    void finalize();
 
 private:
     //  Supporting internal methods:
     //
-    //  Methods to assemble topology and corresponding indices for a face:
-    bool gatherFaceNeighborhoodTopology(Index          baseFace,
+    //  Methods to assemble topology and corresponding indices for entire face:
+    bool gatherFaceNeighborhoodTopology(Index faceIndex,
                                         FaceTopology & topology) const;
 
-    int gatherFaceNeighborhoodIndices(Index                baseFace,
+    int gatherFaceNeighborhoodIndices(Index faceIndex,
                                       FaceTopology const & topology,
-                                      Index                indices[],
-                                      int                  fvarIndex) const;
+                                      Index indices[], int fvarIndex) const;
 
     //  Methods to assemble Evaluators for the different categories of patch:
     void assignLinearEvaluator(LimitSurface::Evaluator & evaluator,
-                               Index baseFace, int fvarIndex) const;
+                               Index faceIndex, int fvarIndex) const;
 
     void assignRegularEvaluator(LimitSurface::Evaluator & evaluator,
                                 SurfaceDescriptor const & surface) const;
@@ -254,22 +311,28 @@ private:
                                 SurfaceDescriptor const       & surface) const;
 
 private:
+    //  Members describing options, subdivision properties and reference to
+    //  an optional cache (very little memory and low initialization cost)
     Sdc::SchemeType _schemeType;
     Sdc::Options    _schemeOptions;
     Options         _limitOptions;
 
+    TopologyCache mutable * _topologyCache;
+
+    //  Members ensuring proper initialization by subclasses:
+    unsigned int _isSchemeTypeInitialized    : 1;
+    unsigned int _isSchemeOptionsInitialized : 1;
+    unsigned int _isLimitOptionsInitialized  : 1;
+    unsigned int _isTopologyCacheInitialized : 1;
+    unsigned int _isFinalized                : 1;
+
+    //  Members related to subdivision topology and options:
     unsigned int _linearScheme      : 1;
     unsigned int _linearFVarInterp  : 1;
     unsigned int _testBoundaryLimit : 1;
     unsigned int _testTriangleLimit : 1;
 
     int  _regFaceSize;
-
-    TopologyCache mutable *  _topologyCache;
-
-    //  WIP - these will be removed, deferred to subclass to add or not
-    int _numFaces;
-    int _numFVarTopologies;
 };
 
 } // end namespace Bfr

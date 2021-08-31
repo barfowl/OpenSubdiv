@@ -39,13 +39,16 @@ namespace Bfr {
 //
 RefinerLimitSurfaceFactory::RefinerLimitSurfaceFactory(
     Far::TopologyRefiner const & mesh, Options limitOptions) :
-        LimitSurfaceFactory(mesh.GetSchemeType(),
-                            mesh.GetSchemeOptions(),
-                            limitOptions,
-                            mesh.GetLevel(0).GetNumFaces(),
-                            mesh.GetNumFVarChannels()),
-        _mesh(mesh) {
+        LimitSurfaceFactory(),
+        _mesh(mesh),
+        _numFaces(mesh.GetLevel(0).GetNumFaces()),
+        _numFVarChannels(mesh.GetNumFVarChannels()) {
 
+    initializeSubdivisionScheme(mesh.GetSchemeType());
+    initializeSubdivisionOptions(mesh.GetSchemeOptions());
+    initializeFactoryOptions(limitOptions);
+    initializeTopologyCache(&_localTopologyCache);
+    finalize();
 }
 
 RefinerLimitSurfaceFactory::~RefinerLimitSurfaceFactory() {
@@ -86,7 +89,7 @@ int
 RefinerLimitSurfaceFactory::getFaceFVarValueIndices(Index baseFace,
         Index indices[], int fvarIndex) const {
 
-    if (fvarIndex >= _mesh.GetNumFVarChannels()) return 0;
+    if (fvarIndex >= _numFVarChannels) return 0;
 
     ConstIndexArray fvarValues =
             _mesh.GetLevel(0).GetFaceFVarValues(baseFace, fvarIndex);
@@ -99,7 +102,7 @@ RefinerLimitSurfaceFactory::getFaceFVarValueIndices(Index baseFace,
 //  Specifying the topology around a face-vertex:
 //
 int
-RefinerLimitSurfaceFactory::populateFaceCornerTopology(
+RefinerLimitSurfaceFactory::populateFaceVertexTopology(
         Index baseFace, int cornerVertex,
         VertexTopology & vertexTopology) const {
 
@@ -188,7 +191,7 @@ RefinerLimitSurfaceFactory::populateFaceCornerTopology(
 //  the indices for a particular vertex Index:
 //
 int
-RefinerLimitSurfaceFactory::getFaceCornerIndices(
+RefinerLimitSurfaceFactory::getFaceVertexIndices(
         Index baseFace, int cornerVertex,
         Index indices[], int fvarIndex) const {
 
@@ -215,19 +218,21 @@ RefinerLimitSurfaceFactory::getFaceCornerIndices(
 }
 
 int
-RefinerLimitSurfaceFactory::getFaceCornerVertexIndices(
+RefinerLimitSurfaceFactory::getFaceVertexIncidentFaceVertexIndices(
         Index baseFace, int cornerVertex,
         Index indices[]) const {
 
-    return getFaceCornerIndices(baseFace, cornerVertex, indices, -1);
+    return getFaceVertexIndices(baseFace, cornerVertex, indices, -1);
 }
 
 int
-RefinerLimitSurfaceFactory::getFaceCornerFVarValueIndices(
+RefinerLimitSurfaceFactory::getFaceVertexIncidentFaceFVarValueIndices(
         Index baseFace, int cornerVertex,
-        Index indices[], int fvar) const {
+        Index indices[], int fvarIndex) const {
 
-    return getFaceCornerIndices(baseFace, cornerVertex, indices, fvar);
+    if (fvarIndex >= _numFVarChannels) return 0;
+
+    return getFaceVertexIndices(baseFace, cornerVertex, indices, fvarIndex);
 }
 
 //
@@ -278,7 +283,7 @@ RefinerLimitSurfaceFactory::IsFaceUnsupported(Index fIndex) const {
 
     Vtr::internal::Level const & baseLevel = _mesh.getLevel(0);
 
-    return (getRegularFaceSize() == 3) ||
+    return (GetRegFaceSize() == 3) ||
            isFaceNonManifold(baseLevel, fIndex) ||
            isFaceVal2Interior(baseLevel, fIndex);
 }
