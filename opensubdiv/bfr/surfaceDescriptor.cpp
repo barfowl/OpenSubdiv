@@ -433,7 +433,7 @@ SurfaceDescriptor::sharpenFVarSubset(CornerSubset         & fvarSub,
     case Sdc::Options::FVAR_LINEAR_CORNERS_PLUS1:
         //  Sharpen corners and vertices with three or more fvar indices:
         isSharp = (fvarSub._numFacesTotal == 1);
-        if (!fvarSub.IsSharp() && !fvarIndexIsUnique) {
+        if (!isSharp && !fvarIndexIsUnique) {
             isSharp = moreThanTwoUniqueCornerIndices(cTop, fvarIndices);
         }
         break;
@@ -443,7 +443,7 @@ SurfaceDescriptor::sharpenFVarSubset(CornerSubset         & fvarSub,
         //  concave corners (two indices with the other unique to one face) and
         //  darts (one discontinuous edge of a periodic set of faces):
         isSharp = (fvarSub._numFacesTotal == 1);
-        if (!fvarSub.IsSharp()) {
+        if (!isSharp) {
             if (!fvarIndexIsUnique) {
                 isSharp =
                         moreThanTwoUniqueCornerIndices(cTop, fvarIndices) ||

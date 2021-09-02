@@ -47,7 +47,7 @@ public:
     ~RegularPatchBuilder() { }
 
     //  Debugging...
-    void print() const;
+    void print(Index const cvIndices[] = 0) const;
 
 public:
     //  Methods to query the number and indices of control vertices:
@@ -63,14 +63,20 @@ public:
 
 private:
     //  Internal methods for assembling quad and tri patches:
-    int gatherPatchPoints4(Index cvIndices[]) const;
-    int gatherPatchPoints3(Index cvIndices[]) const;
+    void gatherInteriorPatchPoints4(Index cvIndices[]) const;
+    void gatherBoundaryPatchPoints4(Index cvIndices[]) const;
+
+    void gatherInteriorPatchPoints3(Index cvIndices[]) const;
+    void gatherBoundaryPatchPoints3(Index cvIndices[]) const;
 
 private:
     //  Private members:
     SurfaceDescriptor const & _surface;
 
-    int                        _patchSize;
+    unsigned short _isQuad     : 1;
+    unsigned short _isBoundary : 1;
+    short          _patchSize;
+
     Far::PatchDescriptor::Type _patchType;
 };
 
