@@ -34,14 +34,36 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 
 //
-//  Trivial constructor/destructor:
+//  Internal helper functions:
+//
+namespace {
+    inline int
+    encodeTriBoundaryMask(int eBits, int vBits) {
+
+        int upperBits = 0;
+        int lowerBits = eBits;
+
+        if (vBits) {
+            if (eBits == 0) {
+                upperBits = 1;
+                lowerBits = vBits;
+            } else if ((vBits == 7) &&
+                       ((eBits == 1) || (eBits == 2) || (eBits == 4))) {
+                upperBits = 2;
+                lowerBits = eBits;
+            }
+        }
+        return (upperBits << 3) | lowerBits;
+    }
+}
+
+//
+//  Constructor (empty destructor is inline):
 //
 RegularPatchBuilder::RegularPatchBuilder(SurfaceDescriptor const & surface) :
         _surface(surface) {
 
-    _isQuad     = (_surface.GetTopology()._faceSize == 4);
-    _isBoundary =  _surface.GetTag().HasBoundaryVertices();
-
+    _isQuad = (_surface.GetTopology()._faceSize == 4);
     if (_isQuad) {
         assert(_surface.GetTopology()._regFaceSize == 4);
 
@@ -54,36 +76,29 @@ RegularPatchBuilder::RegularPatchBuilder(SurfaceDescriptor const & surface) :
         _patchType = Far::PatchDescriptor::LOOP;
         _patchSize = 12;
     }
-}
 
-//
-//  Methods to determine the boundary mask from the CornerSubsets:
-//
-int
-RegularPatchBuilder::GetBoundaryMask() const {
-
-    if (!_isBoundary) return 0;
-
-    CornerSubset const * C = _surface.GetSubsets();
-
-    if (_isQuad) {
-        //  Quad case is trivial -- set a bit for each boundary edge:
-        return ((C[0].IsBoundary() & (C[0]._numFacesBefore == 0)) << 0) |
-               ((C[1].IsBoundary() & (C[1]._numFacesBefore == 0)) << 1) |
-               ((C[2].IsBoundary() & (C[2]._numFacesBefore == 0)) << 2) |
-               ((C[3].IsBoundary() & (C[3]._numFacesBefore == 0)) << 3);
+    _isBoundary = _surface.GetTag().HasBoundaryVertices();
+    if (!_isBoundary) {
+        _boundaryMask = 0;
+    } else if (_isQuad) {
+        //  Boundary mask for quad trivial -- bit for each boundary edge:
+        CornerSubset const * C = _surface.GetSubsets();
+        int eMask = ((C[0].IsBoundary() & (C[0]._numFacesBefore == 0)) << 0) |
+                    ((C[1].IsBoundary() & (C[1]._numFacesBefore == 0)) << 1) |
+                    ((C[2].IsBoundary() & (C[2]._numFacesBefore == 0)) << 2) |
+                    ((C[3].IsBoundary() & (C[3]._numFacesBefore == 0)) << 3);
+        _boundaryMask = eMask;
     } else {
-        //  Tri case is not so trivial -- boundary verts can exist on tris
-        //  without boundary edges, so bits for both are combined:
-        int vMask =  (C[0].IsBoundary() << 0) |
-                     (C[1].IsBoundary() << 1) |
-                     (C[2].IsBoundary() << 2);
+        //  Boundary mask for tris not so trivial -- boundary verts can exist
+        //  on tris without boundary edges, so bits for both are combined:
+        CornerSubset const * C = _surface.GetSubsets();
         int eMask = ((C[0].IsBoundary() & (C[0]._numFacesBefore == 0)) << 0) |
                     ((C[1].IsBoundary() & (C[1]._numFacesBefore == 0)) << 1) |
                     ((C[2].IsBoundary() & (C[2]._numFacesBefore == 0)) << 2);
-
-        //  WIP - need to adjust this eventually to match Far::PatchParam
-        return (vMask << 3) | eMask;
+        int vMask =  (C[0].IsBoundary() << 0) |
+                     (C[1].IsBoundary() << 1) |
+                     (C[2].IsBoundary() << 2);
+        _boundaryMask = encodeTriBoundaryMask(eMask, vMask);
     }
 }
 
@@ -217,18 +232,126 @@ RegularPatchBuilder::gatherBoundaryPatchPoints4(Index P[]) const {
 }
 
 void
-RegularPatchBuilder::gatherInteriorPatchPoints3(Index patchPoints[]) const {
+RegularPatchBuilder::gatherInteriorPatchPoints3(Index P[]) const {
 
-    if (patchPoints) {
-        assert("gatherInteriorPatchPoints3() not yet supported" == 0);
-    }
+    Index const * fvIndices = &_surface.GetIndices()[0];
+
+    //
+    //  For each of the 3 corners, the indices for the four contributing
+    //  points come from the 2nd and 3rd faces following the corner face:
+    //
+    Index const * fvNext2 = 0;
+    Index const * fvNext3 = 0;
+
+    CornerTopology const & cTop0 = _surface.GetCornerTopology(0);
+    fvNext2 = fvIndices + cTop0.GetFaceVertexOffset(cTop0.GetFaceAfter(2));
+    fvNext3 = fvIndices + cTop0.GetFaceVertexOffset(cTop0.GetFaceAfter(3));
+    P[ 4] = fvNext2[0];
+    P[ 7] = fvNext2[1];
+    P[ 3] = fvNext2[2];
+    P[ 0] = fvNext3[2];
+    fvIndices += cTop0.GetNumFaceVertices();
+
+    CornerTopology const & cTop1 = _surface.GetCornerTopology(1);
+    fvNext2 = fvIndices + cTop1.GetFaceVertexOffset(cTop1.GetFaceAfter(2));
+    fvNext3 = fvIndices + cTop1.GetFaceVertexOffset(cTop1.GetFaceAfter(3));
+    P[ 5] = fvNext2[0];
+    P[ 1] = fvNext2[1];
+    P[ 2] = fvNext2[2];
+    P[ 6] = fvNext3[2];
+    fvIndices += cTop1.GetNumFaceVertices();
+
+    CornerTopology const & cTop2 = _surface.GetCornerTopology(2);
+    fvNext2 = fvIndices + cTop2.GetFaceVertexOffset(cTop2.GetFaceAfter(2));
+    fvNext3 = fvIndices + cTop2.GetFaceVertexOffset(cTop2.GetFaceAfter(3));
+    P[ 8] = fvNext2[0];
+    P[ 9] = fvNext2[1];
+    P[11] = fvNext2[2];
+    P[10] = fvNext3[2];
 }
 
 void
-RegularPatchBuilder::gatherBoundaryPatchPoints3(Index patchPoints[]) const {
+RegularPatchBuilder::gatherBoundaryPatchPoints3(Index P[]) const {
 
-    if (patchPoints) {
-        assert("gatherBoundaryPatchPoints3() not yet supported" == 0);
+    Index const * fvIndices = &_surface.GetIndices()[0];
+
+    //
+    //  For each of the 3 corners, one incident face contains all indices
+    //  that will contribute to the points of the corresponding patch, but
+    //  interior vertices require two:
+    //
+    for (int i = 0; i < 3; ++i) {
+        CornerTopology const & cTop = _surface.GetCornerTopology(i);
+        CornerSubset   const & cSub = _surface.GetCornerSubset(i);
+
+        int faceCorner = cTop.GetFaceInVertex();
+
+        int faceOther = -1;
+        if (!cSub.IsBoundary()) {
+            faceOther = cTop.GetFaceAfter(2);
+        } else if (cSub._numFacesTotal == 1) {
+            faceOther = faceCorner;
+        } else if (cSub._numFacesBefore == 0) {
+            faceOther = cTop.GetFaceAfter(2);
+        } else if (cSub._numFacesAfter == 0) {
+            faceOther = cTop.GetFaceBefore(2);
+        } else {
+            faceOther = cTop.GetFaceNext(faceCorner);
+        }
+        assert(faceOther >= 0);
+
+        Index const * fvOther = fvIndices + cTop.GetFaceVertexOffset(faceOther);
+
+        Index fvPhantom = fvOther[0];
+
+        switch (i) {
+        case 0:
+            P[4] = fvOther[0];
+            if (!cSub.IsBoundary()) {
+                P[7] = fvOther[1];
+                P[3] = fvOther[2];
+                fvOther = fvIndices +
+                          cTop.GetFaceVertexOffset(cTop.GetFaceNext(faceOther));
+                P[0] = fvOther[2];
+            } else {
+                P[7] = (cSub._numFacesAfter) ? fvOther[3 - cSub._numFacesAfter]
+                                             : fvPhantom;
+                P[3] = (cSub._numFacesAfter  == 2) ? fvOther[2] : fvPhantom;
+                P[0] = (cSub._numFacesBefore == 2) ? fvOther[1] : fvPhantom;
+            }
+            break;
+        case 1:
+            P[5] = fvOther[0];
+            if (!cSub.IsBoundary()) {
+                P[1] = fvOther[1];
+                P[2] = fvOther[2];
+                fvOther = fvIndices +
+                          cTop.GetFaceVertexOffset(cTop.GetFaceNext(faceOther));
+                P[6] = fvOther[2];
+            } else {
+                P[1] = (cSub._numFacesAfter) ? fvOther[3 - cSub._numFacesAfter]
+                                             : fvPhantom;
+                P[2] = (cSub._numFacesAfter  == 2) ? fvOther[2] : fvPhantom;
+                P[6] = (cSub._numFacesBefore == 2) ? fvOther[1] : fvPhantom;
+            }
+            break;
+        case 2:
+            P[8] = fvOther[0];
+            if (!cSub.IsBoundary()) {
+                P[ 9] = fvOther[1];
+                P[11] = fvOther[2];
+                fvOther = fvIndices +
+                          cTop.GetFaceVertexOffset(cTop.GetFaceNext(faceOther));
+                P[10] = fvOther[2];
+            } else {
+                P[ 9] = (cSub._numFacesAfter) ? fvOther[3 - cSub._numFacesAfter]
+                                              : fvPhantom;
+                P[11] = (cSub._numFacesAfter  == 2) ? fvOther[2] : fvPhantom;
+                P[10] = (cSub._numFacesBefore == 2) ? fvOther[1] : fvPhantom;
+            }
+            break;
+        }
+        fvIndices += cTop.GetNumFaceVertices();
     }
 }
 

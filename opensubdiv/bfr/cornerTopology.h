@@ -63,6 +63,8 @@ public:
 
     VertexTopology & GetVertexTopology() { return _vTop; }
 
+    void ConnectUnOrderedFaces(Index const faceVertexIndices[]);
+
 public:
     //  Methods to query properties after finalization:
     CornerTag GetTag() const { return _tag; }

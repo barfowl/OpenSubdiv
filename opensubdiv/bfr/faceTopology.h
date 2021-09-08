@@ -92,6 +92,10 @@ public:
     int GetNumFaceVertices() const { return _numFaceVertsTotal; }
     int GetNumFaceVertices(int i) const{return _corner[i].GetNumFaceVertices();}
 
+    //  Methods to test for and resolve unordered corners of the face:
+    bool HasUnOrderedCorners() const { return GetTag().HasUnOrderedVertices(); }
+    void ResolveUnOrderedCorners(Index const faceVertexIndices[]);
+
     //  Debugging...
     void print(Index const faceVertIndices[]) const;
 
@@ -99,8 +103,7 @@ public:
     //  WIP - to be removed once all features supported
     bool IsUnsupported() const {
         if (_combinedTag.HasUnOrderedVertices() ||
-            _combinedTag.HasInteriorVal2Vertices() ||
-            (_regFaceSize == 3)) {
+            _combinedTag.HasInteriorVal2Vertices()) {
             return true;
         }
         return false;

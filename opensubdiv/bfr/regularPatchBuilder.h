@@ -57,9 +57,13 @@ public:
 
 public:
     //  Methods to query patch properties:
+    bool IsQuadPatch() const { return _isQuad; }
+    bool IsBoundaryPatch() const { return _isBoundary; }
+
     Far::PatchDescriptor::Type GetPatchType() const { return _patchType; }
 
-    int GetBoundaryMask() const;
+    //  Note the bit-mask here is specific for use with Far::PatchParam
+    int GetPatchParamBoundaryMask() const { return _boundaryMask; }
 
 private:
     //  Internal methods for assembling quad and tri patches:
@@ -73,8 +77,9 @@ private:
     //  Private members:
     SurfaceDescriptor const & _surface;
 
-    unsigned short _isQuad     : 1;
-    unsigned short _isBoundary : 1;
+    unsigned short _isQuad       : 1;
+    unsigned short _isBoundary   : 1;
+    unsigned short _boundaryMask : 6;
     short          _patchSize;
 
     Far::PatchDescriptor::Type _patchType;

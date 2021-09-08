@@ -283,8 +283,7 @@ RefinerLimitSurfaceFactory::IsFaceUnsupported(Index fIndex) const {
 
     Vtr::internal::Level const & baseLevel = _mesh.getLevel(0);
 
-    return (GetRegFaceSize() == 3) ||
-           isFaceNonManifold(baseLevel, fIndex) ||
+    return isFaceNonManifold(baseLevel, fIndex) ||
            isFaceVal2Interior(baseLevel, fIndex);
 }
 

@@ -97,6 +97,26 @@ FaceTopology::Finalize() {
 }
 
 void
+FaceTopology::ResolveUnOrderedCorners(Index const fvIndices[]) {
+
+    //
+    //  Inspect and deal with any corner that did not have its incident
+    //  faces specified in counter-clockwise order (and so which may be
+    //  non-manifold).  The face-vertex indices are required for the
+    //  corner to identify the connectivity between them for later use:
+    //
+    for (int i = 0; i < _faceSize; ++i) {
+        CornerTopology & cTop  = GetTopology(i);
+
+        if (cTop.GetTag().IsUnOrdered()) {
+            cTop.ConnectUnOrderedFaces(fvIndices);
+        }
+
+        fvIndices += cTop.GetNumFaceVertices();
+    }
+}
+
+void
 FaceTopology::print(Index const faceVertIndices[]) const {
 
     CombinedTag const & tag = _combinedTag;

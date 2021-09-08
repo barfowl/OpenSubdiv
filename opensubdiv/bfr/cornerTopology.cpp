@@ -119,6 +119,16 @@ CornerTopology::Finalize(int regFaceSize, int faceInVertex) {
 }
 
 //
+//  Method to connect unordered faces to allow for topological
+//  traversals of the incident faces:
+//
+void
+CornerTopology::ConnectUnOrderedFaces(Index const fvIndices[]) {
+
+    assert(fvIndices);
+}
+
+//
 //  Method to revise the tags for a subset of the corner, which may no
 //  longer include properties that trigger exceptional behavior:
 //

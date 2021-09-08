@@ -288,6 +288,16 @@ protected:
 private:
     //  Supporting internal methods:
     //
+    bool faceHasLimitLocal(       Index faceIndex, int faceSize) const;
+    bool faceHasLimitNeighborhood(Index faceIndex, FaceTopology const *) const;
+
+    bool populateLinearEvaluators(LimitSurface &   limitSurface,
+                                  Index            faceIndex,
+                                  EvaluatorOptions options) const;
+    bool populateNonLinearEvaluators(LimitSurface &   limitSurface,
+                                     Index            faceIndex,
+                                     EvaluatorOptions options) const;
+
     //  Methods to assemble topology and corresponding indices for entire face:
     bool gatherFaceNeighborhoodTopology(Index faceIndex,
                                         FaceTopology & topology) const;
@@ -326,11 +336,13 @@ private:
     unsigned int _isTopologyCacheInitialized : 1;
     unsigned int _isFinalized                : 1;
 
-    //  Members related to subdivision topology and options:
+    //  Members related to subdivision topology, options and limit tests:
     unsigned int _linearScheme      : 1;
     unsigned int _linearFVarInterp  : 1;
-    unsigned int _testBoundaryLimit : 1;
-    unsigned int _testTriangleLimit : 1;
+
+    unsigned int _testNeighborhoodForLimit       : 1;
+    unsigned int _rejectSmoothBoundariesForLimit : 1;
+    unsigned int _rejectIrregularFacesForLimit   : 1;
 
     int  _regFaceSize;
 };
