@@ -34,25 +34,149 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 
 //
-//  Minor methods supporting initialization:
+//  Constructors for vertex and face-varying surfaces:
 //
-void
-SurfaceDescriptor::initialize(int faceSize, Index const indices[]) {
+SurfaceDescriptor::SurfaceDescriptor(FaceTopology const & topology,
+                                     Index const          vtxIndices[]) :
+        _topology(topology),
+        _indices(vtxIndices) {
 
     assert(!_topology.IsUnsupported());
 
-    _indices = indices;
+    //  Sharpen boundary vertices when warranted:
+    bool applyVtxBoundaryInterpolation =
+            (_topology._schemeOptions.GetVtxBoundaryInterpolation() ==
+                Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
 
-    _corners.SetSize(faceSize);
+    //
+    //  Initialize members, followed by the subset for each corner:
+    //
+    _isFaceVarying = false;
+    _matchesVertex = true;
 
     _combinedTag.Clear();
 
-    _isInitialized = true;
-    _isRegular     = false;
-    _isFaceVarying = false;
-    _matchesVertex = true;
+    _corners.SetSize(_topology.GetFaceSize());
+
+    for (int corner = 0; corner < _topology.GetFaceSize(); ++corner) {
+        CornerTopology const & cTop = GetCornerTopology(corner);
+        CornerSubset         & cSub = _corners[corner];
+
+        int cornerFace = cTop.GetFaceInVertex();
+
+        //
+        //  If the vertex topology was unordered (potentially non-manifold)
+        //  the topology for the corners should have been amended with the
+        //  neighboring faces, but the specific subset will not have been
+        //  determined.
+        //
+        if (cTop.GetTag().IsOrdered()) {
+            //  Boundary and sharpness bits copied from topology here:
+            cSub._tag = cTop.GetTag();
+
+            cSub._numFacesTotal = cTop.GetNumFaces();
+            cSub._numFacesBefore = cSub.IsBoundary() ? cornerFace : 0;
+            cSub._numFacesAfter = cSub._numFacesTotal - cSub._numFacesBefore -1;
+
+            if (!cSub.IsSharp() && (cSub._numFacesTotal == 1)) {
+                if (applyVtxBoundaryInterpolation) {
+                    cSub.SetSharp(true);
+                    cTop.ReviseSubsetTag(cSub._tag);
+                }
+            }
+        } else {
+            //  WIP - will need a forward/backward search here
+            //      - use a sharp single-face corner for now
+            cSub._numFacesTotal  = 1;
+            cSub._numFacesBefore = 0;
+            cSub._numFacesAfter  = 0;
+
+            cSub._tag = cTop.GetTag();
+            cSub.SetBoundary(true);
+            cSub.SetSharp(true);
+
+            cTop.ReviseSubsetTag(cSub._tag,
+                                 cSub._numFacesBefore, cSub._numFacesAfter,
+                                 _topology._regFaceSize);
+        }
+        _combinedTag.Combine(cSub._tag);
+    }
+
+    _isRegular = isRegular();
 }
 
+SurfaceDescriptor::SurfaceDescriptor(FaceTopology const      & topology,
+                                     Index const               fvarIndices[],
+                                     SurfaceDescriptor const & vtxSurface) :
+        _topology(topology),
+        _indices(fvarIndices) {
+
+    assert(!_topology.IsUnsupported());
+    assert(&_topology == &vtxSurface._topology);
+
+    Index const * cornerIndices = _indices;
+
+    //
+    //  Initialize members, followed by the face-subset for each corner
+    //  (determined relative to the corner for each vertex):
+    //
+    _isFaceVarying = true;
+    _matchesVertex = true;  // to be adjusted when mismatch detected below
+
+    _combinedTag.Clear();
+
+    _corners.SetSize(_topology.GetFaceSize());
+
+    for (int corner = 0; corner < _topology.GetFaceSize(); ++corner) {
+        CornerTopology const & cornerTop = GetCornerTopology(corner);
+
+        CornerSubset const & vtxSub  = vtxSurface.GetCornerSubset(corner);
+        CornerSubset       & fvarSub = _corners[corner];
+
+        //
+        //  Determine the extent of the fvar subset then determine its
+        //  sharpness (according the local face-varying topology and the
+        //  assigned interpolation option):
+        //
+        extendFVarSubset(fvarSub, vtxSub, cornerTop, cornerIndices);
+
+        if (!fvarSub.IsSharp() && fvarSub.IsBoundary()) {
+            sharpenFVarSubset(fvarSub, vtxSub, cornerTop, cornerIndices);
+        }
+
+        //
+        //  If fvar subset matches vertex, all tags copied from vertex
+        //  subset will apply, otherwise they will need to be revised to
+        //  reflect the reduced extent of the fvar subset:
+        //
+        bool fvarExtentMatches =
+                (fvarSub.IsBoundary()    == vtxSub.IsBoundary()) &&
+                (fvarSub._numFacesBefore == vtxSub._numFacesBefore) &&
+                (fvarSub._numFacesAfter  == vtxSub._numFacesAfter);
+
+        bool fvarSubsetMatches = fvarExtentMatches &&
+                (fvarSub.IsSharp() == vtxSub.IsSharp());
+
+        if (!fvarExtentMatches) {
+            cornerTop.ReviseSubsetTag(fvarSub._tag,
+                             fvarSub._numFacesBefore, fvarSub._numFacesAfter,
+                             _topology._regFaceSize);
+        } else if (!fvarSubsetMatches) {
+            cornerTop.ReviseSubsetTag(fvarSub._tag);
+        }
+        _combinedTag.Combine(fvarSub._tag);
+
+        _matchesVertex &= fvarSubsetMatches;
+
+        cornerIndices += cornerTop.GetNumFaceVertices();
+    }
+
+    _isRegular     = isRegular();
+}
+
+//
+//  Minor methods supporting initialization:
+//
 bool
 SurfaceDescriptor::isRegular() const {
 
@@ -105,140 +229,6 @@ SurfaceDescriptor::isRegular() const {
     }
     return true;
 }
-
-//
-//  Main initialization methods -- one for vertex topology and the other
-//  for face-varying topology (a subset of the vertex topology):
-//
-void
-SurfaceDescriptor::InitializeVertex(Index const vtxIndices[]) {
-
-    assert(_topology._isFinalized);
-
-    //  Initialize members:
-    initialize(_topology.GetFaceSize(), vtxIndices);
-
-    //  Sharpen boundary vertices when warranted:
-    bool applyVtxBoundaryInterpolation =
-            (_topology._schemeOptions.GetVtxBoundaryInterpolation() ==
-                Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
-
-    //
-    //  Inspect each corner and initialize the subset for vertex topology:
-    //
-    for (int i = 0; i < _topology.GetFaceSize(); ++i) {
-        CornerTopology const & cTop = GetCornerTopology(i);
-        CornerSubset         & cSub = _corners[i];
-
-        int cornerFace = cTop.GetFaceInVertex();
-
-        //
-        //  If the vertex topology was unordered (potentially non-manifold)
-        //  the topology for the corners should have been amended with the
-        //  neighboring faces, but the specific subset will not have been
-        //  determined.
-        //
-        if (cTop.GetTag().IsOrdered()) {
-            //  Boundary and sharpness bits copied from topology here:
-            cSub._tag = cTop.GetTag();
-
-            cSub._numFacesTotal = cTop.GetNumFaces();
-            cSub._numFacesBefore = cSub.IsBoundary() ? cornerFace : 0;
-            cSub._numFacesAfter = cSub._numFacesTotal - cSub._numFacesBefore -1;
-
-            if (!cSub.IsSharp() && (cSub._numFacesTotal == 1)) {
-                if (applyVtxBoundaryInterpolation) {
-                    cSub.SetSharp(true);
-                    cTop.ReviseSubsetTag(cSub._tag);
-                }
-            }
-        } else {
-            //  WIP - will need a forward/backward search here
-            //      - use a sharp single-face corner for now
-            cSub._numFacesTotal  = 1;
-            cSub._numFacesBefore = 0;
-            cSub._numFacesAfter  = 0;
-
-            cSub._tag = cTop.GetTag();
-            cSub.SetBoundary(true);
-            cSub.SetSharp(true);
-
-            cTop.ReviseSubsetTag(cSub._tag,
-                                 cSub._numFacesBefore, cSub._numFacesAfter,
-                                 _topology._regFaceSize);
-        }
-        _combinedTag.Combine(cSub._tag);
-    }
-
-    _isRegular = isRegular();
-}
-
-void
-SurfaceDescriptor::InitializeFaceVarying(Index const fvarIndices[],
-        SurfaceDescriptor const & vtxSurface) {
-
-    assert(_topology._isFinalized);
-    assert(&_topology == &vtxSurface._topology);
-
-    //  Initialize members:
-    initialize(_topology.GetFaceSize(), fvarIndices);
-
-    _isFaceVarying = true;
-    _matchesVertex = true;  // to be adjusted when mismatch detected below
-
-    //
-    //  Inspect each corner and initialize its face-varying subset relative
-    //  to the corresponding vertex subset:
-    //
-    Index const * cornerIndices = fvarIndices;
-
-    for (int corner = 0; corner < _topology.GetFaceSize(); ++corner) {
-        CornerTopology const & cornerTop = GetCornerTopology(corner);
-
-        CornerSubset const & vtxSub  = vtxSurface.GetCornerSubset(corner);
-        CornerSubset       & fvarSub = _corners[corner];
-
-        //
-        //  Determine the extent of the fvar subset then determine its
-        //  sharpness (according the local face-varying topology and the
-        //  assigned interpolation option):
-        //
-        extendFVarSubset(fvarSub, vtxSub, cornerTop, cornerIndices);
-
-        if (!fvarSub.IsSharp() && fvarSub.IsBoundary()) {
-            sharpenFVarSubset(fvarSub, vtxSub, cornerTop, cornerIndices);
-        }
-
-        //
-        //  If fvar subset matches vertex, all tags copied from vertex
-        //  subset will apply, otherwise they will need to be revised to
-        //  reflect the reduced extent of the fvar subset:
-        //
-        bool fvarExtentMatches =
-                (fvarSub.IsBoundary()    == vtxSub.IsBoundary()) &&
-                (fvarSub._numFacesBefore == vtxSub._numFacesBefore) &&
-                (fvarSub._numFacesAfter  == vtxSub._numFacesAfter);
-
-        bool fvarSubsetMatches = fvarExtentMatches &&
-                (fvarSub.IsSharp() == vtxSub.IsSharp());
-
-        if (!fvarExtentMatches) {
-            cornerTop.ReviseSubsetTag(fvarSub._tag,
-                             fvarSub._numFacesBefore, fvarSub._numFacesAfter,
-                             _topology._regFaceSize);
-        } else if (!fvarSubsetMatches) {
-            cornerTop.ReviseSubsetTag(fvarSub._tag);
-        }
-        _combinedTag.Combine(fvarSub._tag);
-
-        _matchesVertex &= fvarSubsetMatches;
-
-        cornerIndices += cornerTop.GetNumFaceVertices();
-    }
-
-    _isRegular = isRegular();
-}
-
 
 //
 //  Internal methods supporting face-varying initialization:

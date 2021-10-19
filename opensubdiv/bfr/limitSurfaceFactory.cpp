@@ -567,8 +567,7 @@ LimitSurfaceFactory::populateNonLinearEvaluators(LimitSurface & s,
     //  the face-varying surfaces depend on it and will make use of its
     //  description when they are processed:
     //
-    SurfaceDescriptor vtxSurface(faceTopology);
-    vtxSurface.InitializeVertex(vtxIndices);
+    SurfaceDescriptor vtxSurface(faceTopology, vtxIndices);
 
     if (vtxIsNonLinear) {
         //  WIP - revert to linear for temporarily unsupported cases:
@@ -615,9 +614,7 @@ LimitSurfaceFactory::populateNonLinearEvaluators(LimitSurface & s,
             }
 
             //  Detect matching topology or regular and dispatch accordingly:
-            SurfaceDescriptor fvarSurface(faceTopology);
-
-            fvarSurface.InitializeFaceVarying(fvarIndices, vtxSurface);
+            SurfaceDescriptor fvarSurface(faceTopology, fvarIndices, vtxSurface);
 
             if (fvarSurface.MatchesVertexTopology() && s._vtxEval._isValid) {
                 copyNonLinearEvaluator(fvarEval, s._vtxEval, fvarSurface);

@@ -87,16 +87,13 @@ struct CornerSubset {
 //
 class SurfaceDescriptor {
 public:
-    SurfaceDescriptor(FaceTopology const & topology) :
-                      _topology(topology), _isInitialized(false) { }
+    //  Constructors for vertex and face-varying surfaces:
+    SurfaceDescriptor(FaceTopology const & topology,
+                      Index const          vtxIndices[]);
+    SurfaceDescriptor(FaceTopology const      & topology,
+                      Index const               fvarIndices[],
+                      SurfaceDescriptor const & vtxSurface);
     ~SurfaceDescriptor() { }
-
-    //  Requires initialization for vertex or face-varying topology:
-    //  WIP - consider making these constructors instead
-    void InitializeVertex(Index const vtxIndices[]);
-
-    void InitializeFaceVarying(Index const fvarIndices[],
-                               SurfaceDescriptor const & vtxSurface);
 
     //   Main public methods to distinquish surface and topology:
     bool IsRegular() const { return _isRegular; }
@@ -128,7 +125,7 @@ public:
 
 private:
     //  Internal methods for supporting face-varying initialization:
-    void initialize(int faceSize, Index const indices[]);
+    bool isRegular() const;
 
     void extendFVarSubset(CornerSubset         & fvarSubset,
                           CornerSubset const   & vtxSubset,
@@ -140,8 +137,6 @@ private:
                            CornerTopology const & cornerTopology,
                            Index const            fvarIndices[]);
 
-    bool isRegular() const;
-
 private:
     typedef Vtr::internal::StackBuffer<CornerSubset,8,true> CornerArray;
 
@@ -151,10 +146,9 @@ private:
     CombinedTag          _combinedTag;
 
     //  Members here reflecting collective properties of the corners:
-    unsigned int _isInitialized : 1;
-    unsigned int _isRegular     : 1;
     unsigned int _isFaceVarying : 1;
     unsigned int _matchesVertex : 1;
+    unsigned int _isRegular     : 1;
 };
 
 //
