@@ -251,39 +251,33 @@ protected:
 protected:
     //  (REVIEW 1.2)
     //
-    //  Protected constructor/destructor and explicit initializers for use
-    //  by constructors of subclasses:
+    //  Protected constructor/destructor for use by subclasses:
     //
-    //  Note the use of explicit methods to initialize base class members
-    //  is preferred here over use of base class constructor with arguments
-    //  in an initialization list.  This is done as variables to initialize
-    //  the base class members are often not trivially retrievable from the
-    //  mesh class for which the subclass is written (consider gathering
-    //  all of the subdivision options from UsdGeomMesh).  So a subclass
-    //  is free to do whatever is necessary within its constructor as long
-    //  it satisfies initialization requirements of the base class.
+    //  Initialization of base class members is no longer deferred to the
+    //  subclass via initialize/finalize methods -- the old constructor for
+    //  the base class has been restored.
+    // 
+    //  Construction requires specification of the subdivision scheme and
+    //  options associated with the mesh (as is the case with other classes
+    //  in Far). These will typically reflect the settings in the mesh but
+    //  can also be used to override them -- as determined by the subclass.
+    //  Common uses of overrides are to assign a subdivision scheme to a
+    //  simple polygonal mesh, or to change the face-varying interpolation
+    //  for the faster linear interpolation of UVs.
     //
-    //  Subclasses are also responsible for providing both the type and an
-    //  instance of a TopologyCache for internal use (an external cache of
-    //  any type can be optionally provided on construction and will always
-    //  override it).  Thread-safe cache types can be easily declared for
-    //  specific threading models (tbb, std, etc.) and so the subclass is
-    //  free to declare any as a member and specify it to the base class to
-    //  complete its initialization.
+    //  The subclass is responsible for determining the type and providing
+    //  an instance for the optional internal TopologyCache. For now, this
+    //  is explicitly assigned with a specific initialization method, but
+    //  other ways to deal with this are under consideration (e.g. via the
+    //  Options, an additional virtual method, etc.).
     //
-    //  All initialization methods must be called (order not important) and
-    //  followed by a call to finalize() -- which will verify that each has
-    //  been called.  Any explicit use of base class members in a subclass
-    //  constructor is expected to follow these initialize/finalize calls.
-    //
-    LimitSurfaceFactory();
+    LimitSurfaceFactory(Sdc::SchemeType schemeType,
+                        Sdc::Options    schemeOptions,
+                        Options         limitOptions);
     virtual ~LimitSurfaceFactory();
 
-    void initializeSubdivisionScheme( Sdc::SchemeType schemeType);
-    void initializeSubdivisionOptions(Sdc::Options    schemeOptions);
-    void initializeFactoryOptions(    Options         factoryOptions);
-    void initializeTopologyCache(     TopologyCache * localTopologyCache);
-    void finalize();
+    //  WIP - alternatives to this explicit initializer to be discussed...
+    void assignInternalTopologyCache(TopologyCache * cache);
 
 private:
     //  Supporting internal methods:
@@ -328,13 +322,6 @@ private:
     Options         _limitOptions;
 
     TopologyCache mutable * _topologyCache;
-
-    //  Members ensuring proper initialization by subclasses:
-    unsigned int _isSchemeTypeInitialized    : 1;
-    unsigned int _isSchemeOptionsInitialized : 1;
-    unsigned int _isLimitOptionsInitialized  : 1;
-    unsigned int _isTopologyCacheInitialized : 1;
-    unsigned int _isFinalized                : 1;
 
     //  Members related to subdivision topology, options and limit tests:
     unsigned int _linearScheme      : 1;

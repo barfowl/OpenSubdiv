@@ -56,54 +56,14 @@ static int __numIrregularUncached = 0;
 //
 //  Main constructor and destructor:
 //
-LimitSurfaceFactory::LimitSurfaceFactory() :
-        _schemeType(),
-        _schemeOptions(),
-        _limitOptions(),
-        _topologyCache(0),
-        _isSchemeTypeInitialized(false),
-        _isSchemeOptionsInitialized(false),
-        _isLimitOptionsInitialized(false),
-        _isTopologyCacheInitialized(false),
-        _isFinalized(false) {
-
-}
-
-void
-LimitSurfaceFactory::initializeSubdivisionScheme(Sdc::SchemeType subdScheme) {
-
-    _schemeType = subdScheme;
-    _isSchemeTypeInitialized = true;
-}
-void
-LimitSurfaceFactory::initializeSubdivisionOptions(Sdc::Options subdOptions) {
-
-    _schemeOptions = subdOptions;
-    _isSchemeOptionsInitialized = true;
-}
-void
-LimitSurfaceFactory::initializeFactoryOptions(Options factoryOptions) {
-
-    _limitOptions = factoryOptions;
-    _isLimitOptionsInitialized = true;
-}
-void
-LimitSurfaceFactory::initializeTopologyCache(TopologyCache * localCache) {
-
-    //  Note that options may override use of the local cache:
-    _topologyCache = localCache;
-    _isTopologyCacheInitialized = true;
-}
-
-void
-LimitSurfaceFactory::finalize() {
-
-    //  assert() that all members initialized before continuing...
-    assert(_isSchemeTypeInitialized);
-    assert(_isSchemeOptionsInitialized);
-    assert(_isLimitOptionsInitialized);
-    assert(_isTopologyCacheInitialized);
-    _isFinalized = true;
+LimitSurfaceFactory::LimitSurfaceFactory(
+    Sdc::SchemeType schemeType,
+    Sdc::Options    schemeOptions,
+    Options         limitOptions) :
+        _schemeType(schemeType),
+        _schemeOptions(schemeOptions),
+        _limitOptions(limitOptions),
+        _topologyCache(0) {
 
     //  Override the topology cache if options require it:
     if (_limitOptions.DisableTopologyCache()) {
@@ -132,6 +92,15 @@ LimitSurfaceFactory::finalize() {
     _testNeighborhoodForLimit = _rejectSmoothBoundariesForLimit ||
                                 _rejectIrregularFacesForLimit;
 }
+
+void
+LimitSurfaceFactory::assignInternalTopologyCache(TopologyCache * cache) {
+
+    if (!_limitOptions.DisableTopologyCache() && (_topologyCache == 0)) {
+        _topologyCache = cache;
+    }
+}
+
 
 LimitSurfaceFactory::~LimitSurfaceFactory() {
 

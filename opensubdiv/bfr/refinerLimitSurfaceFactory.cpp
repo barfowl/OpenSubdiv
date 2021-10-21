@@ -39,16 +39,14 @@ namespace Bfr {
 //
 RefinerLimitSurfaceFactory::RefinerLimitSurfaceFactory(
     Far::TopologyRefiner const & mesh, Options limitOptions) :
-        LimitSurfaceFactory(),
+        LimitSurfaceFactory(mesh.GetSchemeType(),
+                            mesh.GetSchemeOptions(),
+                            limitOptions),
         _mesh(mesh),
         _numFaces(mesh.GetLevel(0).GetNumFaces()),
         _numFVarChannels(mesh.GetNumFVarChannels()) {
 
-    initializeSubdivisionScheme(mesh.GetSchemeType());
-    initializeSubdivisionOptions(mesh.GetSchemeOptions());
-    initializeFactoryOptions(limitOptions);
-    initializeTopologyCache(&_localTopologyCache);
-    finalize();
+    assignInternalTopologyCache(&_localTopologyCache);
 }
 
 RefinerLimitSurfaceFactory::~RefinerLimitSurfaceFactory() {
