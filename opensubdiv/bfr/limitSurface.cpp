@@ -124,7 +124,8 @@ Evaluator::evalIrregularPatchBasis(float u, float v,
 
     int subFace = 0;
     if (_param.GetType() == Parameterization::QPOLY) {
-        subFace = _param.ConvertQPolyUVToNormalizedSubQuad(u, v, u, v);
+        //  Quadrangulated faces internally use a Ptex parameterization
+        _param.ConvertUvToPtex(u, v, u, v, subFace);
     }
 
     int subPatchIndex = _irregPatch->FindSubPatch(u, v, subFace);
@@ -185,7 +186,8 @@ Evaluator::evalMultiLinearPatchBasis(float u, float v,
 
     assert(_param.GetType() == Parameterization::QPOLY);
 
-    int subFace = _param.ConvertQPolyUVToNormalizedSubQuad(u, v, u, v);
+    int subFace = 0;
+    _param.ConvertUvToPtex(u, v, u, v, subFace);
 
     //  WIP - Prefer to eval Linear basis directly, i.e.:
     //

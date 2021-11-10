@@ -71,13 +71,16 @@ public:
 
 public:
     //
-    //  Methods to query common features of a parameterization -- beware of
-    //  going overboard here, and methods returning aggregates need to be
-    //  careful about types (e.g. use of Coord[])
+    //  Methods to query common features of a parameterization.
     //
     //  Methods for corners and boundaries require a corner or boundary
     //  index.  The parameter "t" for boundaries locally parameterizes a
     //  boundary edge over [0,1] in a counter-clockwise orientation.
+    //
+    //  WIP - beware of going overboard here in terms of functionality
+    //        and overloading
+    //      - methods returning aggregates also need to be careful about
+    //        types, e.g. use of Coord[] is likely to be replaced
     //
     //  Methods returning singular (u,v) coordinates:
     void GetCornerCoord(int index, float & u, float & v) const;
@@ -95,18 +98,38 @@ public:
 
 public:
     //
-    //  Conversion utilities for dealing with quadrangulated polygons -- note
-    //  why instance methods are preferred here to static (possible future
-    //  UDim option to reduce floating point precision loss)
+    //  Utilities to convert (u,v) coordinates to Ptex coordinates -- for
+    //  either direct use with Ptex per-face textures, or as an alternative
+    //  parameterization for non-quads with quad-based subdivision schemes
+    //  (as used in other places in OpenSubdiv).
     //
-    //  May want to avoid "continuous" to avoid confusion with parametric or
-    //  geometric continuity, consider "piece-wise" as an alternative...
-    bool IsContinuous() const { return _type != QPOLY; }
+    //  The (u,v) coordinates of quads and triangles will pass through the
+    //  conversions unchanged when used with the appropriate schemes.
+    //
+    //  Note that instance methods are preferred here to static methods as
+    //  the conversion depends on both the face size and the subdivision
+    //  scheme (from which a temporary instance can be trivially created).
+    //
+    void ConvertUvToPtex(float   inU,   float   inV,
+                         float & ptexU, float & ptexV, int & ptexFace) const;
+    void ConvertPtexToUv(float   ptexU, float   ptexV, int   ptexFace,
+                         float & outU,  float & outV) const;
 
+    //  WIP - to be deprecated, now obsolete given the above methods...
     int ConvertQPolyUVToNormalizedSubQuad(float u, float v,
                                           float & uOut, float & vOut) const;
     void ConvertQPolyUVFromNormalizedSubQuad(float u, float v, int subQuad,
                                              float & uOut, float & vOut) const;
+
+    //  Method to query if parameterizations is continuous, i.e. two or
+    //  more (u,v) locations can be interpolated to provide a meaningful
+    //  result.
+    //
+    //  WIP - may want to avoid "continuous" to avoid confusion with
+    //        parametric vs geometric continuity, so consider alternatives.
+    //      - also, how useful is this without a method to provide some
+    //        kind of reasonable interpolation in discontinuous cases?
+    bool IsContinuous() const { return _type != QPOLY; }
 
 private:
     void initialize();
@@ -117,6 +140,9 @@ private:
     unsigned int _qPolyUDim :  8;
 };
 
+//
+//  Inline construction and resizing methods:
+//
 inline void
 Parameterization::initialize() {
 
@@ -156,7 +182,7 @@ Parameterization::Resize(int faceSize) {
 }
 
 //
-//  Topological queries:
+//  Inline topological queries:
 //
 inline void
 Parameterization::GetCornerCoord(int corner, Coord & coord) const {
@@ -177,26 +203,54 @@ Parameterization::GetCenterCoord(Coord & coord) const {
 }
 
 //
-//  Eventually want QPOLY parameterization to make use of _qPolyUDim, which
-//  will be set to the integer sqrt(N) to reduce roundoff for large N.  At
-//  this point, all UV tiles for subquads are sequential in U...
+//  Inline Ptex conversion methods:
 //
+//  WIP - Eventually the QPOLY parameterization will make use of a "udim"
+//  member -- set to the integer sqrt(faceSize) to reduce roundoff for
+//  large face sizes.  Until then, all UV tiles are sequential in U.
+//
+inline void
+Parameterization::ConvertUvToPtex(float inU, float inV,
+        float & ptexU, float & ptexV, int & ptexFace) const {
+
+    if (_type == QPOLY) {
+        ptexFace = (int) inU;
+        ptexU    = 2.0 * (inU - ptexFace);
+        ptexV    = 2.0 *  inV;
+    } else {
+        ptexFace = 0;
+        ptexU    = inU;
+        ptexV    = inV;
+    }
+}
+
+inline void
+Parameterization::ConvertPtexToUv(float ptexU, float ptexV, int ptexFace,
+        float & outU,  float & outV) const {
+
+    if (_type == QPOLY) {
+        outU = 0.5 * ptexU + ptexFace;
+        outV = 0.5 * ptexV;
+    } else {
+        outU = ptexU;
+        outV = ptexV;
+    }
+}
+
 inline int
 Parameterization::ConvertQPolyUVToNormalizedSubQuad(
-        float u, float v, float & uOut, float & vOut) const {
+        float inU, float inV, float & outU, float & outV) const {
 
-    int subQuad = (int)u;
-    uOut = 2.0 * (u - subQuad);
-    vOut = 2.0 *  v;
-    return subQuad;
+    int outSubQuad = 0;
+    ConvertUvToPtex(inU, inV, outU, outV, outSubQuad);
+    return outSubQuad;
 }
 
 inline void
 Parameterization::ConvertQPolyUVFromNormalizedSubQuad(
-        float u, float v, int subQuad, float & uOut, float & vOut) const {
+        float inU, float inV, int inSubQuad, float & outU, float & outV) const {
 
-    uOut = 0.5 * u + subQuad;
-    vOut = 0.5 * v;
+    ConvertPtexToUv(inU, inV, inSubQuad, outU, outV);
 }
 
 } // end namespace Bfr
