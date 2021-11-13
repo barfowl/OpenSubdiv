@@ -36,12 +36,13 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 
 //
-//  The VertexTopology class describes the topological neighborhood around
-//  a vertex (the valence, size of incident faces, sharpness values, etc.).
+//  VertexTopology is a simple class that describes the full topological
+//  neighborhood around a vertex of a mesh, i.e. its valence, the sizes
+//  of its incident faces, sharpness values, etc.
 //
 //  It is used by subclasses of LimitSurfaceFactory to provide a complete
-//  topological description for each vertex of a face, i.e. invoked vi the
-//  virtual method:
+//  topological description for each vertex of a face, i.e. invoked via
+//  the virtual method:
 //
 //      int populateFaceCornerTopology(Index baseFace, int cornerVertex,
 //                                     VertexTopology & vt) const;
@@ -49,46 +50,47 @@ namespace Bfr {
 //  Assignment of the full topology can be involved in the presence of
 //  irregular faces, non-manifold topology or creasing around a vertex, but
 //  many cases will be simple.  For example, to specify a regular boundary
-//  vertex of a Catmark mesh:
+//  vertex of a Catmark mesh without any optional sharpness:
 //
-//      int numIncidentFaces = 2;
+//      int  numIncidentFaces = 2;
 //      bool vertexOnBoundary = true;
 //
 //      vt.Initialize(numIncidentFaces);
-//          vt.SetOrdered(true);
+//          vt.SetManifold(true);
 //          vt.SetBoundary(vertexOnBoundary);
-//          vt.SetCommonFaceSize();
+//          vt.SetCommonFaceSize(true);
 //      vt.Finalize();
 //
-//  For a more general example, to assign a valence-5 vertex with incident
-//  faces of different sizes (e.g. required when triangles appear around a
-//  vertex in an otherwise quad-dominant Catmark mesh):
+//  For a more general example, to assign a vertex of some valence whose
+//  incident faces are of different sizes (e.g. required when triangles
+//  appear around a vertex in an otherwise quad-dominant Catmark mesh):
 //
-//      int numIncidentFaces = 5;
-//      bool vertexOnBoundary = false;
+//      int  numIncidentFaces = meshVertex.GetNumIncidentFaces();
+//      bool vertexOnBoundary = meshVertex.IsBoundar();
 //
 //      vt.Initialize(numIncidentFaces);
-//          vt.SetOrdered(true);
+//          vt.SetManifold(true);
 //          vt.SetBoundary(vertexOnBoundary);
-//          int * incFaceSizes = vt.AccessFaceSizeBuffer();
 //
+//          vt.SetCommonFaceSize(false);
 //          for (int i = 0; i < numIncidentFaces; ++i) {
-//              incFaceSizes[i] = myVertex.GetIncidentFaceSize(i);
+//              vt.SetIncidentFaceSize(i, meshVertex.GetIncidentFaceSize(i));
 //          }
 //      vt.Finalize();
 //
-//  These examples specify incident faces as being "ordered", i.e. they
-//  will be considered as occuring in a counter-clockwise order.  In the
-//  case of a boundary vertex, the first face must be on the leading edge
-//  while the last is on the trailing edge of the boundary.  For an
-//  interior vertex, which face is first does not matter (since the set
-//  is periodic).
+//  These examples specify the incident faces as forming a manifold ring
+//  (or half-ring) around the vertex, i.e. they can be specified as a
+//  continuous, connected sequence in counter-clockwise order (and also
+//  without degeneracies).  In the case of a boundary vertex, the first
+//  face must be on the leading edge of the boundary while the last is on
+//  the trailing edge.  For an interior vertex, which face is specified
+//  first does not matter (since the set is periodic).
 //
-//  In both cases, the location in this sequence of the base face -- the
+//  In both cases, the location of the base face in this sequence -- the
 //  face whose corner vertex is being described here -- must be specified
-//  in the return value to populateFaceCornerTopology(). For example, when
-//  a boundary vertex has 3 incident faces, a return value of 0, 1 or 2
-//  will indicate which is the base face.
+//  in the return value to populateFaceCornerTopology() (e.g. when a
+//  boundary vertex has 3 incident faces, a return value of 0, 1 or 2
+//  will indicate which is the base face).
 //
 //  The corresponding methods to specify mesh control vertex indices (or
 //  face-varying indices) complete the specification of the neighborhood:
@@ -125,14 +127,15 @@ public:
     void Finalize();
 
     //
-    //  Topology is specified in three groups of methods:
+    //  Three groups of methods describe the topology around a vertex:
+    //      - simple properties (vertex is a boundary, manifold, etc.)
+    //      - sizes of incident faces (constant or size for each face)
+    //      - sharpness of the vertex and its incident edges (optional)
     //
-    //      - ordering and boundary/interior status
-    //      - sizes incident faces (constant or size per face)
-    //      - sharpness of vertex and/or incident edges
-    //
-    //  Face ordering and manifold conditions:
-    void SetOrdered(bool incidentFacesAreOrdered);
+
+    //  Manifold and boundary conditions:
+    void SetManifold(bool isManifold);
+    bool IsManifold() const;
     bool IsOrdered() const;
 
     void SetBoundary(bool isOnBoundary);
@@ -142,18 +145,24 @@ public:
     void SetCommonFaceSize(bool incidentFacesHaveCommonSize);
     bool HasCommonFaceSize() const;
 
-    int * AccessFaceSizeBuffer();
+    void SetIncidentFaceSize(int faceIndex, int faceSize);
+    int  GetIncidentFaceSize(int faceIndex) const;
 
-    //  Assigning vertex sharpness:
+    //  Optional vertex sharpness:
     void SetVertexSharpness(float sharpness);
-    bool HasVertexSharpness() const;
 
+    bool  HasVertexSharpness() const;
     float GetVertexSharpness() const;
 
-    //  Assigning edge sharpness:
-    bool HasEdgeSharpness() const;
+    //  Optional edge sharpness -- the more general method assigns the
+    //  sharpness to the leading and trailing edges of each face, but a
+    //  simpler method allows direct assignment to edges when manifold.
+    void SetIncidentFaceEdgeSharpness(int faceIndex, float leadingEdgeSharp,
+                                                     float trailingEdgeSharp);
 
-    float * AccessFaceEdgeSharpnessBuffer(bool clear);
+    void SetManifoldEdgeSharpness(int edgeIndex, float edgeSharpness);
+
+    bool HasEdgeSharpness() const;
 
 protected:
     friend class CornerTopology;
@@ -184,8 +193,12 @@ protected:
 //  Public inline methods for simple assignment:
 //  
 inline void
-VertexTopology::SetOrdered(bool isOrdered) {
-    _isOrdered  = isOrdered;
+VertexTopology::SetManifold(bool isManifold) {
+    _isOrdered  = isManifold;
+}
+inline bool
+VertexTopology::IsManifold() const {
+    return _isOrdered;
 }
 inline bool
 VertexTopology::IsOrdered() const {
@@ -229,27 +242,56 @@ VertexTopology::HasEdgeSharpness() const {
     return _hasEdgeSharpness;
 }
 
-inline int *
-VertexTopology::AccessFaceSizeBuffer() {
+inline void
+VertexTopology::SetIncidentFaceSize(int incFaceIndex, int faceSize) {
 
     if (_faceSizeOffsets.GetSize() == 0) {
         _faceSizeOffsets.SetSize(_numFaces + 1);
+        _hasFaceSizes = true;
     }
-    _hasFaceSizes = true;
-    return _faceSizeOffsets;
+    _faceSizeOffsets[incFaceIndex] = faceSize;
+}
+inline int
+VertexTopology::GetIncidentFaceSize(int incFaceIndex) const {
+    return _faceSizeOffsets[incFaceIndex];
 }
 
-inline float *
-VertexTopology::AccessFaceEdgeSharpnessBuffer(bool clear) {
+inline void
+VertexTopology::SetManifoldEdgeSharpness(int edgeIndex, float sharpness) {
 
+    assert(IsManifold());
     if (_faceEdgeSharpness.GetSize() == 0) {
         _faceEdgeSharpness.SetSize(_numFaces * 2);
-    }
-    if (clear) {
         std::fill(&_faceEdgeSharpness[0], &_faceEdgeSharpness[_numFaces*2], 0);
+        _hasEdgeSharpness = true;
     }
-    _hasEdgeSharpness = true;
-    return _faceEdgeSharpness;
+
+    //  Assign the leading edge of the face after the edge (even index):
+    if (edgeIndex < _numFaces) {
+        _faceEdgeSharpness[2*edgeIndex] = sharpness;
+    }
+
+    //  Assign the trailing edge of the face before the edge (odd index):
+    if (edgeIndex > 0) {
+        _faceEdgeSharpness[2*edgeIndex-1] = sharpness;
+    } else if (!IsBoundary()) {
+        _faceEdgeSharpness[2*_numFaces-1] = sharpness;
+    }
+}
+inline void
+VertexTopology::SetIncidentFaceEdgeSharpness(int   faceIndex,
+                                             float leadingEdgeSharpness,
+                                             float trailingEdgeSharpness) {
+
+    assert(IsManifold());
+    if (_faceEdgeSharpness.GetSize() == 0) {
+        _faceEdgeSharpness.SetSize(_numFaces * 2);
+        std::fill(&_faceEdgeSharpness[0], &_faceEdgeSharpness[_numFaces*2], 0);
+        _hasEdgeSharpness = true;
+    }
+
+    _faceEdgeSharpness[2*faceIndex  ] = leadingEdgeSharpness;
+    _faceEdgeSharpness[2*faceIndex+1] = trailingEdgeSharpness;
 }
 
 } // end namespace Bfr

@@ -124,18 +124,16 @@ RefinerLimitSurfaceFactory::populateFaceVertexTopology(
     vertexTopology.Initialize(nFaces);
     {
         //  Assign ordering and boundary status:
-        if (isManifold) {
-            vertexTopology.SetOrdered(true);
-            vertexTopology.SetBoundary(vTag._boundary);
-        }
+        vertexTopology.SetManifold(isManifold);
+        vertexTopology.SetBoundary(vTag._boundary);
 
         //  Assign face sizes -- variable/explicit or constant/implicit:
         if (vTag._incidIrregFace) {
             vertexTopology.SetCommonFaceSize(false);
 
-            int * faceSizes = vertexTopology.AccessFaceSizeBuffer();
             for (int i = 0; i < nFaces; ++i) {
-                faceSizes[i] = baseLevel.getFaceVertices(vFaces[i]).size();
+                vertexTopology.SetIncidentFaceSize(i,
+                        baseLevel.getFaceVertices(vFaces[i]).size());
             }
         } else {
             vertexTopology.SetCommonFaceSize(true);
@@ -150,21 +148,28 @@ RefinerLimitSurfaceFactory::populateFaceVertexTopology(
         //  Assign edge sharpness (try to avoid when sharpness is implicit):
         if (vTag._semiSharpEdges || vTag._infSharpEdges) {
             if (isManifold) {
+                //  Can use manifold/ordered edge indices here:
                 ConstIndexArray vEdges = baseLevel.getVertexEdges(vIndex);
 
-                float * sharp = vertexTopology.AccessFaceEdgeSharpnessBuffer(0);
-
-                *sharp++ = baseLevel.getEdgeSharpness(vEdges[0]);
-                for (int i = 1; i < nFaces; ++i) {
-                    float eSharp = baseLevel.getEdgeSharpness(vEdges[i]);
-                    *sharp++ = eSharp;
-                    *sharp++ = eSharp;
+                for (int i = 0; i < vEdges.size(); ++i) {
+                    vertexTopology.SetManifoldEdgeSharpness(i,
+                            baseLevel.getEdgeSharpness(vEdges[i]));
                 }
-                *sharp++ = vTag._boundary
-                         ? baseLevel.getEdgeSharpness(vEdges[nFaces])
-                         : baseLevel.getEdgeSharpness(vEdges[0]);
             } else {
-                //  WIP - traverse faces, use leading/trailing edges
+                //  Must use face-edges and identify next/prev edges in face:
+                ConstLocalIndexArray vInFace =
+                    baseLevel.getVertexFaceLocalIndices(vIndex);
+
+                for (int i = 0; i < nFaces; ++i) {
+                    ConstIndexArray fEdges = baseLevel.getFaceEdges(vFaces[i]);
+
+                    int eLeading  = vInFace[i];
+                    int eTrailing = (eLeading ? eLeading : fEdges.size()) - 1;
+
+                    vertexTopology.SetIncidentFaceEdgeSharpness(i,
+                            baseLevel.getEdgeSharpness(fEdges[eLeading]),
+                            baseLevel.getEdgeSharpness(fEdges[eTrailing]));
+                }
             }
         }
     }
