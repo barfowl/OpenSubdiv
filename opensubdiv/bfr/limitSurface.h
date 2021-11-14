@@ -87,12 +87,12 @@ public:
     //  Methods for retrieving Evaluators for varying, face-varying, etc.:
     bool HasVertexEvaluator() const;
     bool HasVaryingEvaluator() const;
-    bool HasFaceVaryingEvaluator(int fvarIndex = 0) const;
+    bool HasFaceVaryingEvaluator(int index = 0) const;
 
     class Evaluator;
     Evaluator const * GetVertexEvaluator() const;
     Evaluator const * GetVaryingEvaluator() const;
-    Evaluator const * GetFaceVaryingEvaluator(int fvarIndex = 0) const;
+    Evaluator const * GetFaceVaryingEvaluator(int index = 0) const;
 
     //
     //  The local Evaluator class contains the evaluation interface used for
@@ -242,9 +242,9 @@ LimitSurface::HasVaryingEvaluator() const {
     return _varEval.isValid();
 }
 inline bool
-LimitSurface::HasFaceVaryingEvaluator(int fvarIndex) const {
-    return (fvarIndex < (int)_fvarEval.GetSize()) &&
-        _fvarEval[fvarIndex].isValid();
+LimitSurface::HasFaceVaryingEvaluator(int index) const {
+    return (index < (int)_fvarEval.GetSize()) &&
+        _fvarEval[index].isValid();
 }
 
 inline Evaluator const *
@@ -256,8 +256,8 @@ LimitSurface::GetVaryingEvaluator() const {
     return HasVaryingEvaluator() ? &_varEval : 0;
 }
 inline Evaluator const *
-LimitSurface::GetFaceVaryingEvaluator(int fvarIndex) const {
-    return HasFaceVaryingEvaluator(fvarIndex) ? &_fvarEval[fvarIndex] : 0;
+LimitSurface::GetFaceVaryingEvaluator(int index) const {
+    return HasFaceVaryingEvaluator(index) ? &_fvarEval[index] : 0;
 }
 
 //

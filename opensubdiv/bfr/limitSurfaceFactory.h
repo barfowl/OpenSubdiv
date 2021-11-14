@@ -65,10 +65,79 @@ class TopologyCache;
 class LimitSurfaceFactory {
 public:
     //
-    //  Options are primarily concerned with caching and approximation.
-    //  Former options to create vertex, varying or face-varying evaluators
-    //  for each LimitSurface have been moved to LimitSuface construction
-    //  (but may eventually be duplicated here).
+    //  The Evaluators class is a simple optional container used to instruct
+    //  the Factory to create instances of LimitSurface with Evaluators
+    //  enabled for specific types of interpolation data, i.e. vertex, varying
+    //  or face-varying.
+    //
+    //  The default is to enable only the vertex Evaluator, and if there is
+    //  no interest in evaluating varying or face-varying data, explicit
+    //  assignment of Evaluators can be completely ignored.
+    //
+    //  When necessary, a set of Evaluators can be specified either to the
+    //  Factory on construction or specified individually for construction
+    //  of a LimitSurface for each face.  Methods creating a LimitSurface
+    //  are overloaded to allow the Factory's default set of Evaluators to
+    //  be applied or to be explicitly overridden.
+    //
+    class Evaluators {
+    public:
+        Evaluators() : _vtxEval(true), _varEval(false),
+                       _fvarEvalCount(0), _fvarEvalIDs(0) { }
+
+        //  Construct Evaluators for vertex and/or varying data:
+        void CreateVertexEvaluator(bool on) { _vtxEval = on; }
+        bool CreateVertexEvaluator()  const { return _vtxEval; }
+
+        void CreateVaryingEvaluator(bool on) { _varEval = on; }
+        bool CreateVaryingEvaluator() const  { return _varEval; }
+
+        //  Construct Evaluators for one or more face-varying topologies:
+        //
+        //  Each face-varying topology is identified by an ID (int) that
+        //  the Factory implementation uses to access the appropriate
+        //  mesh topology.  If not explicitly provided here, the IDs for
+        //  N face-varying Evaluators are assumed to be [0..N-1].
+        void CreateFVarEvaluator(int fvarID = 0);
+        void CreateFVarEvaluators(int count, int const fvarIDs[] = 0);
+
+        int GetNumFVarEvaluators() const { return _fvarEvalCount; }
+
+        void SetFVarEvaluatorID(int i, int fvarID) { _fvarEvalIDs[i] = fvarID; }
+        int  GetFVarEvaluatorID(int i) const       { return _fvarEvalIDs[i]; }
+
+        //  WIP - for near-term backward compatibility (to be deprecated)
+        void SetFVarEvaluatorIndices(int const * iVec) {
+            std::memcpy(_fvarEvalIDs, iVec, _fvarEvalCount * sizeof(int));
+        }
+        int const * GetFVarEvaluatorIndices() const { return _fvarEvalIDs; }
+
+    private:
+        //  Member variables:
+        unsigned int _vtxEval : 1;
+        unsigned int _varEval : 1;
+
+        int              _fvarEvalCount;
+        int *            _fvarEvalIDs;
+        int              _fvarEvalIDsStatic[4];
+        std::vector<int> _fvarEvalIDsDynamic;
+    };
+
+    //  WIP - for near-term backward compatibility (to be deprecated)
+    typedef Evaluators EvaluatorOptions;
+
+    //
+    //  The Options class is a simple container specfying options for the
+    //  construction of the Factory.  These options cover three areas:
+    //
+    //      - specification of default Evaluators (see Evaluators)
+    //      - caching of intermediate topological results for efficiency
+    //      - approximation of the limit surface
+    //  
+    //  Choices for caching behavior include disabling all caching, the
+    //  use of an internal cache for each Factory (the default), or the
+    //  specification of an external cache shared between Factories (for
+    //  advanced use only).
     //  
     //  The number of shape approximating options is minimized here (in
     //  contrast to the Far classes that are forced to maintain legacy
@@ -76,90 +145,56 @@ public:
     //  control local refinement depth, but may limit the effectiveness
     //  of caching across multiple meshes.
     //
-    //  Given the regret elsewhere of exposing Option members directly,
-    //  member variables not public and are accessed/assigned by methods.
-    //
     class Options {
     public:
-        Options() : maxLevelPrimary(6), maxLevelSecondary(2),
-                    disableCache(0), extCachePtr(0) { }
+        Options() : _evaluators(),
+                    _maxLevelPrimary(6), _maxLevelSecondary(2),
+                    _disableCache(false), _extCachePtr(0) { }
+
+        //  Access Evaluators by reference to assign or query:
+        Evaluators const & GetEvaluators() const { return _evaluators; }
+        Evaluators       & GetEvaluators()       { return _evaluators; }
 
         //  Alternatives to the default internal TopologyCache:
-        void DisableTopologyCache(bool on) { disableCache = on; }
-        bool DisableTopologyCache()  const { return disableCache; }
+        void DisableTopologyCache(bool on) { _disableCache = on; }
+        bool DisableTopologyCache()  const { return _disableCache; }
 
-        void ExternalTopologyCache(TopologyCache * c) { extCachePtr = c; }
-        TopologyCache * ExternalTopologyCache() const { return extCachePtr; }
+        void ExternalTopologyCache(TopologyCache * c) { _extCachePtr = c; }
+        TopologyCache * ExternalTopologyCache() const { return _extCachePtr; }
 
         //  NOT MEANT FOR PUBLIC USE -- currently for development use:
-        void MaxLevelPrimary( int n) { maxLevelPrimary = n; }
-        int  MaxLevelPrimary() const { return maxLevelPrimary; }
+        void MaxLevelPrimary( int n) { _maxLevelPrimary = n; }
+        int  MaxLevelPrimary() const { return _maxLevelPrimary; }
 
-        void MaxLevelSecondary( int n) { maxLevelSecondary = n; }
-        int  MaxLevelSecondary() const { return maxLevelSecondary; }
+        void MaxLevelSecondary( int n) { _maxLevelSecondary = n; }
+        int  MaxLevelSecondary() const { return _maxLevelSecondary; }
 
-    protected:
+    private:
         //  Member variables:
-        unsigned int maxLevelPrimary   : 4;
-        unsigned int maxLevelSecondary : 4;
-        unsigned int disableCache      : 1;
-
-        TopologyCache * extCachePtr;
+        Evaluators      _evaluators;
+        short           _maxLevelPrimary;
+        short           _maxLevelSecondary;
+        bool            _disableCache;
+        TopologyCache * _extCachePtr;
     };
 
 public:
     //
-    //  Simple queries reflecting the mesh associated with an instance:
+    //  Simple queries:
     //
     Options GetOptions() const { return _limitOptions; }
 
     Sdc::SchemeType GetSchemeType() const    { return _schemeType; }
     Sdc::Options    GetSchemeOptions() const { return _schemeOptions; }
 
+    //  WIP - nice convenience but probably not necessary if we want to
+    //        keep the number of public methods to a minimum
     int GetRegFaceSize() const { return _regFaceSize; }
 
     //
-    //  Options to construct specific Evaluators for the LimitSurface:
-    //
-    //  Using these options per-LimitSurface provides added flexibility
-    //  but added tedium for those cases that don't warrant it.  For
-    //  that reason, duplicating these at the Factory level so that they
-    //  do not have to be applied to every face, is being considered.
-    //
-    class EvaluatorOptions {
-    public:
-        EvaluatorOptions() : _vtxEvaluator(true),
-                             _varEvaluator(false),
-                             _fvarEvaluators(0),
-                             _fvarIndices(0) { }
-
-        //  Construct Evaluators for vertex and/or varying data:
-        void CreateVertexEvaluator(bool on) { _vtxEvaluator = on; }
-        bool CreateVertexEvaluator()  const { return _vtxEvaluator; }
-
-        void CreateVaryingEvaluator(bool on) { _varEvaluator = on; }
-        bool CreateVaryingEvaluator() const  { return _varEvaluator; }
-
-        //  Specify construction of Evaluators for face-varying topologies:
-        //      - specifying the count alone creates [0..count-1]
-        //      - specify explicit indices for an unordered subset
-        void CreateFVarEvaluators(int count) { _fvarEvaluators = count; }
-        int  GetNumFVarEvaluators() const  { return _fvarEvaluators; }
-
-        void SetFVarEvaluatorIndices(int const * iVec) { _fvarIndices = iVec; }
-        int const * GetFVarEvaluatorIndices() const { return _fvarIndices; }
-
-    protected:
-        //  Member variables:
-        unsigned int _vtxEvaluator :  1;
-        unsigned int _varEvaluator :  1;
-
-        int        _fvarEvaluators;
-        int const *_fvarIndices;
-    };
-
-    //
-    //  Methods to create or re-populate an existing LimitSurface:
+    //  Methods to create or re-populate an existing LimitSurface -- both
+    //  exist with a variant taking a set of Evaluators to override those
+    //  use by the Factory as defaults.
     //
     //  The "has limit surface" query can be used to determine if a face
     //  has an associated limit surface -- usually the case except when the
@@ -177,12 +212,13 @@ public:
     //
     bool FaceHasLimitSurface(Index faceIndex) const;
 
-    LimitSurface * Create(Index            faceIndex,
-                          EvaluatorOptions opts = EvaluatorOptions()) const;
+    LimitSurface * Create(Index faceIndex) const;
+    LimitSurface * Create(Index faceIndex,
+                          Evaluators const & evaluators) const;
 
-    bool Populate(LimitSurface &   instance,
-                  Index            faceIndex,
-                  EvaluatorOptions opts = EvaluatorOptions()) const;
+    bool Populate(LimitSurface & instance, Index faceIndex) const;
+    bool Populate(LimitSurface & instance, Index faceIndex,
+                  Evaluators const & evaluators) const;
 
 protected:
     //  (REVIEW 1.1)
@@ -285,12 +321,12 @@ private:
     bool faceHasLimitLocal(       Index faceIndex, int faceSize) const;
     bool faceHasLimitNeighborhood(Index faceIndex, FaceTopology const *) const;
 
-    bool populateLinearEvaluators(LimitSurface &   limitSurface,
-                                  Index            faceIndex,
-                                  EvaluatorOptions options) const;
-    bool populateNonLinearEvaluators(LimitSurface &   limitSurface,
-                                     Index            faceIndex,
-                                     EvaluatorOptions options) const;
+    bool populateLinearEvaluators(LimitSurface &     limitSurface,
+                                  Index              faceIndex,
+                                  Evaluators const & evaluators) const;
+    bool populateNonLinearEvaluators(LimitSurface &     limitSurface,
+                                     Index              faceIndex,
+                                     Evaluators const & evaluators) const;
 
     //  Methods to assemble topology and corresponding indices for entire face:
     bool gatherFaceNeighborhoodTopology(Index faceIndex,
@@ -333,6 +369,21 @@ private:
 
     int  _regFaceSize;
 };
+
+//
+//  Inline methods for LimitSurfaceFactory:
+//
+inline LimitSurface *
+LimitSurfaceFactory::Create(Index faceIndex) const {
+
+    return Create(faceIndex, _limitOptions.GetEvaluators());
+}
+
+inline bool
+LimitSurfaceFactory::Populate(LimitSurface & instance, Index faceIndex) const {
+
+    return Populate(instance, faceIndex, _limitOptions.GetEvaluators());
+}
 
 } // end namespace Bfr
 

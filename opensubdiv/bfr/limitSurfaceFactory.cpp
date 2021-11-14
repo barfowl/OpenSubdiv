@@ -53,6 +53,44 @@ static int __numIrregularPatches  = 0;
 static int __numIrregularUncached = 0;
 #endif
 
+
+//
+//  Methods for LimitSurfaceFactory::Evaluators (used by Options):
+//
+void
+LimitSurfaceFactory::Evaluators::CreateFVarEvaluator(int fvarID) {
+
+    _fvarEvalCount = 1;
+
+    _fvarEvalIDsDynamic.clear();
+    _fvarEvalIDs = &_fvarEvalIDsStatic[0];
+
+    _fvarEvalIDs[0] = fvarID;
+}
+
+void
+LimitSurfaceFactory::Evaluators::CreateFVarEvaluators(
+        int count, int const fvarIDs[]) {
+
+    _fvarEvalCount = count;
+
+    if (count > (int)(sizeof(_fvarEvalIDsStatic) / sizeof(int))) {
+        _fvarEvalIDsDynamic.resize(count);
+        _fvarEvalIDs = &_fvarEvalIDsDynamic[0];
+    } else {
+        _fvarEvalIDsDynamic.clear();
+        _fvarEvalIDs = &_fvarEvalIDsStatic[0];
+    }
+
+    if (fvarIDs) {
+        std::memcpy(_fvarEvalIDs, fvarIDs, _fvarEvalCount * sizeof(int));
+    } else {
+        for (int i = 0; i < count; ++i) {
+            _fvarEvalIDs[i] = i;
+        }
+    }
+}
+
 //
 //  Main constructor and destructor:
 //
@@ -463,23 +501,21 @@ LimitSurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
 bool
 LimitSurfaceFactory::populateLinearEvaluators(LimitSurface & s,
         Index faceIndex,
-        EvaluatorOptions evalOptions) const {
+        Evaluators const & evalOptions) const {
 
     if (evalOptions.CreateVaryingEvaluator()) {
         assignLinearEvaluator(s._varEval, faceIndex, -1);
     }
 
-    if (evalOptions.CreateVertexEvaluator() && _linearScheme) {
+    if (_linearScheme && evalOptions.CreateVertexEvaluator()) {
         assignLinearEvaluator(s._vtxEval, faceIndex, -1);
     }
 
-    if (evalOptions.GetNumFVarEvaluators() && _linearFVarInterp) {
-        int const * fvarIDs = evalOptions.GetFVarEvaluatorIndices();
-
+    if (_linearFVarInterp) {
         int numFVarEvaluators = evalOptions.GetNumFVarEvaluators();
         for (int i = 0; i < numFVarEvaluators; ++i) {
             assignLinearEvaluator(s._fvarEval[i], faceIndex,
-                                  fvarIDs ? fvarIDs[i] : i);
+                                  evalOptions.GetFVarEvaluatorID(i));
         }
     }
     return true;
@@ -488,7 +524,7 @@ LimitSurfaceFactory::populateLinearEvaluators(LimitSurface & s,
 bool
 LimitSurfaceFactory::populateNonLinearEvaluators(LimitSurface & s,
         Index faceIndex,
-        EvaluatorOptions evalOptions) const {
+        Evaluators const & evalOptions) const {
 
     typedef Vtr::internal::StackBuffer<Index,72,true> IndexBuffer;
 
@@ -562,13 +598,11 @@ LimitSurfaceFactory::populateNonLinearEvaluators(LimitSurface & s,
         //  We can re-use the vertex index buffer for face-varying indices:
         IndexBuffer & fvarIndices = vtxIndices;
 
-        int const * fvarIDs = evalOptions.GetFVarEvaluatorIndices();
-
         int numFVarEvaluators = evalOptions.GetNumFVarEvaluators();
         for (int i = 0; i < numFVarEvaluators; ++i) {
             LimitSurface::Evaluator & fvarEval = s._fvarEval[i];
 
-            int fvarID = fvarIDs ? fvarIDs[i] : i;
+            int fvarID = evalOptions.GetFVarEvaluatorID(i);
 
             //  WIP - revert to linear for temporarily unsupported cases:
             if (faceTopology.IsUnsupported()) {
@@ -600,7 +634,7 @@ LimitSurfaceFactory::populateNonLinearEvaluators(LimitSurface & s,
 bool
 LimitSurfaceFactory::Populate(LimitSurface & s,
         Index faceIndex,
-        EvaluatorOptions evalOptions) const {
+        Evaluators const & evalOptions) const {
 
     //
     //  Clear and re-initialize the existing instance before re-populating.
@@ -648,7 +682,7 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
 
 LimitSurface *
 LimitSurfaceFactory::Create(Index faceIndex,
-        EvaluatorOptions evalOptions) const {
+        Evaluators const & evalOptions) const {
 
     //
     //  Avoid allocation if face trivially has no limit (a hole).

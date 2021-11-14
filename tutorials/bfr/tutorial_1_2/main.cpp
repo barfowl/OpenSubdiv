@@ -369,19 +369,35 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     ObjWriter objWriter(args.outputObjFile);
 
     //
-    //  Initialize specified evaluation options and declare buffers
-    //  required by use of instances of Bfr::LimitSurface during
-    //  evaluation (declared here to reuse memory for each face):
+    //  Initialize specified evaluation options for the Factory (e.g.
+    //  the need for UV face-varying evaluation), then declare an
+    //  instance of the Factory for the given base mesh (very low cost
+    //  in terms of time and space):
     //
     Bfr::RefinerLimitSurfaceFactory::Options limitFactoryOptions;
 
-    Bfr::RefinerLimitSurfaceFactory::EvaluatorOptions limitSurfaceOptions;
-    limitSurfaceOptions.CreateVertexEvaluator(true);
-    limitSurfaceOptions.CreateVaryingEvaluator(false);
+    Bfr::RefinerLimitSurfaceFactory::Evaluators & evaluatorsPerFace =
+            limitFactoryOptions.GetEvaluators();
 
-    int numFVarEvaluators = !args.noUVFlag && (baseMeshFVarUVs.size() > 0);
-    limitSurfaceOptions.CreateFVarEvaluators(numFVarEvaluators);
+    evaluatorsPerFace.CreateVertexEvaluator(true);
+    evaluatorsPerFace.CreateVaryingEvaluator(false);
 
+    bool createUvEvaluator = !args.noUVFlag && (baseMeshFVarUVs.size() > 0);
+    if (createUvEvaluator) {
+        //  The UV channel index in the base mesh is 0, so assign the
+        //  face-varying ID of 0 here to identify it to the Factory:
+        int uvFVarChannelInMesh = 0;
+        evaluatorsPerFace.CreateFVarEvaluator(uvFVarChannelInMesh);
+        //evaluatorsPerFace.CreateFVarEvaluators(1, &uvFVarChannelInMesh);
+    }
+
+    Bfr::RefinerLimitSurfaceFactory limitFactory(baseMesh, limitFactoryOptions);
+
+    //
+    //  Declare buffers required by use of instances of Bfr::LimitSurface
+    //  to gather and compute control points prior to evaluation (declared
+    //  here to reuse memory for each face):
+    //
     std::vector<Vec3f> limitSurfaceXYZPoints;
     std::vector<Vec3f> limitSurfaceUVPoints;
 
@@ -400,9 +416,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     std::vector<Vec3f> tessUV;
 
     //
-    //  Initialize the Bfr::LimitSurfaceFactory for the given base mesh
-    //  (very low cost in terms of time and space) and tessellate each
-    //  face independently (i.e. no shared vertices):
+    //  Tessellate each face independently (i.e. no shared vertices):
     //
     //  Note that the LimitSurfaceFactory is not thread-safe by default
     //  due to use of an internal cache.  Creating a separate instance
@@ -410,8 +424,6 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  parallelize this loop.  Another (preferred) is to assign a
     //  thread-safe cache to the single instance.
     //
-    Bfr::RefinerLimitSurfaceFactory limitFactory(baseMesh, limitFactoryOptions);
-
     int numFaces = limitFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
         //
@@ -425,8 +437,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  face to assess curvature, etc.)
         //
         Bfr::LimitSurface limitSurface;
-        if (!limitFactory.Populate(limitSurface, faceIndex,
-                                   limitSurfaceOptions)) continue;
+        if (!limitFactory.Populate(limitSurface, faceIndex)) continue;
 
         Bfr::Tessellation tessPattern(limitSurface.GetParameterization(),
                                       args.tessUniform,
