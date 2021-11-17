@@ -100,15 +100,7 @@ LimitSurfaceFactory::LimitSurfaceFactory(
     Options         limitOptions) :
         _schemeType(schemeType),
         _schemeOptions(schemeOptions),
-        _limitOptions(limitOptions),
-        _topologyCache(0) {
-
-    //  Override the topology cache if options require it:
-    if (_limitOptions.DisableTopologyCache()) {
-        _topologyCache = 0;
-    } else if (_limitOptions.ExternalTopologyCache()) {
-        _topologyCache = _limitOptions.ExternalTopologyCache();
-    }
+        _limitOptions(limitOptions) {
 
     //  Initialize members dependent on subdivision topology:
     _regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(_schemeType);
@@ -131,14 +123,16 @@ LimitSurfaceFactory::LimitSurfaceFactory(
                                 _rejectIrregularFacesForLimit;
 }
 
-void
-LimitSurfaceFactory::assignInternalTopologyCache(TopologyCache * cache) {
+inline TopologyCache *
+LimitSurfaceFactory::getTopologyCache() const {
 
-    if (!_limitOptions.DisableTopologyCache() && (_topologyCache == 0)) {
-        _topologyCache = cache;
+    if (_limitOptions.ExternalTopologyCache()) {
+        return _limitOptions.ExternalTopologyCache();
+    } else if (!_limitOptions.DisableTopologyCache()) {
+        return getInternalTopologyCache();
     }
+    return 0;
 }
-
 
 LimitSurfaceFactory::~LimitSurfaceFactory() {
 
@@ -148,7 +142,7 @@ printf("LimitSurfaceFactory destructor:\n");
 printf("    __numLinearPatches     = %6d\n", __numLinearPatches);
 printf("    __numRegularPatches    = %6d\n", __numRegularPatches);
 printf("    __numIrregularPatches  = %6d\n", __numIrregularPatches);
-if (_topologyCache) {
+if (getTopologyCache()) {
 printf("\n");
 printf("    __numIrregularUncached = %6d\n", __numIrregularUncached);
 }
@@ -357,13 +351,14 @@ LimitSurfaceFactory::assignIrregularEvaluator(
 
     IrregularPatchBuilder builder(surface, buildOptions);
 
-    if (_topologyCache == 0) {
+    TopologyCache * topologyCache = getTopologyCache();
+    if (topologyCache == 0) {
         eval._irregPatch = builder.Build();
         eval._irregOwner = true;
     } else {
         bool isNew    = false;
         bool isCached = false;
-        eval._irregPatch = builder.Find(*_topologyCache, isNew, isCached);
+        eval._irregPatch = builder.Find(*topologyCache, isNew, isCached);
         eval._irregOwner = isNew && !isCached;
     }
 

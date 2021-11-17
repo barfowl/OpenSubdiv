@@ -94,6 +94,10 @@ protected:
                             Index faceIndex, int faceVertex,
                             Index fvarValueIndices[], int fvarID) const;
 
+    TopologyCache * getInternalTopologyCache() const {
+        return &_localTopologyCache;
+    }
+
 private:
     //
     //  Additional supporting methods:
@@ -105,7 +109,7 @@ private:
     //  Additional members for the subclass:
     Far::TopologyRefiner const & _mesh;
 
-    Bfr::TopologyCache _localTopologyCache;
+    Bfr::TopologyCache mutable _localTopologyCache;
 
     int _numFaces;
     int _numFVarChannels;

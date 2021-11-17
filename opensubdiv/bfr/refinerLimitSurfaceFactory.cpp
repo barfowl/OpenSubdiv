@@ -46,7 +46,6 @@ RefinerLimitSurfaceFactory::RefinerLimitSurfaceFactory(
         _numFaces(mesh.GetLevel(0).GetNumFaces()),
         _numFVarChannels(mesh.GetNumFVarChannels()) {
 
-    assignInternalTopologyCache(&_localTopologyCache);
 }
 
 RefinerLimitSurfaceFactory::~RefinerLimitSurfaceFactory() {

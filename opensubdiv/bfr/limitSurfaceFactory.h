@@ -221,7 +221,6 @@ public:
                   Evaluators const & evaluators) const;
 
 protected:
-    //  (REVIEW 1.1)
     //
     //  Virtual methods required to support LimitSurface construction:
     //
@@ -285,14 +284,9 @@ protected:
                     Index fvarValueIndices[], int fvarID) const = 0;
 
 protected:
-    //  (REVIEW 1.2)
     //
-    //  Protected constructor/destructor for use by subclasses:
+    //  Additional protected methods used to define a subclasses:
     //
-    //  Initialization of base class members is no longer deferred to the
-    //  subclass via initialize/finalize methods -- the old constructor for
-    //  the base class has been restored.
-    // 
     //  Construction requires specification of the subdivision scheme and
     //  options associated with the mesh (as is the case with other classes
     //  in Far). These will typically reflect the settings in the mesh but
@@ -301,19 +295,21 @@ protected:
     //  simple polygonal mesh, or to change the face-varying interpolation
     //  for the faster linear interpolation of UVs.
     //
-    //  The subclass is responsible for determining the type and providing
-    //  an instance for the optional internal TopologyCache. For now, this
-    //  is explicitly assigned with a specific initialization method, but
-    //  other ways to deal with this are under consideration (e.g. via the
-    //  Options, an additional virtual method, etc.).
+    //  The subclass is also responsible for providing a reference to a
+    //  mutable instance of a TopologyCache for use by the base class. The
+    //  subclass is free to use any type of TopologyCache that it requires
+    //  (e.g. one it has defined/declared for thread-safety) and manages
+    //  the lifetime of that instance.
+    //  WIP - currently this is provided by an additional virtual method,
+    //        though other means are still under consideration (e.g. a
+    //        separate initializer, via Options, etc.)
     //
     LimitSurfaceFactory(Sdc::SchemeType schemeType,
                         Sdc::Options    schemeOptions,
                         Options         limitOptions);
     virtual ~LimitSurfaceFactory();
 
-    //  WIP - alternatives to this explicit initializer to be discussed...
-    void assignInternalTopologyCache(TopologyCache * cache);
+    virtual TopologyCache * getInternalTopologyCache() const = 0;
 
 private:
     //  Supporting internal methods:
@@ -350,14 +346,15 @@ private:
                                 LimitSurface::Evaluator const & srcEvaluator,
                                 SurfaceDescriptor const       & surface) const;
 
+    //  Methods for dealing with optional cache:
+    TopologyCache * getTopologyCache() const;
+
 private:
-    //  Members describing options, subdivision properties and reference to
-    //  an optional cache (very little memory and low initialization cost)
+    //  Members describing options and subdivision properties (very little
+    //  memory and low initialization cost)
     Sdc::SchemeType _schemeType;
     Sdc::Options    _schemeOptions;
     Options         _limitOptions;
-
-    TopologyCache mutable * _topologyCache;
 
     //  Members related to subdivision topology, options and limit tests:
     unsigned int _linearScheme      : 1;
