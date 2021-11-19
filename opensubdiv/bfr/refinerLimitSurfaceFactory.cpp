@@ -37,7 +37,7 @@ namespace Bfr {
 //
 //  Main constructor and destructor:
 //
-RefinerLimitSurfaceFactory::RefinerLimitSurfaceFactory(
+RefinerLimitSurfaceFactoryBase::RefinerLimitSurfaceFactoryBase(
     Far::TopologyRefiner const & mesh, Options limitOptions) :
         LimitSurfaceFactory(mesh.GetSchemeType(),
                             mesh.GetSchemeOptions(),
@@ -48,7 +48,7 @@ RefinerLimitSurfaceFactory::RefinerLimitSurfaceFactory(
 
 }
 
-RefinerLimitSurfaceFactory::~RefinerLimitSurfaceFactory() {
+RefinerLimitSurfaceFactoryBase::~RefinerLimitSurfaceFactoryBase() {
 
 }
 
@@ -58,13 +58,13 @@ RefinerLimitSurfaceFactory::~RefinerLimitSurfaceFactory() {
 //  Simple/trivial face queries:
 //
 bool
-RefinerLimitSurfaceFactory::isFaceHole(Index face) const {
+RefinerLimitSurfaceFactoryBase::isFaceHole(Index face) const {
 
     return _mesh.HasHoles() && _mesh.getLevel(0).isFaceHole(face);
 }
 
 int
-RefinerLimitSurfaceFactory::getFaceSize(Index baseFace) const {
+RefinerLimitSurfaceFactoryBase::getFaceSize(Index baseFace) const {
 
     return _mesh.GetLevel(0).GetFaceVertices(baseFace).size();
 }
@@ -73,7 +73,7 @@ RefinerLimitSurfaceFactory::getFaceSize(Index baseFace) const {
 //  Specifying vertex or face-varying indices for a face:
 //
 int
-RefinerLimitSurfaceFactory::getFaceVertexIndices(Index baseFace,
+RefinerLimitSurfaceFactoryBase::getFaceVertexIndices(Index baseFace,
         Index indices[]) const {
 
     ConstIndexArray fVerts = _mesh.GetLevel(0).GetFaceVertices(baseFace);
@@ -83,7 +83,7 @@ RefinerLimitSurfaceFactory::getFaceVertexIndices(Index baseFace,
 }
 
 int
-RefinerLimitSurfaceFactory::getFaceFVarValueIndices(Index baseFace,
+RefinerLimitSurfaceFactoryBase::getFaceFVarValueIndices(Index baseFace,
         Index indices[], int fvarIndex) const {
 
     if (fvarIndex >= _numFVarChannels) return 0;
@@ -99,7 +99,7 @@ RefinerLimitSurfaceFactory::getFaceFVarValueIndices(Index baseFace,
 //  Specifying the topology around a face-vertex:
 //
 int
-RefinerLimitSurfaceFactory::populateFaceVertexTopology(
+RefinerLimitSurfaceFactoryBase::populateFaceVertexTopology(
         Index baseFace, int cornerVertex,
         VertexTopology & vertexTopology) const {
 
@@ -193,7 +193,7 @@ RefinerLimitSurfaceFactory::populateFaceVertexTopology(
 //  the indices for a particular vertex Index:
 //
 int
-RefinerLimitSurfaceFactory::getFaceVertexIndices(
+RefinerLimitSurfaceFactoryBase::getFaceVertexIndices(
         Index baseFace, int cornerVertex,
         Index indices[], int fvarIndex) const {
 
@@ -220,7 +220,7 @@ RefinerLimitSurfaceFactory::getFaceVertexIndices(
 }
 
 int
-RefinerLimitSurfaceFactory::getFaceVertexIncidentFaceVertexIndices(
+RefinerLimitSurfaceFactoryBase::getFaceVertexIncidentFaceVertexIndices(
         Index baseFace, int cornerVertex,
         Index indices[]) const {
 
@@ -228,7 +228,7 @@ RefinerLimitSurfaceFactory::getFaceVertexIncidentFaceVertexIndices(
 }
 
 int
-RefinerLimitSurfaceFactory::getFaceVertexIncidentFaceFVarValueIndices(
+RefinerLimitSurfaceFactoryBase::getFaceVertexIncidentFaceFVarValueIndices(
         Index baseFace, int cornerVertex,
         Index indices[], int fvarIndex) const {
 
@@ -281,7 +281,7 @@ namespace {
 }
 
 bool
-RefinerLimitSurfaceFactory::IsFaceUnsupported(Index fIndex) const {
+RefinerLimitSurfaceFactoryBase::IsFaceUnsupported(Index fIndex) const {
 
     Vtr::internal::Level const & baseLevel = _mesh.getLevel(0);
 
@@ -290,7 +290,7 @@ RefinerLimitSurfaceFactory::IsFaceUnsupported(Index fIndex) const {
 }
 
 bool
-RefinerLimitSurfaceFactory::HasUnsupportedFaces() const {
+RefinerLimitSurfaceFactoryBase::HasUnsupportedFaces() const {
 
     int nFaces = _mesh.getLevel(0).getNumFaces();
     for (int fIndex = 0; fIndex < nFaces; ++fIndex) {
@@ -300,7 +300,7 @@ RefinerLimitSurfaceFactory::HasUnsupportedFaces() const {
 }
 
 int
-RefinerLimitSurfaceFactory::GetNumUnsupportedFaces() const {
+RefinerLimitSurfaceFactoryBase::GetNumUnsupportedFaces() const {
 
     int nFacesUnsupported = 0;
 
@@ -312,7 +312,7 @@ RefinerLimitSurfaceFactory::GetNumUnsupportedFaces() const {
 }
 
 int
-RefinerLimitSurfaceFactory::GetNumNonManifoldFaces() const {
+RefinerLimitSurfaceFactoryBase::GetNumNonManifoldFaces() const {
 
     Vtr::internal::Level const & baseLevel = _mesh.getLevel(0);
 
@@ -326,7 +326,7 @@ RefinerLimitSurfaceFactory::GetNumNonManifoldFaces() const {
 }
 
 int
-RefinerLimitSurfaceFactory::GetNumVal2InteriorFaces() const {
+RefinerLimitSurfaceFactoryBase::GetNumVal2InteriorFaces() const {
 
     Vtr::internal::Level const & baseLevel = _mesh.getLevel(0);
 

@@ -41,17 +41,25 @@ namespace Far {
 namespace Bfr {
 
 //
-//  Subclass of LimitSurfaceFactory using Far::TopologyRefiner as the
-//  connected mesh class:
+//  Intermediate subclass of LimitSurfaceFactory using Far::TopologyRefiner
+//  as the connected mesh class.
 //
-class RefinerLimitSurfaceFactory : public LimitSurfaceFactory {
+//  This subclass provides additional interface specific to TopologyRefiner
+//  and all requirements of the base class with the exception of the local
+//  TopologyCache -- that is deferred to a template below so that clients
+//  can easily declare subclasses using a preferred thread-safe cache type.
+//
+//  Creating this intermediate abstract class allows us to template for the
+//  TopologyCache without templating the entire subclass implementation.
+//
+class RefinerLimitSurfaceFactoryBase : public LimitSurfaceFactory {
 public:
     //
     //  Subclass-specific constructor:
     //
-    RefinerLimitSurfaceFactory(Far::TopologyRefiner const & mesh,
+    RefinerLimitSurfaceFactoryBase(Far::TopologyRefiner const & mesh,
                                Options options = Options());
-    virtual ~RefinerLimitSurfaceFactory();
+    virtual ~RefinerLimitSurfaceFactoryBase();
 
     //  Additional subclass-specific public queries:
     Far::TopologyRefiner const & GetMesh() const { return _mesh; }
@@ -74,7 +82,7 @@ public:
 
 protected:
     //
-    //  Virtual methods required by the base class:
+    //  Virtual methods to satisfy topological requirements:
     //
     bool isFaceHole( Index faceIndex) const;
     int  getFaceSize(Index faceIndex) const;
@@ -94,10 +102,6 @@ protected:
                             Index faceIndex, int faceVertex,
                             Index fvarValueIndices[], int fvarID) const;
 
-    TopologyCache * getInternalTopologyCache() const {
-        return &_localTopologyCache;
-    }
-
 private:
     //
     //  Additional supporting methods:
@@ -109,11 +113,35 @@ private:
     //  Additional members for the subclass:
     Far::TopologyRefiner const & _mesh;
 
-    Bfr::TopologyCache mutable _localTopologyCache;
-
     int _numFaces;
     int _numFVarChannels;
 };
+
+
+//
+//  Template for concrete subclasses with the addition of management of an
+//  internal cache. This makes it easy for clients to declare subclasses
+//  for thread-safe types of TopologyCache as a simple typedef:
+//
+template <class CACHE_TYPE = TopologyCache>
+class RefinerLimitSurfaceFactoryCached: public RefinerLimitSurfaceFactoryBase {
+public:
+    RefinerLimitSurfaceFactoryCached(Far::TopologyRefiner const & mesh,
+                                     Options options = Options()) :
+            RefinerLimitSurfaceFactoryBase(mesh, options),
+            _localCache() { }
+    ~RefinerLimitSurfaceFactoryCached() { }
+
+protected:
+    TopologyCache * getInternalTopologyCache() const { return & _localCache; }
+
+private:
+    CACHE_TYPE mutable _localCache;
+};
+
+//  WIP - naming is uncertain here, this typedef may eventually be removed
+typedef RefinerLimitSurfaceFactoryCached<TopologyCache>
+        RefinerLimitSurfaceFactory;
 
 } // end namespace Bfr
 
