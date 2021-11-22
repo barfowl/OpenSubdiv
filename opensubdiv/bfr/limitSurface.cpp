@@ -35,10 +35,10 @@ namespace Bfr {
 
 
 //
-//  LimitSurface::Evaluator methods to use for re-initialization:
+//  Surface methods to use for construction and re-initialization:
 //
 void
-LimitSurface::Evaluator::initialize() {
+Surface::initialize() {
 
     _numControlPoints = 0;
     _numPatchPoints   = 0;
@@ -52,7 +52,7 @@ LimitSurface::Evaluator::initialize() {
 }
 
 void
-LimitSurface::Evaluator::clear() {
+Surface::clear() {
 
     if (_irregOwner) delete _irregPatch;
 }
@@ -108,7 +108,7 @@ LimitSurface::clear() {
 //  Evaluation methods accessing the local data for a simple regular patch:
 //
 void
-Evaluator::evalRegularPatchBasis(float u, float v,
+Surface::evalRegularPatchBasis(float u, float v,
         float wP[], float wDu[], float wDv[]) const {
 
     Far::internal::EvaluatePatchBasisNormalized(
@@ -119,7 +119,7 @@ Evaluator::evalRegularPatchBasis(float u, float v,
 //  Evaluation methods accessing the Far::PatchTree for irregular patches:
 //
 ConstIndexArray
-Evaluator::evalIrregularPatchBasis(float u, float v,
+Surface::evalIrregularPatchBasis(float u, float v,
         float wP[], float wDu[], float wDv[]) const {
 
     int subFace = 0;
@@ -181,7 +181,7 @@ namespace {
 }
 
 int
-Evaluator::evalMultiLinearPatchBasis(float u, float v,
+Surface::evalMultiLinearPatchBasis(float u, float v,
         float wP[4], float wDu[4], float wDv[4]) const {
 
     assert(_param.GetType() == Parameterization::QPOLY);
@@ -216,7 +216,7 @@ Evaluator::evalMultiLinearPatchBasis(float u, float v,
 //  Access to PatchTree's StencilTable:
 //
 Far::StencilTableReal<float> const *
-Evaluator::getIrregPatchStencilTable() const {
+Surface::getIrregPatchStencilTable() const {
 
     return _irregPatch->GetStencilTable();
 }

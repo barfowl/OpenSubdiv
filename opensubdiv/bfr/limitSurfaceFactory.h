@@ -103,8 +103,12 @@ public:
 
         int GetNumFVarEvaluators() const { return _fvarEvalCount; }
 
+        int GetNumEvaluators() const {return _vtxEval+_varEval+_fvarEvalCount;}
+
         void SetFVarEvaluatorID(int i, int fvarID) { _fvarEvalIDs[i] = fvarID; }
         int  GetFVarEvaluatorID(int i) const       { return _fvarEvalIDs[i]; }
+
+        int const * GetFVarEvaluatorIDs() const { return _fvarEvalIDs; }
 
         //  WIP - for near-term backward compatibility (to be deprecated)
         void SetFVarEvaluatorIndices(int const * iVec) {
@@ -180,7 +184,7 @@ public:
 
 public:
     //
-    //  Simple queries:
+    //  Simple queries of the Factory:
     //
     Options GetOptions() const { return _limitOptions; }
 
@@ -191,27 +195,67 @@ public:
     //        keep the number of public methods to a minimum
     int GetRegFaceSize() const { return _regFaceSize; }
 
+public:
     //
-    //  Methods to create or re-populate an existing LimitSurface -- both
-    //  exist with a variant taking a set of Evaluators to override those
-    //  use by the Factory as defaults.
+    //  Simple queries of faces -- for use prior to surface construction:
     //
     //  The "has limit surface" query can be used to determine if a face
     //  has an associated limit surface -- usually the case except when the
     //  face is tagged as a hole, or due to boundary interpolation options
     //  when the face lies on a boundary (only for VTX_BOUNDARY_NONE).
     //
-    //  But note that create/populate applies the same test and so also
-    //  fails when no limit surface exists -- so there is little point
-    //  using the test purely as a pre-condition to create/populate. The
+    //  But note that the creation methods apply the same test and also
+    //  fail when no limit surface exists -- so there is little point
+    //  using the test purely as a pre-condition to create/populate. This
     //  separate test exists to detemine existence of a limit surface for
     //  pre-processing needs when the surface is not actually needed.
     //
-    //  Failure of create/populate is also possible if the subclass fails
-    //  to provide a valid topological description of the face.
+    //  Similarly, the Parameterization of a face may also be useful for
+    //  processing prior to surface construction -- it assumes the face
+    //  has been tested for a limit surface and so is trivial:
     //
     bool FaceHasLimitSurface(Index faceIndex) const;
 
+    Parameterization GetFaceParameterization(Index faceIndex) const;
+
+public:
+    //
+    //  Methods to construct the limit Surface for a specific face:
+    //
+    //  Failure of these construction methods is expected (and so to be
+    //  tested) whan a face has no limit surface -- either due to it being
+    //  a hole or through the use of less common boundary interpolation
+    //  options. Failure is also possible if the subclass fails to provide
+    //  a valid topological description of the face. (WIP - consider more
+    //  extreme failure for these cases, e.g. possible assertions.)
+    //
+    //  Methods to create/populate new/given instances of a Surface for
+    //  the different interpolation types:
+    Surface * CreateVertexSurface(     Index faceIndex) const;
+    Surface * CreateVaryingSurface(    Index faceIndex) const;
+    Surface * CreateFaceVaryingSurface(Index faceIndex, int fvarID = 0) const;
+
+    bool CreateVertexSurface(     Index faceIndex, Surface * vtxSurface) const;
+    bool CreateVaryingSurface(    Index faceIndex, Surface * varSurface) const;
+    bool CreateFaceVaryingSurface(Index faceIndex, Surface * fvarSurface,
+                                                   int       fvarID = 0) const;
+
+    //  Most general method to create several Surfaces at once (avoiding
+    //  the duplicated effort of creating them separately):
+    bool CreateSurfaces(Index faceIndex, Surface * vtxSurface,
+                                         Surface * varSurface,
+                                         Surface * fvarSurfaces,
+                                         int       fvarCount,
+                                         int const fvarIDs[] = 0) const;
+
+public:
+    //
+    //  Methods to create or re-populate an existing LimitSurface -- both
+    //  exist with a variant taking a set of Evaluators to override those
+    //  use by the Factory as defaults.
+    //
+    //  WIP - note that use of LimitSurface will eventually be removed
+    //
     LimitSurface * Create(Index faceIndex) const;
     LimitSurface * Create(Index faceIndex,
                           Evaluators const & evaluators) const;
@@ -317,12 +361,11 @@ private:
     bool faceHasLimitLocal(       Index faceIndex, int faceSize) const;
     bool faceHasLimitNeighborhood(Index faceIndex, FaceTopology const *) const;
 
-    bool populateLinearEvaluators(LimitSurface &     limitSurface,
-                                  Index              faceIndex,
-                                  Evaluators const & evaluators) const;
-    bool populateNonLinearEvaluators(LimitSurface &     limitSurface,
-                                     Index              faceIndex,
-                                     Evaluators const & evaluators) const;
+    struct SurfaceSet;
+
+    bool populateAllSurfaces(      Index faceIndex, SurfaceSet & surfs) const;
+    bool populateLinearSurfaces(   Index faceIndex, SurfaceSet & surfs) const;
+    bool populateNonLinearSurfaces(Index faceIndex, SurfaceSet & surfs) const;
 
     //  Methods to assemble topology and corresponding indices for entire face:
     bool gatherFaceNeighborhoodTopology(Index faceIndex,
@@ -332,19 +375,19 @@ private:
                                       FaceTopology const & topology,
                                       Index indices[], int fvarIndex) const;
 
-    //  Methods to assemble Evaluators for the different categories of patch:
-    void assignLinearEvaluator(LimitSurface::Evaluator & evaluator,
-                               Index faceIndex, int fvarIndex) const;
+    //  Methods to assemble Surfaces for the different categories of patch:
+    void assignLinearSurface(Surface & evaluator,
+                             Index faceIndex, int fvarIndex) const;
 
-    void assignRegularEvaluator(LimitSurface::Evaluator & evaluator,
-                                SurfaceDescriptor const & surface) const;
+    void assignRegularSurface(Surface                 & surface,
+                              SurfaceDescriptor const & descriptor) const;
 
-    void assignIrregularEvaluator(LimitSurface::Evaluator & evaluator,
-                                  SurfaceDescriptor const & surface) const;
+    void assignIrregularSurface(Surface                 & surface,
+                                SurfaceDescriptor const & descriptor) const;
 
-    void copyNonLinearEvaluator(LimitSurface::Evaluator       & dstEvaluator,
-                                LimitSurface::Evaluator const & srcEvaluator,
-                                SurfaceDescriptor const       & surface) const;
+    void copyNonLinearSurface(Surface                 & dstSurface,
+                              Surface const           & srcSurface,
+                              SurfaceDescriptor const & descriptor) const;
 
     //  Methods for dealing with optional cache:
     TopologyCache * getTopologyCache() const;
@@ -366,21 +409,6 @@ private:
 
     int  _regFaceSize;
 };
-
-//
-//  Inline methods for LimitSurfaceFactory:
-//
-inline LimitSurface *
-LimitSurfaceFactory::Create(Index faceIndex) const {
-
-    return Create(faceIndex, _limitOptions.GetEvaluators());
-}
-
-inline bool
-LimitSurfaceFactory::Populate(LimitSurface & instance, Index faceIndex) const {
-
-    return Populate(instance, faceIndex, _limitOptions.GetEvaluators());
-}
 
 } // end namespace Bfr
 

@@ -25,7 +25,7 @@
 //
 //  Description:
 //      This tutorial builds on the previous tutorial that makes use of the
-//      Bfr::LimitSurface and Bfr::Tessellation classes for evaluating and
+//      SurfaceFactory, Surface and Tessellation classes for evaluating and
 //      tessellating the limit surface of faces of a mesh.  This tutorial
 //      adds support for evaluating and tessellating face-varying UVs.  If
 //      UVs are present in the mesh, they will be evaluated, tessellated
@@ -369,32 +369,16 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     ObjWriter objWriter(args.outputObjFile);
 
     //
-    //  Initialize specified evaluation options for the Factory (e.g.
-    //  the need for UV face-varying evaluation), then declare an
-    //  instance of the Factory for the given base mesh (very low cost
-    //  in terms of time and space):
+    //  Initialize specified options for the Factory (currently nothing
+    //  explicit) and declare an instance of the Factory for the given
+    //  base mesh (very low cost in terms of time and space):
     //
     Bfr::RefinerLimitSurfaceFactory::Options limitFactoryOptions;
-
-    Bfr::RefinerLimitSurfaceFactory::Evaluators & evaluatorsPerFace =
-            limitFactoryOptions.GetEvaluators();
-
-    evaluatorsPerFace.CreateVertexEvaluator(true);
-    evaluatorsPerFace.CreateVaryingEvaluator(false);
-
-    bool createUvEvaluator = !args.noUVFlag && (baseMeshFVarUVs.size() > 0);
-    if (createUvEvaluator) {
-        //  The UV channel index in the base mesh is 0, so assign the
-        //  face-varying ID of 0 here to identify it to the Factory:
-        int uvFVarChannelInMesh = 0;
-        evaluatorsPerFace.CreateFVarEvaluator(uvFVarChannelInMesh);
-        //evaluatorsPerFace.CreateFVarEvaluators(1, &uvFVarChannelInMesh);
-    }
 
     Bfr::RefinerLimitSurfaceFactory limitFactory(baseMesh, limitFactoryOptions);
 
     //
-    //  Declare buffers required by use of instances of Bfr::LimitSurface
+    //  Declare buffers required by the Bfr::Surfaces for position and UV
     //  to gather and compute control points prior to evaluation (declared
     //  here to reuse memory for each face):
     //
@@ -424,30 +408,74 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  parallelize this loop.  Another (preferred) is to assign a
     //  thread-safe cache to the single instance.
     //
+    bool meshHasUvs  = (baseMeshFVarUVs.size() > 0);
+    bool evaluateUvs = meshHasUvs && !args.noUVFlag;
+
     int numFaces = limitFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
         //
-        //  Create/populate the LimitSurface for this face (if present, i.e.
-        //  skipping holes and designated boundary faces) and declare the
-        //  simple uniform Tessellation using its Parameterization:
+        //  Create/populate the Surfaces for position and UVs for this face
+        //  (if present, i.e. skipping holes and designated boundary faces).
+        //  There are two ways to do this -- both illustrated here:
         //
-        //  (The LimitSurface can also first be used to evaluate points
-        //  that may then determine non-uniform Tessellation parameters per
-        //  edge, e.g. evaluating positions and normals at corners of the
-        //  face to assess curvature, etc.)
+        //  While we can declare the Bfr::Surfaces locally here, they may
+        //  internally need to allocate memory from the heap in cases where
+        //  vertex valences are high. So its worth moving these declarations
+        //  outside the loop so that such memory can be re-used instead of
+        //  repeatedly freed and re-allocated.
         //
-        Bfr::LimitSurface limitSurface;
-        if (!limitFactory.Populate(limitSurface, faceIndex)) continue;
+        Bfr::Surface posSurface;
+        Bfr::Surface uvSurface;
 
-        Bfr::Tessellation tessPattern(limitSurface.GetParameterization(),
+        bool createSurfacesIndependently = true;
+        if (createSurfacesIndependently) {
+            //
+            //  Creating Bfr::Surfaces for the different data interpolation
+            //  types independently is clear and convenient, but some work
+            //  is duplicated in the construction process -- especially for
+            //  each face-varying Surface -- so be aware of such added
+            //  overhead when doing so. (Creating/evaluating each Surface
+            //  on a separate thread is a case where the effect of that
+            //  duplicated effort is eliminated.)
+            //
+            if (!limitFactory.CreateVertexSurface(faceIndex, &posSurface)) {
+                continue;
+            }
+            //  Could potentially defer the declaration and creation of the
+            //  UV Surface to the scope where it is used:
+            if (evaluateUvs &&
+                !limitFactory.CreateFaceVaryingSurface(faceIndex, &uvSurface)) {
+                continue;
+            }
+        } else {
+            //
+            //  When creating one or more face-varying Surfaces for use with
+            //  the Surface for vertex data (position), use of the method to
+            //  create multiple surfaces at once is preferred.
+            //
+            Bfr::Surface * fvarSurfaces = evaluateUvs ? &uvSurface : 0;
+            int            fvarCount    = evaluateUvs;
+
+            if (!limitFactory.CreateSurfaces(faceIndex,
+                    &posSurface,     // Surface for vertex data
+                    0,               // Surface for varying data
+                    fvarSurfaces,    // Surfaces for face-varying data
+                    fvarCount)) {    // number of face-varying Surfaces
+                continue;
+            }
+        }
+
+        //
+        //  Declare a simple uniform Tessellation using the Parameterization
+        //  of the position Surface.  Then identify parametric coordinates
+        //  of the sample points of the Tessellation pattern (more specific
+        //  inspection methods are available, but gathering the full set of
+        //  data is simplest for this example):
+        //
+        Bfr::Tessellation tessPattern(posSurface.GetParameterization(),
                                       args.tessUniform,
                                       tessOptions);
 
-        //
-        //  Identify coordinates of the sample points of the Tessellation
-        //  pattern (more specific inspection methods are available, but
-        //  gathering the full set of data is simplest for this example):
-        //
         int numTessCoords = tessPattern.GetNumCoords();
 
         tessCoords.resize(numTessCoords);
@@ -456,38 +484,36 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
         //
         //  For both position and UVs (when present), assemble the local
-        //  buffer of points for LimitSurface evaluation (resizing as
+        //  buffer of points for evaluation of the Surfaces (resizing as
         //  needed) and evaluate the sample points of the Tessellation:
         //
-        Bfr::Evaluator const * vtxEval = limitSurface.GetVertexEvaluator();
+        //  if (evaluating position):
         {
-            limitSurfaceXYZPoints.resize(vtxEval->GetNumPatchPoints());
+            limitSurfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
 
-            vtxEval->PreparePatchPointValues(baseMeshVertexXYZs,
-                                             limitSurfaceXYZPoints);
+            posSurface.PreparePatchPointValues(baseMeshVertexXYZs,
+                                               limitSurfaceXYZPoints);
 
             tessXYZ.resize(numTessCoords);
             tessDu.resize(numTessCoords);
             tessDv.resize(numTessCoords);
 
             for (int i = 0; i < numTessCoords; ++i) {
-                vtxEval->Evaluate(tessCoords[i][0], tessCoords[i][1],
-                                  limitSurfaceXYZPoints,
-                                  tessXYZ[i], tessDu[i], tessDv[i]);
+                posSurface.Evaluate(tessCoords[i][0], tessCoords[i][1],
+                                    limitSurfaceXYZPoints,
+                                    tessXYZ[i], tessDu[i], tessDv[i]);
             }
         }
+        if (evaluateUvs) {
+            limitSurfaceUVPoints.resize(uvSurface.GetNumPatchPoints());
 
-        Bfr::Evaluator const * fvarEval = limitSurface.GetFaceVaryingEvaluator();
-        if (fvarEval) {
-            limitSurfaceUVPoints.resize(fvarEval->GetNumPatchPoints());
-
-            fvarEval->PreparePatchPointValues(baseMeshFVarUVs,
+            uvSurface.PreparePatchPointValues(baseMeshFVarUVs,
                                               limitSurfaceUVPoints);
 
             tessUV.resize(numTessCoords);
 
             for (int i = 0; i < numTessCoords; ++i) {
-                fvarEval->Evaluate(tessCoords[i][0], tessCoords[i][1],
+                uvSurface.Evaluate(tessCoords[i][0], tessCoords[i][1],
                                    limitSurfaceUVPoints,
                                    tessUV[i]);
             }

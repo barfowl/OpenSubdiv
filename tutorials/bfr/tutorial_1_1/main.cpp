@@ -24,10 +24,10 @@
 
 //
 //  Description:
-//      This tutorial illustrates the use of the Bfr::LimitSurface and
-//      Bfr::Tessellation classes for evaluating and tessellating the limit
-//      surface associated with each base face of a mesh.  Each face of a
-//      mesh is tessellated independently, with the results written out in
+//      This tutorial illustrates the use of the SurfaceFactory, Surface and
+//      Tessellation classes for creating, evaluating and tessellating the
+//      limit surface associated with each base face of a mesh.  Each face of
+//      a mesh is tessellated independently, with the results written out in
 //      Obj format for inspection.  These classes make it simple to evaluate
 //      and tessellate all faces (quads, tris or others) while supporting
 //      the full set of subdivision options.
@@ -365,9 +365,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     ObjWriter objWriter(args.outputObjFile);
 
     //
-    //  Initialize specified evaluation options and declare buffers
-    //  required by use of instances of Bfr::LimitSurface during
-    //  evaluation (declared here to reuse memory for each face):
+    //  Initialize specified evaluation options (none explicit here) and
+    //  declare buffers required by use of instances of Bfr::Surface
+    //  during evaluation (declared here to reuse memory for each face):
     //
     Bfr::RefinerLimitSurfaceFactory::Options limitFactoryOptions;
 
@@ -402,19 +402,22 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     int numFaces = limitFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
         //
-        //  Create/populate the LimitSurface for this face (if present, i.e.
-        //  skipping holes and designated boundary faces) and declare the
-        //  simple uniform Tessellation using its Parameterization:
+        //  Create/populate the Bfr::Surface for this face (if present,
+        //  i.e. skipping holes and designated boundary faces) and declare
+        //  the simple uniform Tessellation using its Parameterization:
         //
-        //  (The LimitSurface can also first be used to evaluate points
+        //  (The position Surface can also first be used to evaluate points
         //  that may then determine non-uniform Tessellation parameters per
         //  edge, e.g. evaluating positions and normals at corners of the
         //  face to assess curvature, etc.)
         //
-        Bfr::LimitSurface limitSurface;
-        if (!limitFactory.Populate(limitSurface, faceIndex)) continue;
+        Bfr::Surface posSurface;
 
-        Bfr::Tessellation tessPattern(limitSurface.GetParameterization(),
+        if (!limitFactory.CreateVertexSurface(faceIndex, &posSurface)) {
+            continue;
+        }
+
+        Bfr::Tessellation tessPattern(posSurface.GetParameterization(),
                                       args.tessUniform,
                                       tessOptions);
 
@@ -430,26 +433,23 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         tessPattern.GetCoords(&tessCoords[0]);
 
         //
-        //  Assemble the local buffer of points for LimitSurface evaluation
+        //  Assemble the local buffer of points for the Surface evaluation
         //  (resizing as needed) and evaluate the sample points of the
         //  Tessellation:
         //
-        Bfr::Evaluator const * vtxEval = limitSurface.GetVertexEvaluator();
-        assert(vtxEval);
+        limitSurfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
 
-        limitSurfaceXYZPoints.resize(vtxEval->GetNumPatchPoints());
-
-        vtxEval->PreparePatchPointValues(baseMeshVertexXYZs,
-                                         limitSurfaceXYZPoints);
+        posSurface.PreparePatchPointValues(baseMeshVertexXYZs,
+                                           limitSurfaceXYZPoints);
 
         tessXYZ.resize(numTessCoords);
         tessDu.resize(numTessCoords);
         tessDv.resize(numTessCoords);
 
         for (int i = 0; i < numTessCoords; ++i) {
-            vtxEval->Evaluate(tessCoords[i][0], tessCoords[i][1],
-                              limitSurfaceXYZPoints,
-                              tessXYZ[i], tessDu[i], tessDv[i]);
+            posSurface.Evaluate(tessCoords[i][0], tessCoords[i][1],
+                                limitSurfaceXYZPoints,
+                                tessXYZ[i], tessDu[i], tessDv[i]);
         }
 
         //

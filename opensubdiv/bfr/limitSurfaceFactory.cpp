@@ -92,6 +92,67 @@ LimitSurfaceFactory::Evaluators::CreateFVarEvaluators(
 }
 
 //
+//  Definition of the private/nested SurfaceSet class:
+//
+//  This class (really a struct) encapsulates a clients specification of
+//  a set of multiple surfaces and their intended interpolation types
+//  (vertex, varying, and face-varying).  The multiple public creation
+//  methods to request common subsets of surfaces all populate an instance
+//  of SurfaceSet for internal use.
+//
+//  WIP - while this appears to be very similar to the public Evaluators
+//        class, it includes Surface* members destined for assignment
+//      - the public Evaluators class is expected to be deprecated while
+//        SurfaceSet will continue to serve the Factory internally.
+//
+class LimitSurfaceFactory::SurfaceSet {
+public:
+    SurfaceSet() : numSurfs(0), numFVarSurfs(0),
+                   vtxSurf(0), varSurf(0),
+                   fvarSurfs(0), fvarSurfPtrs(0), fvarIDs(0) { }
+
+public:
+    //  Assignment to member variable is intended to be explicit:
+    int numSurfs;
+    int numFVarSurfs;
+
+    Surface  * vtxSurf;
+    Surface  * varSurf;
+    Surface  * fvarSurfs;
+    Surface ** fvarSurfPtrs;
+    int const  * fvarIDs;
+
+    void InitializeSurfaces() const {
+        if (vtxSurf) vtxSurf->reinitialize();
+        if (varSurf) varSurf->reinitialize();
+        for (int i = 0; i < numFVarSurfs; ++i) {
+            GetFVarSurface(i)->reinitialize();
+        }
+    }
+
+public:
+    //  Access to member variables is preferred through these methods,
+    //  which may require a little more logic than expected:
+    int GetNumSurfaces() const { return numSurfs; }
+
+    bool      HasVertexSurface() const { return (vtxSurf != 0); }
+    Surface * GetVertexSurface() const { return vtxSurf; }
+
+    bool      HasVaryingSurface() const { return (varSurf != 0); }
+    Surface * GetVaryingSurface() const { return varSurf; }
+
+    bool      HasFVarSurfaces()       const { return numFVarSurfs > 0; }
+    int       GetNumFVarSurfaces()    const { return numFVarSurfs; }
+    int       GetFVarSurfaceID(int i) const { return fvarIDs ? fvarIDs[i] : i; }
+    Surface * GetFVarSurface(int i)   const {
+        //  Note that FVar Surfaces may be specified either as an
+        //  array of Surfaces or an array of Surface pointers:
+        return fvarSurfs ? (fvarSurfs + i) : fvarSurfPtrs[i];
+    }
+};
+
+
+//
 //  Main constructor and destructor:
 //
 LimitSurfaceFactory::LimitSurfaceFactory(
@@ -248,99 +309,103 @@ LimitSurfaceFactory::FaceHasLimitSurface(Index faceIndex) const {
         (!_testNeighborhoodForLimit || faceHasLimitNeighborhood(faceIndex, 0));
 }
 
+Parameterization
+LimitSurfaceFactory::GetFaceParameterization(Index faceIndex) const {
+
+    return Parameterization(_schemeType, getFaceSize(faceIndex));
+}
+
 //
 //  Methods supporting construction of linear, regular and irregular patches:
 //
 void
-LimitSurfaceFactory::assignLinearEvaluator(LimitSurface::Evaluator & eval,
+LimitSurfaceFactory::assignLinearSurface(Surface & surf,
         Index faceIndex, int fvarIndex) const {
 
     //  Initialize instance members from the associated irregular patch:
     int faceSize  = getFaceSize(faceIndex);
 
-    eval._param = Parameterization(_schemeType, faceSize);
+    surf._param = Parameterization(_schemeType, faceSize);
 
-    eval._isRegular = (faceSize == _regFaceSize);
-    eval._isLinear  = true;
+    surf._isRegular = (faceSize == _regFaceSize);
+    surf._isLinear  = true;
 
-    eval._regPatchType = (_regFaceSize == 4)
+    surf._regPatchType = (_regFaceSize == 4)
                        ?  Far::PatchDescriptor::QUADS
                        :  Far::PatchDescriptor::TRIANGLES;
-    eval._regPatchParam.Clear();
+    surf._regPatchParam.Clear();
 
     //
     //  Finally, gather patch control points from the appropriate indices:
     //
-    eval._numControlPoints = faceSize;
-    eval._numPatchPoints   = faceSize;
+    surf._numControlPoints = faceSize;
+    surf._numPatchPoints   = faceSize;
 
-    eval._controlPoints.SetSize(eval._numControlPoints);
+    surf._controlPoints.SetSize(surf._numControlPoints);
     int count = 0;
     if (fvarIndex < 0) {
-        count = getFaceVertexIndices(faceIndex, &eval._controlPoints[0]);
+        count = getFaceVertexIndices(faceIndex, &surf._controlPoints[0]);
     } else {
-        count = getFaceFVarValueIndices(faceIndex, &eval._controlPoints[0],
+        count = getFaceFVarValueIndices(faceIndex, &surf._controlPoints[0],
                                                    fvarIndex);
     }
-    //  If subclass fails to get indices, Evaluator will remain invalid
+    //  If subclass fails to get indices, Surface will remain invalid
     if (count < faceSize) return;
 
-    eval._isValid = true;
+    surf._isValid = true;
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numLinearPatches ++;
 #endif
 }
 
 void
-LimitSurfaceFactory::assignRegularEvaluator(
-        LimitSurface::Evaluator & eval,
-        SurfaceDescriptor const & surface) const {
+LimitSurfaceFactory::assignRegularSurface(Surface & surf,
+        SurfaceDescriptor const & descriptor) const {
 
     //
     //  Assign the parameterization and discriminants first:
     //
-    eval._param = Parameterization(_schemeType, _regFaceSize);
+    surf._param = Parameterization(_schemeType, _regFaceSize);
 
-    eval._isRegular = true;
-    eval._isLinear  = false;
+    surf._isRegular = true;
+    surf._isLinear  = false;
 
     //
     //  Assemble the regular patch:
     //
-    RegularPatchBuilder builder(surface);
+    RegularPatchBuilder builder(descriptor);
 
     int boundaryMask = builder.GetPatchParamBoundaryMask();
 
-    eval._regPatchType = builder.GetPatchType();
-    eval._regPatchParam.Set(0, 0, 0, 0, 0, boundaryMask, 0, true);
+    surf._regPatchType = builder.GetPatchType();
+    surf._regPatchParam.Set(0, 0, 0, 0, 0, boundaryMask, 0, true);
 
     //
     //  Gather the patch control points from the given indices:
     //
-    eval._numControlPoints = builder.GetNumControlVertices();
-    eval._numPatchPoints   = eval._numControlPoints;
+    surf._numControlPoints = builder.GetNumControlVertices();
+    surf._numPatchPoints   = surf._numControlPoints;
 
-    eval._controlPoints.SetSize(eval._numControlPoints);
-    builder.GatherControlVertexIndices(&eval._controlPoints[0]);
+    surf._controlPoints.SetSize(surf._numControlPoints);
+    builder.GatherControlVertexIndices(&surf._controlPoints[0]);
 
-    eval._isValid = true;
+    surf._isValid = true;
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numRegularPatches ++;
 #endif
 }
 
 void
-LimitSurfaceFactory::assignIrregularEvaluator(
-        LimitSurface::Evaluator & eval,
-        SurfaceDescriptor const & surface) const {
+LimitSurfaceFactory::assignIrregularSurface(Surface & surf,
+        SurfaceDescriptor const & descriptor) const {
 
     //
     //  Assign the parameterization and discriminants first:
     //
-    eval._param = Parameterization(_schemeType, surface.GetFaceSize());
+    surf._param = Parameterization(_schemeType, descriptor.GetFaceSize());
 
-    eval._isRegular = false;
-    eval._isLinear  = false;
+    surf._isRegular = false;
+    surf._isLinear  = false;
 
     //
     //  Construct a new irregular patch or identify one from the cache:
@@ -349,86 +414,86 @@ LimitSurfaceFactory::assignIrregularEvaluator(
     buildOptions.sharpLevel  = _limitOptions.MaxLevelPrimary();
     buildOptions.smoothLevel = _limitOptions.MaxLevelSecondary();
 
-    IrregularPatchBuilder builder(surface, buildOptions);
+    IrregularPatchBuilder builder(descriptor, buildOptions);
 
     TopologyCache * topologyCache = getTopologyCache();
     if (topologyCache == 0) {
-        eval._irregPatch = builder.Build();
-        eval._irregOwner = true;
+        surf._irregPatch = builder.Build();
+        surf._irregOwner = true;
     } else {
         bool isNew    = false;
         bool isCached = false;
-        eval._irregPatch = builder.Find(*topologyCache, isNew, isCached);
-        eval._irregOwner = isNew && !isCached;
+        surf._irregPatch = builder.Find(*topologyCache, isNew, isCached);
+        surf._irregOwner = isNew && !isCached;
     }
 
     //
     //  Gather the patch control points from the given indices:
     //
-    eval._numControlPoints = eval._irregPatch->GetNumControlPoints();
-    eval._numPatchPoints   = eval._irregPatch->GetNumPointsTotal();
+    surf._numControlPoints = surf._irregPatch->GetNumControlPoints();
+    surf._numPatchPoints   = surf._irregPatch->GetNumPointsTotal();
 
-    eval._controlPoints.SetSize(eval._numControlPoints);
-    builder.GatherControlVertexIndices(&eval._controlPoints[0]);
+    surf._controlPoints.SetSize(surf._numControlPoints);
+    builder.GatherControlVertexIndices(&surf._controlPoints[0]);
 
-    eval._isValid = true;
+    surf._isValid = true;
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numIrregularPatches  ++;
-__numIrregularUncached += eval._irregOwner;
+__numIrregularUncached += surf._irregOwner;
 #endif
 }
 
 void
-LimitSurfaceFactory::copyNonLinearEvaluator(
-        LimitSurface::Evaluator       & dstEval,
-        LimitSurface::Evaluator const & srcEval,
-        SurfaceDescriptor const       & surface) const {
+LimitSurfaceFactory::copyNonLinearSurface(
+        Surface                 & dstSurf,
+        Surface const           & srcSurf,
+        SurfaceDescriptor const & descriptor) const {
 
     //  Should be creating a linear patch directly rather than copying:
-    assert(!srcEval._isLinear);
+    assert(!srcSurf._isLinear);
 
     //
     //  Assign the topological fields of the patch first:
     //
-    dstEval._param = srcEval._param;
+    dstSurf._param = srcSurf._param;
 
-    dstEval._isLinear  = false;
-    dstEval._isRegular = srcEval._isRegular;
+    dstSurf._isLinear  = false;
+    dstSurf._isRegular = srcSurf._isRegular;
 
-    dstEval._numControlPoints = srcEval._numControlPoints;
-    dstEval._numPatchPoints   = srcEval._numPatchPoints;
+    dstSurf._numControlPoints = srcSurf._numControlPoints;
+    dstSurf._numPatchPoints   = srcSurf._numPatchPoints;
 
-    dstEval._controlPoints.SetSize(srcEval._numControlPoints);
+    dstSurf._controlPoints.SetSize(srcSurf._numControlPoints);
 
     //
     //  Assign regular/irregular fields and gather control points:
     //
-    if (dstEval._isRegular) {
-        dstEval._regPatchType  = srcEval._regPatchType;
-        dstEval._regPatchParam = srcEval._regPatchParam;
+    if (dstSurf._isRegular) {
+        dstSurf._regPatchType  = srcSurf._regPatchType;
+        dstSurf._regPatchParam = srcSurf._regPatchParam;
 
-        RegularPatchBuilder builder(surface);
-        assert(builder.GetNumControlVertices() == dstEval._numControlPoints);
+        RegularPatchBuilder builder(descriptor);
+        assert(builder.GetNumControlVertices() == dstSurf._numControlPoints);
 
-        builder.GatherControlVertexIndices(&dstEval._controlPoints[0]);
+        builder.GatherControlVertexIndices(&dstSurf._controlPoints[0]);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numRegularPatches ++;
 #endif
     } else {
-        dstEval._irregPatch = srcEval._irregPatch;
-        dstEval._irregOwner = false;
+        dstSurf._irregPatch = srcSurf._irregPatch;
+        dstSurf._irregOwner = false;
 
-        IrregularPatchBuilder builder(surface);
-        assert(builder.GetNumControlVertices() == dstEval._numControlPoints);
+        IrregularPatchBuilder builder(descriptor);
+        assert(builder.GetNumControlVertices() == dstSurf._numControlPoints);
 
-        builder.GatherControlVertexIndices(&dstEval._controlPoints[0]);
+        builder.GatherControlVertexIndices(&dstSurf._controlPoints[0]);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numIrregularPatches  ++;
-__numIrregularUncached += dstEval._irregOwner;
+__numIrregularUncached += dstSurf._irregOwner;
 #endif
     }
 
-    dstEval._isValid = true;
+    dstSurf._isValid = true;
 }
 
 
@@ -491,43 +556,88 @@ LimitSurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
 }
 
 //
-//  Main method to populate an instance of LimitSurface:
+//  Main internal methods to populate set of limit Surfaces:
 //
 bool
-LimitSurfaceFactory::populateLinearEvaluators(LimitSurface & s,
-        Index faceIndex,
-        Evaluators const & evalOptions) const {
+LimitSurfaceFactory::populateAllSurfaces(Index faceIndex,
+        SurfaceSet & surfaces) const {
 
-    if (evalOptions.CreateVaryingEvaluator()) {
-        assignLinearEvaluator(s._varEval, faceIndex, -1);
+    //  Abort if no Surfaces are specified to populate:
+    if (surfaces.GetNumSurfaces() == 0) {
+        return false;
     }
 
-    if (_linearScheme && evalOptions.CreateVertexEvaluator()) {
-        assignLinearEvaluator(s._vtxEval, faceIndex, -1);
+    //
+    //  Be sure to re-initialize all Surfaces up-front, rather than
+    //  deferring it to the assignment of each.  A failure of any one
+    //  surface may leave others unvisited -- leaving it unchanged
+    //  from previous use.
+    //
+    surfaces.InitializeSurfaces();
+
+    //  Quickly reject faces with no limit (typically holes) -- some cases
+    //  require full topological inspection and will be rejected later:
+    if (!faceHasLimitLocal(faceIndex, getFaceSize(faceIndex))) {
+        return false;
     }
 
-    if (_linearFVarInterp) {
-        int numFVarEvaluators = evalOptions.GetNumFVarEvaluators();
-        for (int i = 0; i < numFVarEvaluators; ++i) {
-            assignLinearEvaluator(s._fvarEval[i], faceIndex,
-                                  evalOptions.GetFVarEvaluatorID(i));
+    //  Determine if we have any non-linear cases to deal with -- which
+    //  require gathering and inspection of the full neighborhood around
+    //  the given face:
+    int numFVarSurfaces = surfaces.GetNumFVarSurfaces();
+
+    bool hasNonLinearSurfaces =
+                (surfaces.HasVertexSurface() && !_linearScheme) ||
+                (numFVarSurfaces && !_linearFVarInterp);
+
+    bool hasLinearSurfaces =
+                 surfaces.HasVaryingSurface() ||
+                (surfaces.HasVertexSurface() && _linearScheme) ||
+                (numFVarSurfaces && _linearFVarInterp);
+
+    if (hasNonLinearSurfaces || _testNeighborhoodForLimit) {
+        if (!populateNonLinearSurfaces(faceIndex, surfaces)) {
+            return false;
+        }
+    }
+    if (hasLinearSurfaces) {
+        if (!populateLinearSurfaces(faceIndex, surfaces)) {
+            return false;
         }
     }
     return true;
 }
 
 bool
-LimitSurfaceFactory::populateNonLinearEvaluators(LimitSurface & s,
-        Index faceIndex,
-        Evaluators const & evalOptions) const {
+LimitSurfaceFactory::populateLinearSurfaces(Index faceIndex,
+        SurfaceSet & surfaces) const {
+
+    if (surfaces.HasVaryingSurface()) {
+        assignLinearSurface(*surfaces.GetVaryingSurface(), faceIndex, -1);
+    }
+
+    if (_linearScheme && surfaces.HasVertexSurface()) {
+        assignLinearSurface(*surfaces.GetVertexSurface(), faceIndex, -1);
+    }
+
+    if (_linearFVarInterp) {
+        int numFVarSurfaces = surfaces.GetNumFVarSurfaces();
+        for (int i = 0; i < numFVarSurfaces; ++i) {
+            assignLinearSurface(*surfaces.GetFVarSurface(i), faceIndex,
+                                 surfaces.GetFVarSurfaceID(i));
+        }
+    }
+    return true;
+}
+
+bool
+LimitSurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
+        SurfaceSet & surfaces) const {
 
     typedef Vtr::internal::StackBuffer<Index,72,true> IndexBuffer;
 
-    bool vtxIsNonLinear = evalOptions.CreateVertexEvaluator() &&
-                          !_linearScheme;
-
-    bool fvarIsNonLinear = evalOptions.GetNumFVarEvaluators() &&
-                           !_linearFVarInterp;
+    bool vtxIsNonLinear  = surfaces.HasVertexSurface() && !_linearScheme;
+    bool fvarIsNonLinear = surfaces.HasFVarSurfaces()  && !_linearFVarInterp;
 
     //
     //  Three steps are required to get the full description of a limit
@@ -569,17 +679,21 @@ LimitSurfaceFactory::populateNonLinearEvaluators(LimitSurface & s,
     //
     SurfaceDescriptor vtxSurface(faceTopology, vtxIndices);
 
+    bool vtxSurfIsValid = false;
     if (vtxIsNonLinear) {
+        Surface & vtxSurf = *surfaces.GetVertexSurface();
+
         //  WIP - revert to linear for temporarily unsupported cases:
         if (faceTopology.IsUnsupported()) {
-            assignLinearEvaluator(s._vtxEval, faceIndex, -1);
+            assignLinearSurface(vtxSurf, faceIndex, -1);
         } else 
 
         if (vtxSurface.IsRegular()) {
-            assignRegularEvaluator(s._vtxEval, vtxSurface);
+            assignRegularSurface(vtxSurf, vtxSurface);
         } else {
-            assignIrregularEvaluator(s._vtxEval, vtxSurface);
+            assignIrregularSurface(vtxSurf, vtxSurface);
         }
+        vtxSurfIsValid = vtxSurf.IsValid();
     }
 
     //
@@ -587,21 +701,20 @@ LimitSurfaceFactory::populateNonLinearEvaluators(LimitSurface & s,
     //  of which are potentially distinct.  Use the description of the
     //  vertex surface along with the face-varying indices assigned to
     //  determine the appropriate topological subset, then classify
-    //  and assign the Evaluator:
+    //  and assign the Surface:
     //
     if (fvarIsNonLinear) {
         //  We can re-use the vertex index buffer for face-varying indices:
         IndexBuffer & fvarIndices = vtxIndices;
 
-        int numFVarEvaluators = evalOptions.GetNumFVarEvaluators();
-        for (int i = 0; i < numFVarEvaluators; ++i) {
-            LimitSurface::Evaluator & fvarEval = s._fvarEval[i];
-
-            int fvarID = evalOptions.GetFVarEvaluatorID(i);
+        int numFVarSurfaces = surfaces.GetNumFVarSurfaces();
+        for (int i = 0; i < numFVarSurfaces; ++i) {
+            Surface & fvarSurf = *surfaces.GetFVarSurface(i);
+            int       fvarID   =  surfaces.GetFVarSurfaceID(i);
 
             //  WIP - revert to linear for temporarily unsupported cases:
             if (faceTopology.IsUnsupported()) {
-                assignLinearEvaluator(fvarEval, faceIndex, fvarID);
+                assignLinearSurface(fvarSurf, faceIndex, fvarID);
                 continue;
             }
 
@@ -614,25 +727,136 @@ LimitSurfaceFactory::populateNonLinearEvaluators(LimitSurface & s,
             //  Detect matching topology or regular and dispatch accordingly:
             SurfaceDescriptor fvarSurface(faceTopology, fvarIndices, vtxSurface);
 
-            if (fvarSurface.MatchesVertexTopology() && s._vtxEval._isValid) {
-                copyNonLinearEvaluator(fvarEval, s._vtxEval, fvarSurface);
+            if (fvarSurface.MatchesVertexTopology() && vtxSurfIsValid) {
+                Surface & vtxSurf = *surfaces.GetVertexSurface();
+                copyNonLinearSurface(fvarSurf, vtxSurf, fvarSurface);
             } else if (fvarSurface.IsRegular()) {
-                assignRegularEvaluator(fvarEval, fvarSurface);
+                assignRegularSurface(fvarSurf, fvarSurface);
             } else {
-                assignIrregularEvaluator(fvarEval, fvarSurface);
+                assignIrregularSurface(fvarSurf, fvarSurface);
             }
         }
     }
     return true;
 }
 
+//
+//  Public creation methods for instances of Surface:
+//
+bool
+LimitSurfaceFactory::CreateVertexSurface(Index faceIndex,
+        Surface * vtxSurface) const {
+
+    assert(vtxSurface);
+    //
+    //  This can be streamlined in future (no need to use full SurfaceSet):
+    //
+    SurfaceSet surfaces;
+
+    surfaces.vtxSurf  = vtxSurface;
+    surfaces.numSurfs = 1;
+
+    return populateAllSurfaces(faceIndex, surfaces);
+}
+
+bool
+LimitSurfaceFactory::CreateVaryingSurface(Index faceIndex,
+        Surface * varSurface) const {
+
+    assert(varSurface);
+    //
+    //  This can be streamlined in future (no need to use full SurfaceSet):
+    //
+    SurfaceSet surfaces;
+
+    surfaces.varSurf  = varSurface;
+    surfaces.numSurfs = 1;
+
+    return populateAllSurfaces(faceIndex, surfaces);
+}
+
+bool
+LimitSurfaceFactory::CreateFaceVaryingSurface(Index faceIndex,
+        Surface * fvarSurface, int fvarID) const {
+
+    assert(fvarSurface);
+    //
+    //  This can be streamlined in future (no need to use full SurfaceSet):
+    //
+    SurfaceSet surfaces;
+
+    surfaces.fvarSurfs    =  fvarSurface;
+    surfaces.fvarIDs      = &fvarID;
+    surfaces.numSurfs     = 1;
+    surfaces.numFVarSurfs = 1;
+
+    return populateAllSurfaces(faceIndex, surfaces);
+}
+
+bool
+LimitSurfaceFactory::CreateSurfaces(Index faceIndex,
+        Surface * vtxSurface,
+        Surface * varSurface,
+        Surface * fvarSurfaces,
+        int       fvarCount,
+        int const fvarIDs[]) const {
+
+    SurfaceSet surfaces;
+
+    surfaces.vtxSurf   = vtxSurface;
+    surfaces.varSurf   = varSurface;
+    surfaces.fvarSurfs = fvarSurfaces;
+    surfaces.fvarIDs   = &fvarIDs[0];
+
+    surfaces.numFVarSurfs = fvarCount;
+    surfaces.numSurfs     = fvarCount + (vtxSurface != 0) + (varSurface != 0);
+
+    return populateAllSurfaces(faceIndex, surfaces);
+}
+
+Surface *
+LimitSurfaceFactory::CreateVertexSurface(Index faceIndex) const {
+
+    Surface * s = new Surface();
+
+    if (CreateVertexSurface(faceIndex, s)) return s;
+
+    delete s;
+    return 0;
+}
+
+Surface *
+LimitSurfaceFactory::CreateVaryingSurface(Index faceIndex) const {
+
+    Surface * s = new Surface();
+
+    if (CreateVaryingSurface(faceIndex, s)) return s;
+
+    delete s;
+    return 0;
+}
+
+Surface *
+LimitSurfaceFactory::CreateFaceVaryingSurface(Index faceIndex, int fvID) const {
+
+    Surface * s = new Surface();
+
+    if (CreateFaceVaryingSurface(faceIndex, s, fvID)) return s;
+
+    delete s;
+    return 0;
+}
+
+//
+//  Public creation methods for an instance of LimitSurface:
+//
 bool
 LimitSurfaceFactory::Populate(LimitSurface & s,
         Index faceIndex,
         Evaluators const & evalOptions) const {
 
     //
-    //  Clear and re-initialize the existing instance before re-populating.
+    //  Clear and re-initialize the LimitSurface before re-populating:
     //
     int faceSize = getFaceSize(faceIndex);
     int numFVarEvaluators = evalOptions.GetNumFVarEvaluators();
@@ -644,35 +868,26 @@ LimitSurfaceFactory::Populate(LimitSurface & s,
 
     s.parameterize(Parameterization(_schemeType, faceSize));
 
-    //  Quickly reject faces with no limit (typically holes) -- some cases
-    //  require full topological inspection and will be rejected later:
-    if (!faceHasLimitLocal(faceIndex, faceSize)) {
-        return false;
-    }
+    //  Nothing more to do if no Evaluator specified:
+    int numEvaluators = evalOptions.GetNumEvaluators();
+    if (numEvaluators == 0) return false;
 
-    //  Determine if we have any non-linear cases to deal with -- which
-    //  require gathering and inspection of the full neighborhood around
-    //  the given face:
-    bool hasNonLinearEvaluators =
-                (evalOptions.CreateVertexEvaluator() && !_linearScheme) ||
-                (numFVarEvaluators && !_linearFVarInterp);
+    //
+    //  Convert the LimitSurface and specified Evaluators to a SurfaceSet
+    //  to be populated:
+    //
+    SurfaceSet surfaceSet;
 
-    bool hasLinearEvaluators =
-                 evalOptions.CreateVaryingEvaluator() ||
-                (evalOptions.CreateVertexEvaluator() && _linearScheme) ||
-                (numFVarEvaluators && _linearFVarInterp);
+    if (evalOptions.CreateVertexEvaluator())  surfaceSet.vtxSurf = &s._vtxEval;
+    if (evalOptions.CreateVaryingEvaluator()) surfaceSet.varSurf = &s._varEval;
+    if (numFVarEvaluators) {
+        surfaceSet.fvarSurfs = &s._fvarEval[0];
+        surfaceSet.fvarIDs   = evalOptions.GetFVarEvaluatorIDs();
+    }
+    surfaceSet.numFVarSurfs = numFVarEvaluators;
+    surfaceSet.numSurfs     = numEvaluators;
 
-    if (hasNonLinearEvaluators || _testNeighborhoodForLimit) {
-        if (!populateNonLinearEvaluators(s, faceIndex, evalOptions)) {
-            return false;
-        }
-    }
-    if (hasLinearEvaluators) {
-        if (!populateLinearEvaluators(s, faceIndex, evalOptions)) {
-            return false;
-        }
-    }
-    return true;
+    return populateAllSurfaces(faceIndex, surfaceSet);
 }
 
 LimitSurface *
@@ -693,6 +908,18 @@ LimitSurfaceFactory::Create(Index faceIndex,
         return 0;
     }
     return limitSurface;
+}
+
+bool
+LimitSurfaceFactory::Populate(LimitSurface & instance, Index faceIndex) const {
+
+    return Populate(instance, faceIndex, _limitOptions.GetEvaluators());
+}
+
+LimitSurface *
+LimitSurfaceFactory::Create(Index faceIndex) const {
+
+    return Create(faceIndex, _limitOptions.GetEvaluators());
 }
 
 } // end namespace Bfr

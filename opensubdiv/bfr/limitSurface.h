@@ -48,6 +48,129 @@ namespace Bfr {
 typedef Far::PatchTree const * IrregPatchPtr;
 
 //
+//  The Surface class encapsulates the limit surface for any of the data
+//  interpolation types (vertex, varying and face-varying) and provides
+//  the public interface for its evaluation:
+//
+class Surface {
+public:
+    Surface() { initialize(); }
+    ~Surface() { }
+
+public:
+    bool IsValid() const { return _isValid; }
+
+    Parameterization const & GetParameterization() const { return _param; }
+
+    int GetFaceSize() const  { return _param.GetFaceSize(); }
+
+    //
+    //  A LimitSurface is evaluated by preparing a set of "patch points"
+    //  required for subsequent evaluation methods.  The patch points
+    //  consist of a subset of the control vertices of the mesh in the
+    //  neighborhood of the face plus any additional points derived from
+    //  them that may be required to represent the limit surface as one
+    //  or more parametric patches.
+    //
+    int GetNumPatchPoints() const { return _numPatchPoints; }
+
+    template <class T, class U>
+    void PreparePatchPointValues(T const & meshVertices,
+                                 U       & patchPoints) const;
+
+    //  WIP - overload with references or optional pointer arguments?
+    template <class T, class U>
+    void Evaluate(float u, float v, T const & patchPoints, U & P) const;
+
+    template <class T, class U>
+    void Evaluate(float u, float v, T const & patchPoints, U & P,
+                  U & Du, U & Dv) const;
+
+    //
+    //  The "control vertices" identify the subset of vertices of the
+    //  mesh that contribute to the limit surface of the face (use of
+    //  "vertex" here is intended to emphasize their presence in the
+    //  mesh, unlike patch "points" which may be derived from them).
+    //  They will be a subset of the patch points and are intended for
+    //  combination with "limit stencils" that can (in future) be
+    //  evaluated below.
+    //
+    int GetNumControlVertices() const { return _numControlPoints; }
+
+    ConstIndexArray GetControlVertexIndices() const;
+
+    template <class T, class U>
+    void GatherControlVertexValues(T const & meshVerts,
+                                   U       & controlVerts) const;
+/*
+    int EvaluateStencils(float u, float v, float wP[],
+                                           float wDu[] = 0,
+                                           float wDv[] = 0) const;
+*/
+
+private:
+    friend class LimitSurface;
+    friend class LimitSurfaceFactory;
+
+    void clear();
+    void initialize();
+    void reinitialize() { if (_isValid) clear(), initialize(); }
+
+    //  WIP - now redundant given public equivalent, to be removed
+    bool isValid() const { return _isValid; }
+
+    //  WIP - internal support of overloaded eval methods (this may yet
+    //        replace them as the primary public eval method)
+    template <class T, class U>
+    void evaluate(float u, float v, T const & patchPoints,
+            U * P, U * Du = 0, U * Dv = 0) const;
+
+    //  Dealing directly with StencilTable may provide more flexibility
+    //  than the public method that applies it (like the PatchTable):
+    Far::StencilTableReal<float> const * getIrregPatchStencilTable() const;
+
+    //  Evaluation of basis functions and contributing points of internal
+    //  patch (implicit for a regular patch):
+    void evalRegularPatchBasis(float u, float v,
+            float wP[], float wDu[], float wDv[]) const;
+    ConstIndexArray evalIrregularPatchBasis(float u, float v,
+            float wP[], float wDu[], float wDv[]) const;
+    int evalMultiLinearPatchBasis(float u, float v,
+            float wP[4], float wDu[4], float wDv[4]) const;
+
+    //  Evaluation to combine basis functions and contributing points:
+    template <class T, class U>
+    void evalRegularPatch(float u, float v, T const & patchPoints,
+            U * P, U * Du = 0, U * Dv = 0) const;
+    template <class T, class U>
+    void evalIrregularPatch(float u, float v, T const & patchPoints,
+            U * P, U * Du = 0, U * Dv = 0) const;
+    template <class T, class U>
+    void evalMultiLinearPatch(float u, float v, T const & patchPoints,
+            U * P, U * Du = 0, U * Dv = 0) const;
+
+private:
+    Parameterization _param;
+
+    Vtr::internal::StackBuffer<Index,20,true> _controlPoints;
+
+    int _numControlPoints;
+    int _numPatchPoints;
+
+    unsigned int _isValid   : 1;
+    unsigned int _isRegular : 1;
+    unsigned int _isLinear  : 1;
+
+    //  WIP - consider a union here for the reg/irreg members:
+    unsigned int _irregOwner : 1;
+    IrregPatchPtr _irregPatch;
+
+    Far::PatchDescriptor::Type _regPatchType;
+    Far::PatchParam            _regPatchParam;
+};
+
+
+//
 //  LimitSurface is the main client-facing class that provides a potentially
 //  piecewise piece of limit surface associated with the base face of a mesh.
 //
@@ -73,6 +196,10 @@ typedef Far::PatchTree const * IrregPatchPtr;
 //
 class LimitSurface {
 public:
+    //  Backward compatibility for former nested class:
+    typedef Surface Evaluator;
+
+public:
     //  Default constructor may be used when repopulating the same instance:
     LimitSurface();
     ~LimitSurface();
@@ -89,124 +216,9 @@ public:
     bool HasVaryingEvaluator() const;
     bool HasFaceVaryingEvaluator(int index = 0) const;
 
-    class Evaluator;
     Evaluator const * GetVertexEvaluator() const;
     Evaluator const * GetVaryingEvaluator() const;
     Evaluator const * GetFaceVaryingEvaluator(int index = 0) const;
-
-    //
-    //  The local Evaluator class contains the evaluation interface used for
-    //  all data interpolation types (vertex, varying and face-varying):
-    //
-    class Evaluator {
-    public:
-        //
-        //  A LimitSurface is evaluated by preparing a set of "patch points"
-        //  required for subsequent evaluation methods.  The patch points
-        //  consist of a subset of the control vertices of the mesh in the
-        //  neighborhood of the face plus any additional points derived from
-        //  them that may be required to represent the limit surface as one
-        //  or more parametric patches.
-        //
-        int GetNumPatchPoints() const { return _numPatchPoints; }
-
-        template <class T, class U>
-        void PreparePatchPointValues(T const & meshVertices,
-                                     U       & patchPoints) const;
-
-        //  WIP - overload with references or optional pointer arguments?
-        template <class T, class U>
-        void Evaluate(float u, float v, T const & patchPoints, U & P) const;
-
-        template <class T, class U>
-        void Evaluate(float u, float v, T const & patchPoints, U & P,
-                      U & Du, U & Dv) const;
-
-        //
-        //  The "control vertices" identify the subset of vertices of the
-        //  mesh that contribute to the limit surface of the face (use of
-        //  "vertex" here is intended to emphasize their presence in the
-        //  mesh, unlike patch "points" which may be derived from them).
-        //  They will be a subset of the patch points and are intended for
-        //  combination with "limit stencils" that can (in future) be
-        //  evaluated below.
-        //
-        int GetNumControlVertices() const { return _numControlPoints; }
-
-        ConstIndexArray GetControlVertexIndices() const;
-
-        template <class T, class U>
-        void GatherControlVertexValues(T const & meshVerts,
-                                       U       & controlVerts) const;
-/*
-        int EvaluateStencils(float u, float v, float wP[],
-                                               float wDu[] = 0,
-                                               float wDv[] = 0) const;
-*/
-
-    private:
-        template <typename TYPE, unsigned int SIZE, bool POD_TYPE>
-        friend class Vtr::internal::StackBuffer;
-        friend class LimitSurface;
-        friend class LimitSurfaceFactory;
-
-        Evaluator() { initialize(); }
-        ~Evaluator() { }
-
-        void initialize();
-        void clear();
-
-        bool isValid() const { return _isValid; }
-
-        //  WIP - internal support of overloaded eval methods (this may yet
-        //        replace them as the primary public eval method)
-        template <class T, class U>
-        void evaluate(float u, float v, T const & patchPoints,
-                U * P, U * Du = 0, U * Dv = 0) const;
-
-        //  Dealing directly with StencilTable may provide more flexibility
-        //  than the public method that applies it (like the PatchTable):
-        Far::StencilTableReal<float> const * getIrregPatchStencilTable() const;
-
-        //  Evaluation of basis functions and contributing points of internal
-        //  patch (implicit for a regular patch):
-        void evalRegularPatchBasis(float u, float v,
-                float wP[], float wDu[], float wDv[]) const;
-        ConstIndexArray evalIrregularPatchBasis(float u, float v,
-                float wP[], float wDu[], float wDv[]) const;
-        int evalMultiLinearPatchBasis(float u, float v,
-                float wP[4], float wDu[4], float wDv[4]) const;
-
-        //  Evaluation to combine basis functions and contributing points:
-        template <class T, class U>
-        void evalRegularPatch(float u, float v, T const & patchPoints,
-                U * P, U * Du = 0, U * Dv = 0) const;
-        template <class T, class U>
-        void evalIrregularPatch(float u, float v, T const & patchPoints,
-                U * P, U * Du = 0, U * Dv = 0) const;
-        template <class T, class U>
-        void evalMultiLinearPatch(float u, float v, T const & patchPoints,
-                U * P, U * Du = 0, U * Dv = 0) const;
-
-    private:
-        Parameterization _param;
-
-        Vtr::internal::StackBuffer<Index,20,true> _controlPoints;
-
-        int _numControlPoints;
-        int _numPatchPoints;
-
-        unsigned int _isValid   : 1;
-        unsigned int _isRegular : 1;
-        unsigned int _isLinear  : 1;
-
-        //  WIP - consider a union here for the reg/irreg members:
-        unsigned int _irregOwner : 1;
-        IrregPatchPtr _irregPatch;
-
-        Far::PatchDescriptor::Type _regPatchType;
-        Far::PatchParam            _regPatchParam;
-    };
 
 protected:
     friend class LimitSurfaceFactory;
@@ -264,14 +276,14 @@ LimitSurface::GetFaceVaryingEvaluator(int index) const {
 //  Inline methods and templates for gathering control points:
 //
 inline ConstIndexArray
-Evaluator::GetControlVertexIndices() const {
+Surface::GetControlVertexIndices() const {
     return ConstIndexArray(&_controlPoints[0], (int)_controlPoints.GetSize());
 }
 
 template <class T, class U>
 void
-Evaluator::GatherControlVertexValues(T const & meshPoints,
-                                     U       & controlPoints) const {
+Surface::GatherControlVertexValues(T const & meshPoints,
+                                   U       & controlPoints) const {
     for (int i = 0; i < _numControlPoints; ++i) {
         //  WIP - cannot guarantee that type T is copyable here, so must
         //        use Clear() and AddWithWeight():
@@ -282,8 +294,8 @@ Evaluator::GatherControlVertexValues(T const & meshPoints,
 
 template <class T, class U>
 void
-Evaluator::PreparePatchPointValues(T const & meshPoints,
-                                   U       & patchPoints) const {
+Surface::PreparePatchPointValues(T const & meshPoints,
+                                 U       & patchPoints) const {
 
     GatherControlVertexValues(meshPoints, patchPoints);
 
@@ -298,8 +310,8 @@ Evaluator::PreparePatchPointValues(T const & meshPoints,
 //
 template <class T, class U>
 void
-Evaluator::evalRegularPatch(float u, float v, T const & patchPoints,
-                            U * P, U * Du, U * Dv) const {
+Surface::evalRegularPatch(float u, float v, T const & patchPoints,
+                          U * P, U * Du, U * Dv) const {
     //
     //  Regular basis evaluation simply returns weights for use with
     //  the entire set of patch control points:
@@ -329,8 +341,8 @@ Evaluator::evalRegularPatch(float u, float v, T const & patchPoints,
 
 template <class T, class U>
 void
-Evaluator::evalIrregularPatch(float u, float v, T const & patchPoints,
-                              U * P, U * Du, U * Dv) const {
+Surface::evalIrregularPatch(float u, float v, T const & patchPoints,
+                            U * P, U * Du, U * Dv) const {
     //
     //  Non-linear irregular basis evaluation returns both the weights
     //  and the corresponding points of a sub-patch defined by a subset
@@ -363,8 +375,8 @@ Evaluator::evalIrregularPatch(float u, float v, T const & patchPoints,
 
 template <class T, class U>
 void
-Evaluator::evalMultiLinearPatch(float u, float v, T const & patchPoints,
-                                U * P, U * Du, U * Dv) const {
+Surface::evalMultiLinearPatch(float u, float v, T const & patchPoints,
+                              U * P, U * Du, U * Dv) const {
     //
     //  Linear evaluation of irregular N-sided faces (usually for varying
     //  or linear face-varying cases) quadrangulates the face implicitly
@@ -407,8 +419,8 @@ Evaluator::evalMultiLinearPatch(float u, float v, T const & patchPoints,
 
 template <class T, class U>
 inline void
-Evaluator::evaluate(float u, float v, T const & patchPoints,
-                    U * P, U * Du, U * Dv) const {
+Surface::evaluate(float u, float v, T const & patchPoints,
+                  U * P, U * Du, U * Dv) const {
 
     if (_isRegular) {
         evalRegularPatch(u, v, patchPoints, P, Du, Dv);
@@ -421,15 +433,15 @@ Evaluator::evaluate(float u, float v, T const & patchPoints,
 
 template <class T, class U>
 inline void
-Evaluator::Evaluate(float u, float v, T const & patchPoints,
-                    U & P, U & Du, U & Dv) const {
+Surface::Evaluate(float u, float v, T const & patchPoints,
+                  U & P, U & Du, U & Dv) const {
 
     evaluate(u, v, patchPoints, &P, &Du, &Dv);
 }
 
 template <class T, class U>
 inline void
-Evaluator::Evaluate(float u, float v, T const & patchPoints, U & P) const {
+Surface::Evaluate(float u, float v, T const & patchPoints, U & P) const {
 
     evaluate(u, v, patchPoints, &P);
 }
