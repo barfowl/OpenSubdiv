@@ -55,7 +55,7 @@ typedef Far::PatchTree const * IrregPatchPtr;
 class Surface {
 public:
     Surface() { initialize(); }
-    ~Surface() { }
+    ~Surface() { clear(); }
 
 public:
     bool IsValid() const { return _isValid; }
