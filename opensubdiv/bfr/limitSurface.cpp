@@ -54,7 +54,10 @@ Surface::initialize() {
 void
 Surface::clear() {
 
-    if (_irregOwner) delete _irregPatch;
+    if (_irregOwner) {
+        delete _irregPatch;
+        _irregPatch = 0;
+    }
 }
 
 //
