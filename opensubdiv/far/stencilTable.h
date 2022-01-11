@@ -41,6 +41,7 @@ namespace Far {
 
 //  Forward declarations for friends:
 class PatchTableBuilder;
+class PatchTreeBuilder;
 
 template <typename REAL> class StencilTableFactoryReal;
 template <typename REAL> class LimitStencilTableFactoryReal;
@@ -259,6 +260,7 @@ protected:
 
     friend class StencilTableFactoryReal<REAL>;
     friend class Far::PatchTableBuilder;
+    friend class PatchTreeBuilder;
 
     int _numControlVertices;              // number of control vertices
 

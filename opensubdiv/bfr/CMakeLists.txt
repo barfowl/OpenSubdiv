@@ -1,5 +1,5 @@
 #
-#   Copyright 2013 Pixar
+#   Copyright 2021
 #
 #   Licensed under the Apache License, Version 2.0 (the "Apache License")
 #   with the following modification; you may not use this file except in
@@ -23,73 +23,61 @@
 #
 
 #-------------------------------------------------------------------------------
+
+#-------------------------------------------------------------------------------
 # source & headers
 set(SOURCE_FILES
-    bilinearPatchBuilder.cpp
-    catmarkPatchBuilder.cpp
-    error.cpp
-    loopPatchBuilder.cpp
-    patchBasis.cpp
-    patchBuilder.cpp
-    patchDescriptor.cpp
-    patchMap.cpp
-    patchTable.cpp
-    patchTableFactory.cpp
-    patchTree.cpp
-    patchTreeFactory.cpp
-    ptexIndices.cpp
-    stencilTable.cpp
-    stencilTableFactory.cpp
-    stencilBuilder.cpp
-    topologyDescriptor.cpp
-    topologyRefiner.cpp
-    topologyRefinerFactory.cpp
+     cornerTopology.cpp
+     faceTopology.cpp
+     faceSurface.cpp
+     hash.cpp
+     irregularPatchBuilder.cpp
+     parameterization.cpp
+     refinerSurfaceFactory.cpp
+     regularPatchBuilder.cpp
+     surface.cpp
+     surfaceFactory.cpp
+     tessellation.cpp
+     topologyCache.cpp
+     vertexTopology.cpp
 )
 
 set(PRIVATE_HEADER_FILES
-    bilinearPatchBuilder.h
-    catmarkPatchBuilder.h
-    loopPatchBuilder.h
-    patchBasis.h
-    patchBuilder.h
-    patchTree.h
-    patchTreeFactory.h
-    sparseMatrix.h
-    stencilBuilder.h
+     cornerTag.h
+     cornerTopology.h
+     faceTopology.h
+     faceSurface.h
+     hash.h
+     irregularPatchBuilder.h
+     regularPatchBuilder.h
 )
 
 set(PUBLIC_HEADER_FILES
-    error.h
-    patchDescriptor.h
-    patchParam.h
-    patchMap.h
-    patchTable.h
-    patchTableFactory.h
-    primvarRefiner.h
-    ptexIndices.h
-    stencilTable.h
-    stencilTableFactory.h
-    topologyDescriptor.h
-    topologyLevel.h
-    topologyRefiner.h
-    topologyRefinerFactory.h
-    types.h
+     parameterization.h
+     refinerSurfaceFactory.h
+     surface.h
+     surfaceFactory.h
+     tessellation.h
+     topologyCache.h
+     types.h
+     vertexTopology.h
 )
 
 set(DOXY_HEADER_FILES ${PUBLIC_HEADER_FILES})
 
-#-------------------------------------------------------------------------------
+include_directories("${CMAKE_CURRENT_BINARY_DIR}")
+
 if (NOT NO_LIB)
 
     # Compile objs first for both the CPU and GPU libs -----
-    add_library(far_obj
+    add_library(bfr_obj
         OBJECT
             ${SOURCE_FILES}
             ${PRIVATE_HEADER_FILES}
             ${PUBLIC_HEADER_FILES}
     )
 
-    set_target_properties(far_obj
+    set_target_properties(bfr_obj
         PROPERTIES
             FOLDER "opensubdiv"
     )
@@ -103,7 +91,7 @@ install(
     FILES
         ${PUBLIC_HEADER_FILES}
     DESTINATION
-        "${CMAKE_INCDIR_BASE}/far"
+        "${CMAKE_INCDIR_BASE}/bfr"
     PERMISSIONS
         OWNER_READ
         GROUP_READ

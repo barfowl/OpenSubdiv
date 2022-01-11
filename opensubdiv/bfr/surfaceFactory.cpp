@@ -1,0 +1,999 @@
+//
+//   Copyright 2021
+//
+//   Licensed under the Apache License, Version 2.0 (the "Apache License")
+//   with the following modification; you may not use this file except in
+//   compliance with the Apache License and the following modification to it:
+//   Section 6. Trademarks. is deleted and replaced with:
+//
+//   6. Trademarks. This License does not grant permission to use the trade
+//      names, trademarks, service marks, or product names of the Licensor
+//      and its affiliates, except as required to comply with Section 4(c) of
+//      the License and to reproduce the content of the NOTICE file.
+//
+//   You may obtain a copy of the Apache License at
+//
+//       http://www.apache.org/licenses/LICENSE-2.0
+//
+//   Unless required by applicable law or agreed to in writing, software
+//   distributed under the Apache License with the above modification is
+//   distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+//   KIND, either express or implied. See the Apache License for the specific
+//   language governing permissions and limitations under the Apache License.
+//
+
+#include "../bfr/surfaceFactory.h"
+#include "../bfr/surface.h"
+#include "../bfr/topologyCache.h"
+#include "../bfr/faceTopology.h"
+#include "../bfr/faceSurface.h"
+#include "../bfr/regularPatchBuilder.h"
+#include "../bfr/irregularPatchBuilder.h"
+#include "../far/patchTree.h"
+
+#include <map>
+#include <cstdio>
+
+namespace OpenSubdiv {
+namespace OPENSUBDIV_VERSION {
+
+namespace Bfr {
+//
+//  DEBUG - some static variables to keep track of a few things...
+//
+//#define _BFR_DEBUG_TOP_TYPE_STATS
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+static int __numLinearPatches     = 0;
+static int __numExpRegularPatches = 0;
+static int __numRegularPatches    = 0;
+static int __numIrregularPatches  = 0;
+static int __numIrregularUncached = 0;
+static int __numIrregularInCache  = 0;
+#endif
+
+//
+//  Definition of the private/nested SurfaceSet class:
+//
+//  This class (essentially a struct) encapsulates a clients specification
+//  of a set of multiple surfaces and their intended interpolation types
+//  (vertex, varying, and face-varying).  The multiple public creation
+//  methods to request common subsets of surfaces all populate an instance
+//  of SurfaceSet for internal use.
+//
+class SurfaceFactory::SurfaceSet {
+public:
+    SurfaceSet() : numSurfs(0), numFVarSurfs(0),
+                   vtxSurf(0), varSurf(0),
+                   fvarSurfs(0), fvarSurfPtrs(0), fvarIDs(0) { }
+
+public:
+    //  Assignment to member variable is intended to be explicit:
+    int numSurfs;
+    int numFVarSurfs;
+
+    Surface  * vtxSurf;
+    Surface  * varSurf;
+    Surface  * fvarSurfs;
+    Surface ** fvarSurfPtrs;
+    int const  * fvarIDs;
+
+    void InitializeSurfaces() const {
+        if (vtxSurf) vtxSurf->reinitialize();
+        if (varSurf) varSurf->reinitialize();
+        for (int i = 0; i < numFVarSurfs; ++i) {
+            GetFVarSurface(i)->reinitialize();
+        }
+    }
+
+public:
+    //  Access to member variables is preferred through these methods,
+    //  which may require a little more logic than expected:
+    int GetNumSurfaces() const { return numSurfs; }
+
+    bool      HasVertexSurface() const { return (vtxSurf != 0); }
+    Surface * GetVertexSurface() const { return vtxSurf; }
+
+    bool      HasVaryingSurface() const { return (varSurf != 0); }
+    Surface * GetVaryingSurface() const { return varSurf; }
+
+    bool      HasFVarSurfaces()       const { return numFVarSurfs > 0; }
+    int       GetNumFVarSurfaces()    const { return numFVarSurfs; }
+    int       GetFVarSurfaceID(int i) const { return fvarIDs ? fvarIDs[i] : i; }
+    Surface * GetFVarSurface(int i)   const {
+        //  Note that FVar Surfaces may be specified either as an
+        //  array of Surfaces or an array of Surface pointers:
+        return fvarSurfs ? (fvarSurfs + i) : fvarSurfPtrs[i];
+    }
+};
+
+
+//
+//  Main constructor and destructor:
+//
+SurfaceFactory::SurfaceFactory(
+    Sdc::SchemeType schemeType,
+    Sdc::Options    schemeOptions,
+    Options         limitOptions) :
+        _schemeType(schemeType),
+        _schemeOptions(schemeOptions),
+        _limitOptions(limitOptions) {
+
+    //  Initialize members dependent on subdivision topology:
+    _regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(_schemeType);
+
+    _linearScheme =
+        (Sdc::SchemeTypeTraits::GetLocalNeighborhoodSize(_schemeType) == 0);
+
+    _linearFVarInterp = _linearScheme ||
+                       (_schemeOptions.GetFVarLinearInterpolation() ==
+                                 Sdc::Options::FVAR_LINEAR_ALL);
+
+    //  Initialize members related to the "face has limit" test:
+    _rejectSmoothBoundariesForLimit = !_linearScheme &&
+                       (_schemeOptions.GetVtxBoundaryInterpolation() ==
+                                 Sdc::Options::VTX_BOUNDARY_NONE);
+
+    _rejectIrregularFacesForLimit = !_linearScheme && (_regFaceSize == 3);
+
+    _testNeighborhoodForLimit = _rejectSmoothBoundariesForLimit ||
+                                _rejectIrregularFacesForLimit;
+}
+
+inline TopologyCache *
+SurfaceFactory::getTopologyCache() const {
+
+    if (_limitOptions.ExternalTopologyCache()) {
+        return _limitOptions.ExternalTopologyCache();
+    } else if (!_limitOptions.DisableTopologyCache()) {
+        return getInternalTopologyCache();
+    }
+    return 0;
+}
+
+SurfaceFactory::~SurfaceFactory() {
+
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+//  DEBUG - report and reset inventory:
+printf("SurfaceFactory destructor:\n");
+printf("    __numLinearPatches     = %6d\n", __numLinearPatches);
+printf("    __numExpRegularPatches = %6d\n", __numExpRegularPatches);
+printf("    __numRegularPatches    = %6d\n", __numRegularPatches);
+printf("    __numIrregularPatches  = %6d\n", __numIrregularPatches);
+if (!_limitOptions.DisableTopologyCache()) {
+printf("\n");
+printf("    __numIrregularUncached = %6d\n", __numIrregularUncached);
+printf("    __numIrregularInCache  = %6d\n", __numIrregularInCache);
+}
+__numLinearPatches     = 0;
+__numExpRegularPatches = 0;
+__numRegularPatches    = 0;
+__numIrregularPatches  = 0;
+__numIrregularUncached = 0;
+__numIrregularInCache  = 0;
+#endif
+}
+
+//
+//  Notes on presence/absence of a limit surface...
+//
+//  Unfortunately it is not trivial to detect when a face does not have
+//  an associated limit surface.  There are a few cases when a face will
+//  not have a limit surface -- divided into simple and complex cases:
+//
+//      - simple:
+//          - the face is a hole
+//          - the face is degenerate (< 3 edges)
+//      - complex:
+//          - boundary interpolation option "none" is assigned:
+//              - in which case some, not all, boundary faces have no limit
+//          - Loop subdivision is applied to non-triangles
+//
+//  The simple cases are, as the name suggests, simple.  But the complex
+//  cases require a greater inspection of the topological neighborhood of
+//  the face.
+//
+//  With boundary faces when "boundary none" is set (not very often) it is
+//  not enough to test if a face is a boundary -- if a boundary face has all
+//  of its incident boundary edges (i.e. all boundary edges incident to all
+//  of its face-vertices) then the boundary face has a limit surface.  This
+//  requires a complete topological description of each corner of the face.
+//
+//  Similarly, the case of Loop subdivision in the presence of non-triangles
+//  required determining if any corner of the face has an incidendent face
+//  that is not a triangle.
+//
+//  The method here inspects a corner at a time and tries to reject a face
+//  without a limit surface as soon as possible. But most cases are going to
+//  require inspection of all corners -- and that same inspection is likely
+//  to be applied later when constructing the limit.
+//
+inline bool
+SurfaceFactory::faceHasLimitSimple(Index faceIndex, int faceSize) const {
+
+    return (faceSize >= 3) && !isFaceHole(faceIndex);
+}
+
+bool
+SurfaceFactory::faceHasLimitNeighborhood(FaceTopology const & topology) const {
+
+    assert(_testNeighborhoodForLimit);
+
+    CombinedTag tag = topology.GetTag();
+
+    if ((_rejectSmoothBoundariesForLimit && tag.HasNonSharpBoundary()) ||
+        (_rejectIrregularFacesForLimit   && tag.HasIrregularFaceSizes())) {
+        return false;
+    }
+    return true;
+}
+
+bool
+SurfaceFactory::faceHasLimitNeighborhood(Index faceIndex) const {
+
+    assert(_testNeighborhoodForLimit);
+
+    //
+    //  The FaceTopology was not available, and rather than construct it
+    //  in its entirety, determine a corner at a time and return if any
+    //  corner warrants it:
+    //
+    typedef Vtr::internal::StackBuffer<Index,32,true> CornerIndexBuffer;
+
+    CornerIndexBuffer cFaceVertIndices;
+
+    CornerTopology   cTop;
+    VertexTopology & vTop = cTop.GetVertexTopology();
+
+    int faceSize = getFaceSize(faceIndex);
+    for (int i = 0; i < faceSize; ++i) {
+        //  Have the subclass load VertexTopology and finalize:
+        cTop.Initialize(faceSize, _regFaceSize);
+
+        int faceInRing = populateFaceVertexTopology(faceIndex, i, &vTop);
+        if (faceInRing < 0) return false;
+
+        cTop.Finalize(faceInRing);
+
+        //  Inspect the tag to reject cases with no limit surface:
+        CornerTag cTag = cTop.GetTag();
+
+        if (_rejectSmoothBoundariesForLimit) {
+            if (cTag.IsUnOrdered()) {
+                //  Need to load face-vertices, connect faces and inspect...
+                cFaceVertIndices.SetSize(cTop.GetNumFaceVertices());
+
+                if (getFaceVertexIncidentFaceVertexIndices(
+                        faceIndex, i, cFaceVertIndices) < 0) return false;
+
+                cTop.ConnectUnOrderedFaces(cFaceVertIndices);
+            }
+            if (cTag.HasNonSharpBoundary()) return false;
+        }
+        if (_rejectIrregularFacesForLimit) {
+            if (cTag.HasIrregularFaceSizes()) return false;
+        }
+    }
+    return true;
+}
+
+bool
+SurfaceFactory::FaceHasLimitSurface(Index faceIndex) const {
+
+    if (!faceHasLimitSimple(faceIndex, getFaceSize(faceIndex))) {
+        return false;
+    }
+    if (_testNeighborhoodForLimit) {
+        if (!isFaceTopologyRegular(faceIndex, 0)) {
+            return faceHasLimitNeighborhood(faceIndex);
+        }
+    }
+    return true;
+}
+
+Parameterization
+SurfaceFactory::GetFaceParameterization(Index faceIndex) const {
+
+    return Parameterization(_schemeType, getFaceSize(faceIndex));
+}
+
+//
+//  Methods supporting construction of linear, regular and irregular patches:
+//
+void
+SurfaceFactory::assignLinearSurface(Surface * surfacePtr,
+        Index faceIndex, int fvarIndex) const {
+
+    Surface & surface = *surfacePtr;
+
+    //  Initialize instance members from the associated irregular patch:
+    int faceSize  = getFaceSize(faceIndex);
+
+    surface._param = Parameterization(_schemeType, faceSize);
+
+    surface._isRegular = (faceSize == _regFaceSize);
+    surface._isLinear  = true;
+
+    surface._regPatchType = (_regFaceSize == 4)
+                       ?  Far::PatchDescriptor::QUADS
+                       :  Far::PatchDescriptor::TRIANGLES;
+    surface._regPatchParam.Clear();
+
+    //
+    //  Finally, gather patch control points from the appropriate indices:
+    //
+    surface._numControlPoints = faceSize;
+    surface._numPatchPoints   = faceSize;
+
+    surface._controlPoints.SetSize(surface._numControlPoints);
+    int count = 0;
+    if (fvarIndex < 0) {
+        count = getFaceVertexIndices(faceIndex, &surface._controlPoints[0]);
+    } else {
+        count = getFaceFVarValueIndices(faceIndex, fvarIndex,
+                                        &surface._controlPoints[0]);
+    }
+    //  If subclass fails to get indices, Surface will remain invalid
+    if (count < faceSize) return;
+
+    surface._isValid = true;
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+__numLinearPatches ++;
+#endif
+}
+
+void
+SurfaceFactory::assignRegularSurface(Surface * surfacePtr,
+        Index const patchPoints[]) const {
+
+    Surface & surface = *surfacePtr;
+
+    //
+    //  Assign the parameterization and discriminants first:
+    //
+    surface._param = Parameterization(_schemeType, _regFaceSize);
+
+    surface._isRegular = true;
+    surface._isLinear  = false;
+
+    //
+    //  Assemble the regular patch:
+    //
+    int boundaryMask =
+            RegularPatchBuilder::GetBoundaryMask(_regFaceSize, patchPoints);
+
+    surface._regPatchType = RegularPatchBuilder::GetPatchType(_regFaceSize);
+    surface._regPatchParam.Set(0, 0, 0, 0, 0, boundaryMask, 0, true);
+
+    //
+    //  Copy the patch control points from the given indices:
+    //
+    int patchSize = RegularPatchBuilder::GetPatchSize(_regFaceSize);
+
+    surface._numControlPoints = patchSize;
+    surface._numPatchPoints   = patchSize;
+
+    surface._controlPoints.SetSize(surface._numControlPoints);
+
+    Index const * pSrc = patchPoints;
+    Index       * pDst = &surface._controlPoints[0];
+
+    //  Remember to replace negative indices in boundary patches:
+    if (boundaryMask) {
+        //  Consider delegating this task to the RegularPatchBuilder:
+        Index pPhantom = pSrc[5];
+        assert(pPhantom >= 0);
+        for (int i = 0; i < patchSize; ++i) {
+            pDst[i] = (pSrc[i] < 0) ? pPhantom : pSrc[i];
+        }
+    } else {
+        std::memcpy(pDst, pSrc, patchSize * sizeof(Index));
+    }
+    surface._isValid = true;
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+__numExpRegularPatches ++;
+#endif
+}
+
+void
+SurfaceFactory::assignRegularSurface(Surface * surfacePtr,
+        FaceSurface const & descriptor) const {
+
+    Surface & surface = *surfacePtr;
+
+    //
+    //  Assign the parameterization and discriminants first:
+    //
+    surface._param = Parameterization(_schemeType, _regFaceSize);
+
+    surface._isRegular = true;
+    surface._isLinear  = false;
+
+    //
+    //  Assemble the regular patch:
+    //
+    RegularPatchBuilder builder(descriptor);
+
+    int boundaryMask = builder.GetPatchParamBoundaryMask();
+
+    surface._regPatchType = builder.GetPatchType();
+    surface._regPatchParam.Set(0, 0, 0, 0, 0, boundaryMask, 0, true);
+
+    //
+    //  Gather the patch control points from the given indices:
+    //
+    surface._numControlPoints = builder.GetNumControlVertices();
+    surface._numPatchPoints   = surface._numControlPoints;
+
+    surface._controlPoints.SetSize(surface._numControlPoints);
+    builder.GatherControlVertexIndices(&surface._controlPoints[0]);
+
+    surface._isValid = true;
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+__numRegularPatches ++;
+#endif
+}
+
+void
+SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
+        FaceSurface const & descriptor) const {
+
+    Surface & surface = *surfacePtr;
+
+    //
+    //  Assign the parameterization and discriminants first:
+    //
+    surface._param = Parameterization(_schemeType, descriptor.GetFaceSize());
+
+    surface._isRegular = false;
+    surface._isLinear  = false;
+
+    //
+    //  Construct a new irregular patch or identify one from the cache:
+    //
+    IrregularPatchBuilder::Options buildOptions;
+    buildOptions.sharpLevel      = _limitOptions.MaxLevelPrimary();
+    buildOptions.smoothLevel     = _limitOptions.MaxLevelSecondary();
+    buildOptions.doublePrecision = _limitOptions.UseDoublePrecision();
+    buildOptions.stencilTables   = _limitOptions.UseStencilTables();
+
+    IrregularPatchBuilder builder(descriptor, buildOptions);
+
+    TopologyCache * topCachePtr = getTopologyCache();
+    if (topCachePtr == 0) {
+        surface._irregPatch = builder.Build();
+        surface._irregOwner = true;
+    } else {
+        bool isNew    = false;
+        bool isCached = false;
+        surface._irregPatch = builder.Find(topCachePtr, &isNew, &isCached);
+        surface._irregOwner = isNew && !isCached;
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+__numIrregularInCache += isCached && isNew;
+#endif
+    }
+
+    //
+    //  Gather the patch control points from the given indices:
+    //
+    surface._numControlPoints = surface._irregPatch->GetNumControlPoints();
+    surface._numPatchPoints   = surface._irregPatch->GetNumPointsTotal();
+
+    surface._controlPoints.SetSize(surface._numControlPoints);
+    builder.GatherControlVertexIndices(&surface._controlPoints[0]);
+
+    surface._isValid = true;
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+__numIrregularPatches  ++;
+__numIrregularUncached += surface._irregOwner;
+#endif
+}
+
+void
+SurfaceFactory::copyNonLinearSurface(
+        Surface           * surfaceDstPtr,
+        Surface const     & surfaceSrc,
+        FaceSurface const & descriptor) const {
+
+    Surface & surfaceDst = *surfaceDstPtr;
+
+    //  Should be creating a linear patch directly rather than copying:
+    assert(!surfaceSrc._isLinear);
+
+    //
+    //  Assign the topological fields of the patch first:
+    //
+    surfaceDst._param = surfaceSrc._param;
+
+    surfaceDst._isLinear  = false;
+    surfaceDst._isRegular = surfaceSrc._isRegular;
+
+    surfaceDst._numControlPoints = surfaceSrc._numControlPoints;
+    surfaceDst._numPatchPoints   = surfaceSrc._numPatchPoints;
+
+    surfaceDst._controlPoints.SetSize(surfaceSrc._numControlPoints);
+
+    //
+    //  Assign regular/irregular fields and gather control points:
+    //
+    if (surfaceDst._isRegular) {
+        surfaceDst._regPatchType  = surfaceSrc._regPatchType;
+        surfaceDst._regPatchParam = surfaceSrc._regPatchParam;
+
+        RegularPatchBuilder builder(descriptor);
+        assert(builder.GetNumControlVertices() == surfaceDst._numControlPoints);
+
+        builder.GatherControlVertexIndices(&surfaceDst._controlPoints[0]);
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+__numRegularPatches ++;
+#endif
+    } else {
+        surfaceDst._irregPatch = surfaceSrc._irregPatch;
+        surfaceDst._irregOwner = false;
+
+        IrregularPatchBuilder builder(descriptor);
+        assert(builder.GetNumControlVertices() == surfaceDst._numControlPoints);
+
+        builder.GatherControlVertexIndices(&surfaceDst._controlPoints[0]);
+#ifdef _BFR_DEBUG_TOP_TYPE_STATS
+__numIrregularPatches  ++;
+#endif
+    }
+
+    surfaceDst._isValid = true;
+}
+
+
+//
+//  Methods to deal with topology assembly and inspection:
+//
+//  Note the difference between the "init" and "gather" methods:  "init"
+//  fully resolves and initializes the topology by gathering face indices
+//  locally and dealing with unordered faces if present, while the "gather"
+//  method simply gathers the corner information -- allowing indices to be
+//  provided for further use if needed.
+//
+bool
+SurfaceFactory::initFaceNeighborhoodTopology(Index faceIndex,
+        FaceTopology * faceTopologyPtr) const {
+
+    FaceTopology & topology = *faceTopologyPtr;
+
+    if (!gatherFaceNeighborhoodTopology(faceIndex, &topology)) {
+        return false;
+    }
+    if (!topology.HasUnOrderedCorners()) {
+        return true;
+    }
+
+    //  Gather the indices to determine topology between unordered faces:
+    typedef Vtr::internal::StackBuffer<Index,72,true> IndexBuffer;
+
+    IndexBuffer indices(topology._numFaceVertsTotal);
+    if (gatherFaceNeighborhoodIndices(faceIndex, topology, -1, indices) < 0) {
+        return false;
+    }
+    topology.ResolveUnOrderedCorners(indices);
+    return true;
+}
+
+bool
+SurfaceFactory::gatherFaceNeighborhoodTopology(Index faceIndex,
+        FaceTopology * faceTopologyPtr) const {
+
+    FaceTopology & faceTopology = *faceTopologyPtr;
+
+    int N = getFaceSize(faceIndex);
+
+    faceTopology.Initialize(N);
+
+    for (int i = 0; i < N; ++i) {
+        CornerTopology & cornerTop = faceTopology.GetTopology(i);
+        VertexTopology & vertexTop = cornerTop.GetVertexTopology();
+
+        cornerTop.Initialize(N, _regFaceSize);
+
+        //  Subclass returning negative here indicates unsupported features
+        //  or some other kind of failure:
+        int faceInRing = populateFaceVertexTopology(faceIndex, i, &vertexTop);
+        if (faceInRing < 0) return false;
+
+        cornerTop.Finalize(faceInRing);
+    }
+
+    faceTopology.Finalize();
+
+    return true;
+}
+
+int
+SurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
+        FaceTopology const & faceTopology,
+        int                  vtxOrFVarID,
+        Index                controlIndices[]) const {
+
+    int faceSize = faceTopology.GetFaceSize();
+
+    Index * indices  = controlIndices;
+    int     nIndices = 0;
+
+    for (int i = 0; i < faceSize; ++i) {
+        int numFaceVerts = (vtxOrFVarID < 0) ?
+                getFaceVertexIncidentFaceVertexIndices(faceIndex, i,
+                        indices) :
+                getFaceVertexIncidentFaceFVarValueIndices(faceIndex, i,
+                        vtxOrFVarID, indices);
+
+        if (numFaceVerts != faceTopology.GetNumFaceVertices(i)) {
+            return -1;
+        }
+
+        indices  += numFaceVerts;
+        nIndices += numFaceVerts;
+    }
+    return nIndices;
+}
+
+//
+//  Main internal methods to populate set of limit Surfaces:
+//
+bool
+SurfaceFactory::populateAllSurfaces(Index faceIndex,
+        SurfaceSet * surfaceSetPtr) const {
+
+    SurfaceSet & surfaces = *surfaceSetPtr;
+
+    //  Abort if no Surfaces are specified to populate:
+    if (surfaces.GetNumSurfaces() == 0) {
+        return false;
+    }
+
+    //
+    //  Be sure to re-initialize all Surfaces up-front, rather than
+    //  deferring it to the assignment of each.  A failure of any one
+    //  surface may leave others unvisited -- leaving it unchanged
+    //  from previous use.
+    //
+    surfaces.InitializeSurfaces();
+
+    //  Quickly reject faces with no limit (typically holes) -- some cases
+    //  require full topological inspection and will be rejected later:
+    if (!faceHasLimitSimple(faceIndex, getFaceSize(faceIndex))) {
+        return false;
+    }
+
+    //  Determine if we have any non-linear cases to deal with -- which
+    //  require gathering and inspection of the full neighborhood around
+    //  the given face:
+    int numFVarSurfaces = surfaces.GetNumFVarSurfaces();
+
+    bool hasNonLinearSurfaces =
+                (surfaces.HasVertexSurface() && !_linearScheme) ||
+                (numFVarSurfaces && !_linearFVarInterp);
+
+    bool hasLinearSurfaces =
+                 surfaces.HasVaryingSurface() ||
+                (surfaces.HasVertexSurface() && _linearScheme) ||
+                (numFVarSurfaces && _linearFVarInterp);
+
+    if (hasNonLinearSurfaces || _testNeighborhoodForLimit) {
+        if (!populateNonLinearSurfaces(faceIndex, &surfaces)) {
+            return false;
+        }
+    }
+    if (hasLinearSurfaces) {
+        if (!populateLinearSurfaces(faceIndex, &surfaces)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool
+SurfaceFactory::populateLinearSurfaces(Index faceIndex,
+        SurfaceSet * surfaceSetPtr) const {
+
+    SurfaceSet & surfaces = *surfaceSetPtr;
+
+    if (surfaces.HasVaryingSurface()) {
+        assignLinearSurface(surfaces.GetVaryingSurface(), faceIndex, -1);
+    }
+
+    if (_linearScheme && surfaces.HasVertexSurface()) {
+        assignLinearSurface(surfaces.GetVertexSurface(), faceIndex, -1);
+    }
+
+    if (_linearFVarInterp) {
+        int numFVarSurfaces = surfaces.GetNumFVarSurfaces();
+        for (int i = 0; i < numFVarSurfaces; ++i) {
+            assignLinearSurface(surfaces.GetFVarSurface(i), faceIndex,
+                                surfaces.GetFVarSurfaceID(i));
+        }
+    }
+    return true;
+}
+
+bool
+SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
+        SurfaceSet * surfaceSetPtr) const {
+
+    SurfaceSet & surfaces = *surfaceSetPtr;
+
+    typedef Vtr::internal::StackBuffer<Index,72,true> IndexBuffer;
+
+    bool vtxIsNonLinear  = surfaces.HasVertexSurface() && !_linearScheme;
+    bool fvarIsNonLinear = surfaces.HasFVarSurfaces()  && !_linearFVarInterp;
+    bool anyNonLinear    = vtxIsNonLinear || fvarIsNonLinear;
+
+    //
+    //  First need to determine the vertex topology of the face and take
+    //  appropriate action based on inputs.  It may be the case that the
+    //  topology is only used to determine if the non-linear face has a
+    //  limit surface and no non-linear surfaces are generated here (and
+    //  linear varying or face-varying surfaces are determined elsewhere).
+    //
+    //  So determine the topology and deal with any required tests for
+    //  the presence of limit surface.
+    //
+    //  If the face is "explicitly regular", i.e. the subclass can provide
+    //  an immediate regular patch representation, the more tedious work
+    //  to assemble the more general topological representation is avoided.
+    //
+    //  Note that while the vertex surface may be explicitly regular, if
+    //  the face-varying topology does not match, i.e. there is a UV seam
+    //  present around the face, the more general topological representation
+    //  will be necessary to deal with a potentially irregular face-varying
+    //  surface.
+    //
+    FaceTopology faceTopology(_schemeType, _schemeOptions);
+    IndexBuffer  vtxIndices(16);
+    FaceSurface  vtxSurfDesc;
+
+    bool vtxIsExplicitlyRegular = isFaceTopologyRegular(faceIndex, vtxIndices);
+    if (vtxIsExplicitlyRegular) {
+        if (_testNeighborhoodForLimit && !anyNonLinear) {
+            return true;
+        }
+    } else {
+        //
+        //  Three steps are required to get full topological description:
+        //      - gathering the full description of the neighborhood
+        //      - gathering vertex indices for the neighborhood
+        //      - using the indices to resolve any unordered topology
+        //  Gathering indices for the vertex surface and/or to resolve
+        //  unordered topology is conditional.
+        //
+        if (!gatherFaceNeighborhoodTopology(faceIndex, &faceTopology)) {
+            return false;
+        }
+        if (vtxIsNonLinear || faceTopology.HasUnOrderedCorners()) {
+            vtxIndices.SetSize(faceTopology._numFaceVertsTotal);
+            if (gatherFaceNeighborhoodIndices(faceIndex, faceTopology, -1,
+                        vtxIndices) < 0) {
+                return false;
+            }
+            if (faceTopology.HasUnOrderedCorners()) {
+                faceTopology.ResolveUnOrderedCorners(vtxIndices);
+            }
+        }
+        if (_testNeighborhoodForLimit) {
+            if (!faceHasLimitNeighborhood(faceTopology)) {
+                return false;
+            } else if (!anyNonLinear) {
+                return true;
+            }
+        }
+
+        //  Initialize the vertex surface descriptor for use creating both
+        //  the vertex Surface and any non-linear FVar Surfaces:
+        vtxSurfDesc.Initialize(faceTopology, vtxIndices);
+    }
+
+    //
+    //  Construct the Surface for vertex topology first, as face-varying
+    //  surfaces that match topology may make use of it:
+    //
+    bool vtxSurfIsValid = false;
+    if (vtxIsNonLinear) {
+        Surface & vtxSurf = *surfaces.GetVertexSurface();
+
+        if (vtxIsExplicitlyRegular) {
+            assignRegularSurface(&vtxSurf, vtxIndices);
+        } else if (vtxSurfDesc.IsRegular()) {
+            assignRegularSurface(&vtxSurf, vtxSurfDesc);
+        } else {
+            assignIrregularSurface(&vtxSurf, vtxSurfDesc);
+        }
+        vtxSurfIsValid = vtxSurf.IsValid();
+    }
+
+    //
+    //  Construct the Surface for the given face-varying topologies --
+    //  all of which are potentially distinct.
+    //
+    //  If the vertex topology is explicitly regular, the face-varying
+    //  surface can only make use of it if it shares the same topology
+    //  and the subclass provides corresponding control points.
+    //
+    //  In all other cases the full topological description and the full
+    //  description of the vertex surface must be provided.  The set of
+    //  face-varying indices must then be gathered and used to create a
+    //  face-varying surface descriptor, which uses the indices to find
+    //  the relevant face-varying subsets for each corner.
+    //
+    if (fvarIsNonLinear) {
+        //  We can re-use the vertex index buffer for face-varying indices:
+        IndexBuffer & fvIndices = vtxIndices;
+
+        int numFVarSurfaces = surfaces.GetNumFVarSurfaces();
+        for (int i = 0; i < numFVarSurfaces; ++i) {
+            Surface & fvarSurf = *surfaces.GetFVarSurface(i);
+            int       fvarID   =  surfaces.GetFVarSurfaceID(i);
+
+            //  First check if trivially regular, quickly assign and continue:
+            bool fvarIsExplicitlyRegular = vtxIsExplicitlyRegular &&
+                    isFaceTopologyRegular(faceIndex, fvarID, fvIndices);
+
+            if (fvarIsExplicitlyRegular) {
+                assignRegularSurface(&fvarSurf, fvIndices);
+                continue;
+            }
+
+            //  Make sure topology, indices and vertex surface are initialized
+            //  (will not be if vertex surface was explicitly regular):
+            if (!vtxSurfDesc.IsInitialized()) {
+                if (!initFaceNeighborhoodTopology(faceIndex, &faceTopology)) {
+                    return false;
+                }
+                vtxIndices.SetSize(faceTopology._numFaceVertsTotal);
+                vtxSurfDesc.Initialize(faceTopology, 0);
+            }
+
+            //  Gather FVar indices and initialize FVar surface descriptor:
+            if (gatherFaceNeighborhoodIndices(faceIndex, faceTopology,
+                    fvarID, fvIndices) < 0) {
+                return false;
+            }
+
+            FaceSurface fvarSurfDesc(vtxSurfDesc, fvIndices);
+
+            //  Detect matching or other topology and dispatch accordingly:
+            if (fvarSurfDesc.MatchesVertexTopology() && vtxSurfIsValid) {
+                copyNonLinearSurface(&fvarSurf, *surfaces.GetVertexSurface(),
+                                     fvarSurfDesc);
+            } else if (fvarSurfDesc.IsRegular()) {
+                assignRegularSurface(&fvarSurf, fvarSurfDesc);
+            } else {
+                assignIrregularSurface(&fvarSurf, fvarSurfDesc);
+            }
+        }
+    }
+    return true;
+}
+
+//
+//  Public creation methods for instances of Surface:
+//
+bool
+SurfaceFactory::InitVertexSurface(Index faceIndex,
+        Surface * vtxSurface) const {
+
+    assert(vtxSurface);
+    //
+    //  This can be streamlined in future (no need to use full SurfaceSet):
+    //
+    SurfaceSet surfaces;
+
+    surfaces.vtxSurf  = vtxSurface;
+    surfaces.numSurfs = 1;
+
+    return populateAllSurfaces(faceIndex, &surfaces);
+}
+
+bool
+SurfaceFactory::InitVaryingSurface(Index faceIndex,
+        Surface * varSurface) const {
+
+    assert(varSurface);
+    //
+    //  This can be streamlined in future (no need to use full SurfaceSet):
+    //
+    SurfaceSet surfaces;
+
+    surfaces.varSurf  = varSurface;
+    surfaces.numSurfs = 1;
+
+    return populateAllSurfaces(faceIndex, &surfaces);
+}
+
+bool
+SurfaceFactory::InitFaceVaryingSurface(Index faceIndex,
+        Surface * fvarSurface, int fvarID) const {
+
+    assert(fvarSurface);
+    //
+    //  This can be streamlined in future (no need to use full SurfaceSet):
+    //
+    SurfaceSet surfaces;
+
+    surfaces.fvarSurfs    =  fvarSurface;
+    surfaces.fvarIDs      = &fvarID;
+    surfaces.numSurfs     = 1;
+    surfaces.numFVarSurfs = 1;
+
+    return populateAllSurfaces(faceIndex, &surfaces);
+}
+
+bool
+SurfaceFactory::InitSurfaces(Index faceIndex,
+        Surface * vtxSurface,
+        Surface * varSurface,
+        Surface * fvarSurfaces,
+        int       fvarCount,
+        int const fvarIDs[]) const {
+
+    SurfaceSet surfaces;
+
+    surfaces.vtxSurf   = vtxSurface;
+    surfaces.varSurf   = varSurface;
+    surfaces.fvarSurfs = fvarSurfaces;
+    surfaces.fvarIDs   = &fvarIDs[0];
+
+    surfaces.numFVarSurfs = fvarCount;
+    surfaces.numSurfs     = fvarCount + (vtxSurface != 0) + (varSurface != 0);
+
+    return populateAllSurfaces(faceIndex, &surfaces);
+}
+
+Surface *
+SurfaceFactory::CreateVertexSurface(Index faceIndex) const {
+
+    Surface * s = new Surface();
+
+    if (InitVertexSurface(faceIndex, s)) return s;
+
+    delete s;
+    return 0;
+}
+
+Surface *
+SurfaceFactory::CreateVaryingSurface(Index faceIndex) const {
+
+    Surface * s = new Surface();
+
+    if (InitVaryingSurface(faceIndex, s)) return s;
+
+    delete s;
+    return 0;
+}
+
+Surface *
+SurfaceFactory::CreateFaceVaryingSurface(Index faceIndex, int fvID) const {
+
+    Surface * s = new Surface();
+
+    if (InitFaceVaryingSurface(faceIndex, s, fvID)) return s;
+
+    delete s;
+    return 0;
+}
+
+//
+//  Optional virtual topology queries:
+//
+bool
+SurfaceFactory::isFaceTopologyRegular(Index, Index[]) const {
+
+    return false;
+}
+
+bool
+SurfaceFactory::isFaceTopologyRegular(Index, int, Index[]) const {
+
+    return false;
+}
+
+
+} // end namespace Bfr
+
+} // end namespace OPENSUBDIV_VERSION
+} // end namespace OpenSubdiv
