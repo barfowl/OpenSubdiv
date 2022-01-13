@@ -90,12 +90,17 @@ public:
     void PreparePatchPointValues(T const & meshVertices,
                                  U       & patchPoints) const;
 
-    //  WIP - still need to extend interfaces for 2nd derivs
-    //      - may prefer overloads for 1st & 2nd derivs vs dflt args
+    //  WIP - need to template for <REAL> while avoiding ambiguity
+    template <class T, class U>
+    void Evaluate(float u, float v, T const & patchPoints, U * P) const;
+
     template <class T, class U>
     void Evaluate(float u, float v, T const & patchPoints, U * P,
-                                                           U * Du = 0,
-                                                           U * Dv = 0) const;
+                                    U * Du, U * Dv) const;
+    template <class T, class U>
+    void Evaluate(float u, float v, T const & patchPoints, U * P,
+                                    U * Du,  U * Dv,
+                                    U * Duu, U * Duv, U * Dvv) const;
 
     //
     //  The "control vertices" identify the subset of vertices of the
@@ -114,25 +119,60 @@ public:
 
     ConstIndexArray GetControlVertexIndices() const;
 
-    template <class T, class U>
-    void GatherControlVertexValues(T const & meshVerts,
-                                   U       & controlVerts) const;
+    //  WIP - need to template for <REAL>
+    int EvaluateStencils(float u, float v, float sP[]) const;
 
-    //  WIP - need to extend for 2nd derivs and template for <REAL>
     int EvaluateStencils(float u, float v, float sP[],
-                                           float sDu[] = 0,
-                                           float sDv[] = 0) const;
+                         float sDu[], float sDv[]) const;
+
+    int EvaluateStencils(float u, float v, float sP[],
+                         float sDu[],  float sDv[],
+                         float sDuu[], float sDuv[], float sDvv[]) const;
 
     template <class T, class U>
-    void ApplyStencil(float const sD[], T const & meshVerts, U * D,
-                      bool applyToGatheredControlVertices = false) const;
+    void ApplyStencil(float const sD[], T const & meshVerts, U * D) const;
+
+    //  Gather control vertices and apply stencil to local array of verts:
+    template <class T, class U>
+    void GatherControlVertexValues(T const & meshVerts, U & cVerts) const;
+
+    template <class T, class U>
+    void ApplyStencilGathered(float const sD[], T const & cVerts, U * D) const;
 
 private:
-    friend class SurfaceFactory;
+    //  Evaluation applying weighted combinations of client type <T>:
+    template <typename REAL, class T, class U>
+    void evalRegularPatch(REAL u, REAL v, T const & patchPoints,
+            U * P, U * Du, U * Dv, U * Duu, U * Dvu, U * Dvv) const;
+    template <typename REAL, class T, class U>
+    void evalIrregularPatch(REAL u, REAL v, T const & patchPoints,
+            U * P, U * Du, U * Dv, U * Duu, U * Dvu, U * Dvv) const;
+    template <typename REAL, class T, class U>
+    void evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
+            U * P, U * Du, U * Dv, U * Duu, U * Dvu, U * Dvv) const;
 
-    void clear();
-    void initialize();
-    void reinitialize() { if (_isValid) clear(), initialize(); }
+    //  Evaluation of basis functions and contributing points of internal
+    //  patch (implicit for a regular patch):
+    template <typename REAL>
+    void evalRegularPatchBasis(REAL u, REAL v, REAL wP[],
+        REAL wDu[], REAL wDv[], REAL wDuu[], REAL wDuv[], REAL wDvv[]) const;
+    template <typename REAL>
+    ConstIndexArray evalIrregularPatchBasis(REAL u, REAL v, REAL wP[],
+        REAL wDu[], REAL wDv[], REAL wDuu[], REAL wDuv[], REAL wDvv[]) const;
+    template <typename REAL>
+    int evalMultiLinearPatchBasis(REAL u, REAL v, REAL wP[],
+        REAL wDu[], REAL wDv[], REAL wDuu[], REAL wDuv[], REAL wDvv[]) const;
+
+    //  Evaluation of limit stencils:
+    template <typename REAL>
+    int evalRegularPatchStencils(REAL u, REAL v, REAL sP[],
+        REAL sDu[], REAL sDv[], REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
+    template <typename REAL>
+    int evalIrregularPatchStencils(REAL u, REAL v, REAL sP[],
+        REAL sDu[], REAL sDv[], REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
+    template <typename REAL>
+    int evalMultiLinearPatchStencils(REAL u, REAL v, REAL sP[], 
+        REAL sDu[], REAL sDv[], REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
 
     //  Access stencils to compute patch point values of client type <T>:
     template <typename REAL, class T>
@@ -147,35 +187,12 @@ private:
     bool irregPatchNeedsStencilTable() const;
     Far::StencilTableReal<float> const * getIrregPatchStencilTable() const;
 
-    //  Evaluation of basis functions and contributing points of internal
-    //  patch (implicit for a regular patch):
-    //  WIP - will need to template these for <REAL>:
-    void evalRegularPatchBasis(float u, float v,
-            float wP[], float wDu[], float wDv[]) const;
-    ConstIndexArray evalIrregularPatchBasis(float u, float v,
-            float wP[], float wDu[], float wDv[]) const;
-    int evalMultiLinearPatchBasis(float u, float v,
-            float wP[4], float wDu[4], float wDv[4]) const;
+private:
+    friend class SurfaceFactory;
 
-    //  Evaluation to combine basis functions and contributing points:
-    template <class T, class U>
-    void evalRegularPatch(float u, float v, T const & patchPoints,
-            U * P, U * Du = 0, U * Dv = 0) const;
-    template <class T, class U>
-    void evalIrregularPatch(float u, float v, T const & patchPoints,
-            U * P, U * Du = 0, U * Dv = 0) const;
-    template <class T, class U>
-    void evalMultiLinearPatch(float u, float v, T const & patchPoints,
-            U * P, U * Du = 0, U * Dv = 0) const;
-
-    //  Evaluation of limit stencils (no templates for point types):
-    //  WIP - will need to template these for <REAL>:
-    int evalRegularPatchStencils(float u, float v,
-            float * sP, float * sDu = 0, float * sDv = 0) const;
-    int evalIrregularPatchStencils(float u, float v,
-            float * sP, float * sDu = 0, float * sDv = 0) const;
-    int evalMultiLinearPatchStencils(float u, float v,
-            float * sP, float * sDu = 0, float * sDv = 0) const;
+    void clear();
+    void initialize();
+    void reinitialize() { if (_isValid) clear(), initialize(); }
 
 private:
     typedef Far::PatchTree const * IrregPatchPtr;
@@ -263,75 +280,109 @@ Surface::PreparePatchPointValues(T const & meshPoints,
 //
 //  Evaluation method templates:
 //
-template <class T, class U>
+template <typename REAL, class T, class U>
 void
-Surface::evalRegularPatch(float u, float v, T const & patchPoints,
-                          U * P, U * Du, U * Dv) const {
+Surface::evalRegularPatch(REAL u, REAL v, T const & patchPoints,
+                          U * P,   U * Du,  U * Dv,
+                          U * Duu, U * Duv, U * Dvv) const {
     //
     //  Regular basis evaluation simply returns weights for use with
     //  the entire set of patch control points:
     //
-    if (Du && Dv) {
-        float wP[20], wDu[20], wDv[20];
-        evalRegularPatchBasis(u, v, wP, wDu, wDv);
+    bool eval1stDerivs = (Du && Dv);
+    bool eval2ndDerivs = eval1stDerivs && (Duu && Duv && Dvv);
 
-        P->Clear();
+    REAL wP[20], wDu[20], wDv[20], wDuu[20], wDuv[20], wDvv[20];
+    if (!eval1stDerivs) {
+        evalRegularPatchBasis<REAL>(u, v, wP, 0, 0, 0, 0, 0);
+    } else if (!eval2ndDerivs) {
+        evalRegularPatchBasis<REAL>(u, v, wP, wDu, wDv, 0, 0, 0);
+    } else {
+        evalRegularPatchBasis<REAL>(u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
+    }
+
+    P->Clear();
+    if (eval1stDerivs) {
         Du->Clear();
         Dv->Clear();
-        for (int i = 0; i < _numControlPoints; ++i) {
-            P->AddWithWeight( patchPoints[i], wP[i]);
+        if (eval2ndDerivs) {
+            Duu->Clear();
+            Duv->Clear();
+            Dvv->Clear();
+        }
+    }
+
+    for (int i = 0; i < _numControlPoints; ++i) {
+        P->AddWithWeight(patchPoints[i], wP[i]);
+        if (eval1stDerivs) {
             Du->AddWithWeight(patchPoints[i], wDu[i]);
             Dv->AddWithWeight(patchPoints[i], wDv[i]);
-        }
-    } else {
-        float wP[20];
-        evalRegularPatchBasis(u, v, wP, 0, 0);
-
-        P->Clear();
-        for (int i = 0; i < _numControlPoints; ++i) {
-            P->AddWithWeight(patchPoints[i], wP[i]);
+            if (eval2ndDerivs) {
+                Duu->AddWithWeight(patchPoints[i], wDuu[i]);
+                Duv->AddWithWeight(patchPoints[i], wDuv[i]);
+                Dvv->AddWithWeight(patchPoints[i], wDvv[i]);
+            }
         }
     }
 }
 
-template <class T, class U>
+template <typename REAL, class T, class U>
 void
-Surface::evalIrregularPatch(float u, float v, T const & patchPoints,
-                            U * P, U * Du, U * Dv) const {
+Surface::evalIrregularPatch(REAL u, REAL v, T const & patchPoints,
+                            U * P,   U * Du,  U * Dv,
+                            U * Duu, U * Duv, U * Dvv) const {
     //
     //  Non-linear irregular basis evaluation returns both the weights
     //  and the corresponding points of a sub-patch defined by a subset
     //  of the given patch points:
     //
-    if (Du && Dv) {
-        float wP[20], wDu[20], wDv[20];
-        ConstIndexArray subPatchPointIndices =
-                evalIrregularPatchBasis(u, v, wP, wDu, wDv);
+    bool eval1stDerivs = (Du && Dv);
+    bool eval2ndDerivs = eval1stDerivs && (Duu && Duv && Dvv);
 
-        P->Clear();
+    REAL wP[20], wDu[20], wDv[20], wDuu[20], wDuv[20], wDvv[20];
+    ConstIndexArray subPatchPoints;
+
+    if (!eval1stDerivs) {
+        subPatchPoints = evalIrregularPatchBasis<REAL>(u, v,
+                wP, 0, 0, 0, 0, 0);
+    } else if (!eval2ndDerivs) {
+        subPatchPoints = evalIrregularPatchBasis<REAL>(u, v,
+                wP, wDu, wDv, 0, 0, 0);
+    } else {
+        subPatchPoints = evalIrregularPatchBasis<REAL>(u, v,
+                wP, wDu, wDv, wDuu, wDuv, wDvv);
+    }
+
+    P->Clear();
+    if (eval1stDerivs) {
         Du->Clear();
         Dv->Clear();
-        for (int i = 0; i < subPatchPointIndices.size(); ++i) {
-            P->AddWithWeight( patchPoints[subPatchPointIndices[i]], wP[i]);
-            Du->AddWithWeight(patchPoints[subPatchPointIndices[i]], wDu[i]);
-            Dv->AddWithWeight(patchPoints[subPatchPointIndices[i]], wDv[i]);
+        if (eval2ndDerivs) {
+            Duu->Clear();
+            Duv->Clear();
+            Dvv->Clear();
         }
-    } else {
-        float wP[20];
-        ConstIndexArray subPatchPointIndices =
-                evalIrregularPatchBasis(u, v, wP, 0, 0);
+    }
 
-        P->Clear();
-        for (int i = 0; i < subPatchPointIndices.size(); ++i) {
-            P->AddWithWeight( patchPoints[subPatchPointIndices[i]], wP[i]);
+    for (int i = 0; i < subPatchPoints.size(); ++i) {
+        P->AddWithWeight( patchPoints[subPatchPoints[i]], wP[i]);
+        if (eval1stDerivs) {
+            Du->AddWithWeight(patchPoints[subPatchPoints[i]], wDu[i]);
+            Dv->AddWithWeight(patchPoints[subPatchPoints[i]], wDv[i]);
+            if (eval2ndDerivs) {
+                Duu->AddWithWeight(patchPoints[subPatchPoints[i]], wDuu[i]);
+                Duv->AddWithWeight(patchPoints[subPatchPoints[i]], wDuv[i]);
+                Dvv->AddWithWeight(patchPoints[subPatchPoints[i]], wDvv[i]);
+            }
         }
     }
 }
 
-template <class T, class U>
+template <typename REAL, class T, class U>
 void
-Surface::evalMultiLinearPatch(float u, float v, T const & patchPoints,
-                              U * P, U * Du, U * Dv) const {
+Surface::evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
+                              U * P,   U * Du,  U * Dv,
+                              U * Duu, U * Duv, U * Dvv) const {
     //
     //  Linear evaluation of irregular N-sided faces (usually for varying
     //  or linear face-varying cases) quadrangulates the face implicitly
@@ -340,21 +391,34 @@ Surface::evalMultiLinearPatch(float u, float v, T const & patchPoints,
     //  to the full set of control points:
     //
     bool eval1stDerivs = (Du && Dv);
+    bool eval2ndDerivs = eval1stDerivs && (Duu && Duv && Dvv);
 
-    float wP[4], wDu[4], wDv[4];
+    REAL wP[4], wDu[4], wDv[4], wDuu[4], wDuv[4], wDvv[4];
 
-    int iOrigin = eval1stDerivs ?
-                  evalMultiLinearPatchBasis(u, v, wP, wDu, wDv) :
-                  evalMultiLinearPatchBasis(u, v, wP, 0, 0);
-
-    int iNext = (iOrigin + 1) % _numControlPoints;
-    int iPrev = (iOrigin + _numControlPoints - 1) % _numControlPoints;
+    int iOrigin = -1;
+    if (!eval1stDerivs) {
+        iOrigin = evalMultiLinearPatchBasis<REAL>(u, v, wP, 0, 0, 0, 0, 0);
+    } else if (!eval2ndDerivs) {
+        iOrigin = evalMultiLinearPatchBasis<REAL>(u, v, wP, wDu, wDv, 0, 0, 0);
+    } else {
+        iOrigin = evalMultiLinearPatchBasis<REAL>(u, v, wP, wDu, wDv,
+                                                        wDuu, wDuv, wDvv);
+    }
 
     P->Clear();
     if (eval1stDerivs) {
         Du->Clear();
         Dv->Clear();
+        if (eval2ndDerivs) {
+            Duu->Clear();
+            Duv->Clear();
+            Dvv->Clear();
+        }
     }
+
+    int iNext = (iOrigin + 1) % _numControlPoints;
+    int iPrev = (iOrigin + _numControlPoints - 1) % _numControlPoints;
+
     for (int i = 0; i < _numControlPoints; ++i) {
         int wIndex = 2;
         if (i == iOrigin) {
@@ -368,7 +432,29 @@ Surface::evalMultiLinearPatch(float u, float v, T const & patchPoints,
         if (eval1stDerivs) {
             Du->AddWithWeight(patchPoints[i], wDu[wIndex]);
             Dv->AddWithWeight(patchPoints[i], wDv[wIndex]);
+            if (eval2ndDerivs) {
+                Duu->AddWithWeight(patchPoints[i], wDuu[wIndex]);
+                Duv->AddWithWeight(patchPoints[i], wDuv[wIndex]);
+                Dvv->AddWithWeight(patchPoints[i], wDvv[wIndex]);
+            }
         }
+    }
+}
+
+template <class T, class U>
+inline void
+Surface::Evaluate(float u, float v, T const & patchPoints,
+                  U * P, U * Du, U * Dv, U * Duu, U * Duv, U * Dvv) const {
+
+    if (_isRegular) {
+        evalRegularPatch<float,T,U>(u,v, patchPoints,
+                                         P, Du, Dv, Duu, Duv, Dvv);
+    } else if (_isLinear) {
+        evalMultiLinearPatch<float,T,U>(u,v, patchPoints,
+                                             P, Du, Dv, Duu, Duv, Dvv);
+    } else {
+        evalIrregularPatch<float,T,U>(u,v, patchPoints,
+                                           P, Du, Dv, Duu, Duv, Dvv);
     }
 }
 
@@ -377,32 +463,45 @@ inline void
 Surface::Evaluate(float u, float v, T const & patchPoints,
                   U * P, U * Du, U * Dv) const {
 
-    if (_isRegular) {
-        evalRegularPatch(u, v, patchPoints, P, Du, Dv);
-    } else if (_isLinear) {
-        evalMultiLinearPatch(u, v, patchPoints, P, Du, Dv);
-    } else {
-        evalIrregularPatch(u, v, patchPoints, P, Du, Dv);
-    }
+    Evaluate<T,U>(u, v, patchPoints, P, Du, Dv, 0, 0, 0);
+}
+
+template <class T, class U>
+inline void
+Surface::Evaluate(float u, float v, T const & patchPoints, U * P) const {
+
+    Evaluate<T,U>(u, v, patchPoints, P, 0, 0, 0, 0, 0);
+}
+
+inline int
+Surface::EvaluateStencils(float u, float v,
+                          float sP[], float sDu[], float sDv[]) const {
+
+    return EvaluateStencils(u, v, sP, sDu, sDv, 0, 0, 0);
+}
+
+inline int
+Surface::EvaluateStencils(float u, float v, float sP[]) const {
+
+    return EvaluateStencils(u, v, sP, 0, 0, 0, 0, 0);
 }
 
 template <class T, class U>
 void
-Surface::ApplyStencil(float const sP[], T const & inputVertices, U * P,
-                      bool applyToGatheredControlVerts) const {
+Surface::ApplyStencil(float const sD[], T const & meshVertices, U * D) const {
 
-    P->Clear();
+    D->Clear();
+    for (int i = 0; i < _numControlPoints; ++i) {
+        D->AddWithWeight(meshVertices[_controlPoints[i]], sD[i]);
+    }
+}
+template <class T, class U>
+void
+Surface::ApplyStencilGathered(float const sD[], T const & cvs, U * D) const {
 
-    if (applyToGatheredControlVerts) {
-        T const & gatheredVertices = inputVertices;
-        for (int i = 0; i < _numControlPoints; ++i) {
-            P->AddWithWeight(gatheredVertices[i], sP[i]);
-        }
-    } else {
-        T const & meshVertices = inputVertices;
-        for (int i = 0; i < _numControlPoints; ++i) {
-            P->AddWithWeight(meshVertices[_controlPoints[i]], sP[i]);
-        }
+    D->Clear();
+    for (int i = 0; i < _numControlPoints; ++i) {
+        D->AddWithWeight(cvs[i], sD[i]);
     }
 }
 

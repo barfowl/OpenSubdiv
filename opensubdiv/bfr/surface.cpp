@@ -61,17 +61,21 @@ Surface::clear() {
 //
 //  Evaluation methods accessing the local data for a simple regular patch:
 //
+template <typename REAL>
 void
-Surface::evalRegularPatchBasis(float u, float v,
-        float wP[], float wDu[], float wDv[]) const {
+Surface::evalRegularPatchBasis(REAL u, REAL v,
+        REAL wP[],   REAL wDu[],  REAL wDv[],
+        REAL wDuu[], REAL wDuv[], REAL wDvv[]) const {
 
     Far::internal::EvaluatePatchBasisNormalized(
-            _regPatchType, _regPatchParam, u, v, wP, wDu, wDv);
+        _regPatchType, _regPatchParam, u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
 }
 
+template <typename REAL>
 int
-Surface::evalRegularPatchStencils(float u, float v,
-        float sP[], float sDu[], float sDv[]) const {
+Surface::evalRegularPatchStencils(REAL u, REAL v,
+        REAL sP[],   REAL sDu[],  REAL sDv[],
+        REAL sDuu[], REAL sDuv[], REAL sDvv[]) const {
 
     //
     //  The control vertices of a regular patch are always the full set
@@ -81,7 +85,7 @@ Surface::evalRegularPatchStencils(float u, float v,
     //  return the basis weights as stencil weights for all cases.
     //
     Far::internal::EvaluatePatchBasisNormalized(
-            _regPatchType, _regPatchParam, u, v, sP, sDu, sDv);
+        _regPatchType, _regPatchParam, u, v, sP, sDu, sDv, sDuu, sDuv, sDvv);
 
     return _numControlPoints;
 }
@@ -89,9 +93,11 @@ Surface::evalRegularPatchStencils(float u, float v,
 //
 //  Evaluation methods accessing the Far::PatchTree for irregular patches:
 //
+template <typename REAL>
 ConstIndexArray
-Surface::evalIrregularPatchBasis(float u, float v,
-        float wP[], float wDu[], float wDv[]) const {
+Surface::evalIrregularPatchBasis(REAL u, REAL v,
+        REAL wP[],   REAL wDu[],  REAL wDv[],
+        REAL wDuu[], REAL wDuv[], REAL wDvv[]) const {
 
     int subFace = 0;
     if (_param.GetType() == Parameterization::QPOLY) {
@@ -102,15 +108,17 @@ Surface::evalIrregularPatchBasis(float u, float v,
     int subPatchIndex = _irregPatch->FindSubPatch(u, v, subFace);
     assert(subPatchIndex >= 0);
 
-    _irregPatch->EvalSubPatchBasis<float>(subPatchIndex,u, v, wP,
-                                          wDu, wDv, 0, 0, 0);
+    _irregPatch->EvalSubPatchBasis(subPatchIndex,u, v,
+                                   wP, wDu, wDv, wDuu, wDuv, wDvv);
 
     return _irregPatch->GetSubPatchPoints(subPatchIndex);
 }
 
+template <typename REAL>
 int
-Surface::evalIrregularPatchStencils(float u, float v,
-        float sP[], float sDu[], float sDv[]) const {
+Surface::evalIrregularPatchStencils(REAL u, REAL v,
+        REAL sP[],   REAL sDu[],  REAL sDv[],
+        REAL sDuu[], REAL sDuv[], REAL sDvv[]) const {
 
     assert(_irregPatch->SupportsStencilEval());
 
@@ -123,8 +131,8 @@ Surface::evalIrregularPatchStencils(float u, float v,
     int subPatchIndex = _irregPatch->FindSubPatch(u, v, subFace);
     assert(subPatchIndex >= 0);
 
-    return _irregPatch->EvalSubPatchStencils<float>(subPatchIndex, u, v, sP,
-                                                    sDu, sDv, 0, 0, 0);
+    return _irregPatch->EvalSubPatchStencils<REAL>(subPatchIndex, u, v, sP,
+                                                   sDu, sDv, sDuu, sDuv, sDvv);
 }
 
 //
@@ -147,33 +155,34 @@ namespace {
     //      w[2] = the N-3 points not adjacent to P (contributing to center)
     //      w[3] = the point preceding P
     //
+    template <typename REAL>
     inline void
-    transformSubFaceWeightsToBase(int N, float w[4]) {
+    transformSubFaceWeightsToBase(int N, REAL w[4], REAL derivScale) {
 
-        float wOrigin = w[0];
-        float wNext   = w[1] * 0.5f;
-        float wCenter = w[2] / (float)N;
-        float wPrev   = w[3] * 0.5f;
+        REAL wOrigin = w[0];
+        REAL wNext   = w[1] * 0.5f;
+        REAL wCenter = w[2] / (REAL)N;
+        REAL wPrev   = w[3] * 0.5f;
 
         w[0] = wCenter + wNext + wPrev + wOrigin;
         w[1] = wCenter + wNext;
         w[2] = wCenter;
         w[3] = wCenter + wPrev;
-    }
 
-    inline void
-    scaleSubFaceWeightsForDerivs(float w[4], float derivScale) {
-
-        w[0] *= derivScale;
-        w[1] *= derivScale;
-        w[2] *= derivScale;
-        w[3] *= derivScale;
+        if (derivScale > 0.0f) {
+            w[0] *= derivScale;
+            w[1] *= derivScale;
+            w[2] *= derivScale;
+            w[3] *= derivScale;
+        }
     }
 }
 
+template <typename REAL>
 int
-Surface::evalMultiLinearPatchBasis(float u, float v,
-        float wP[4], float wDu[4], float wDv[4]) const {
+Surface::evalMultiLinearPatchBasis(REAL u, REAL v,
+        REAL wP[4],   REAL wDu[4],  REAL wDv[4],
+        REAL wDuu[4], REAL wDuv[4], REAL wDvv[4]) const {
 
     assert(_param.GetType() == Parameterization::QPOLY);
 
@@ -186,26 +195,33 @@ Surface::evalMultiLinearPatchBasis(float u, float v,
     //
     //  but this internal Far function is sometimes optimized out, causing
     //  link errors.  Need to fix in Far with explicit instantiation...
-    Far::internal::EvaluatePatchBasisNormalized(
-        Far::PatchDescriptor::QUADS, Far::PatchParam(), u, v, wP, wDu, wDv);
+    Far::internal::EvaluatePatchBasisNormalized(Far::PatchDescriptor::QUADS,
+            Far::PatchParam(), u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
 
-    transformSubFaceWeightsToBase(_numControlPoints, wP);
+    transformSubFaceWeightsToBase<REAL>(_numControlPoints, wP, 1.0f);
     if (wDu) {
-        transformSubFaceWeightsToBase(_numControlPoints, wDu);
-        scaleSubFaceWeightsForDerivs(wDu, 2.0);
+        transformSubFaceWeightsToBase<REAL>(_numControlPoints, wDu, 2.0f);
     }
     if (wDv) {
-        transformSubFaceWeightsToBase(_numControlPoints, wDv);
-        scaleSubFaceWeightsForDerivs(wDv, 2.0);
+        transformSubFaceWeightsToBase<REAL>(_numControlPoints, wDv, 2.0f);
     }
-    //  WIP - remember later for 2nd derivs that non-zero dudv needs scaling
-
+    if (wDuu) {
+        //  Basis weights will be and should remain zero for this 2nd deriv
+    }
+    if (wDuv) {
+        transformSubFaceWeightsToBase<REAL>(_numControlPoints, wDuv, 4.0f);
+    }
+    if (wDvv) {
+        //  Basis weights will be and should remain zero for this 2nd deriv
+    }
     return subFace;
 }
 
+template <typename REAL>
 int
-Surface::evalMultiLinearPatchStencils(float u, float v,
-        float sP[], float sDu[], float sDv[]) const {
+Surface::evalMultiLinearPatchStencils(REAL u, REAL v,
+        REAL sP[],   REAL sDu[],  REAL sDv[],
+        REAL sDuu[], REAL sDuv[], REAL sDvv[]) const {
 
     //
     //  Linear evaluation of irregular N-sided faces (usually for varying
@@ -215,12 +231,19 @@ Surface::evalMultiLinearPatchStencils(float u, float v,
     //  to the full set of control points:
     //
     bool eval1stDerivs = (sDu && sDv);
+    bool eval2ndDerivs = eval1stDerivs && (sDuu && sDuv && sDvv);
 
-    float wP[4], wDu[4], wDv[4];
+    REAL wP[4], wDu[4], wDv[4], wDuu[4], wDuv[4], wDvv[4];
 
-    int iOrigin = eval1stDerivs ?
-                  evalMultiLinearPatchBasis(u, v, wP, wDu, wDv) :
-                  evalMultiLinearPatchBasis(u, v, wP, 0, 0);
+    int iOrigin = -1;
+    if (!eval1stDerivs) {
+        iOrigin = evalMultiLinearPatchBasis<REAL>(u, v, wP, 0, 0, 0, 0, 0);
+    } else if (!eval2ndDerivs) {
+        iOrigin = evalMultiLinearPatchBasis<REAL>(u, v, wP, wDu, wDv, 0, 0, 0);
+    } else {
+        iOrigin = evalMultiLinearPatchBasis<REAL>(u, v, wP, wDu, wDv,
+                                                        wDuu, wDuv, wDvv);
+    }
 
     int iNext = (iOrigin + 1) % _numControlPoints;
     int iPrev = (iOrigin + _numControlPoints - 1) % _numControlPoints;
@@ -239,6 +262,11 @@ Surface::evalMultiLinearPatchStencils(float u, float v,
         if (eval1stDerivs) {
             sDu[i] = wDu[wIndex];
             sDv[i] = wDv[wIndex];
+            if (eval2ndDerivs) {
+                sDuu[i] = 0.0f;
+                sDuv[i] = wDuv[wIndex];
+                sDvv[i] = 0.0f;
+            }
         }
     }
     return _numControlPoints;
@@ -250,14 +278,18 @@ Surface::evalMultiLinearPatchStencils(float u, float v,
 //
 int
 Surface::EvaluateStencils(float u, float v,
-                  float * sP, float * sDu, float * sDv) const {
+                  float sP[],   float sDu[],  float sDv[],
+                  float sDuu[], float sDuv[], float sDvv[]) const {
 
     if (_isRegular) {
-        return evalRegularPatchStencils(u, v, sP, sDu, sDv);
+        return evalRegularPatchStencils(u, v,
+                                        sP, sDu, sDv, sDuu, sDuv, sDvv);
     } else if (_isLinear) {
-        return evalMultiLinearPatchStencils(u, v, sP, sDu, sDv);
+        return evalMultiLinearPatchStencils(u, v,
+                                            sP, sDu, sDv, sDuu, sDuv, sDvv);
     } else {
-        return evalIrregularPatchStencils(u, v, sP, sDu, sDv);
+        return evalIrregularPatchStencils(u, v,
+                                          sP, sDu, sDv, sDuu, sDuv, sDvv);
     }
 }
 
@@ -278,8 +310,6 @@ Surface::getIrregPatchStencilMatrix() const {
     return _irregPatch->GetStencilMatrix<REAL>();
 }
 
-template float  const * Surface::getIrregPatchStencilMatrix<float>() const;
-template double const * Surface::getIrregPatchStencilMatrix<double>() const;
 
 //  WIP - use of StencilTables will eventually be removed
 bool
@@ -293,6 +323,72 @@ Surface::getIrregPatchStencilTable() const {
 
     return _irregPatch->GetStencilTable();
 }
+
+//
+//  Explicit instantiation for supporting multiple precision:
+//
+//  Regular patch basis and stencil evaluation:
+template void
+Surface::evalRegularPatchBasis<float>(float u, float v,
+        float wP[],   float wDu[],  float wDv[],
+        float wDuu[], float wDuv[], float wDvv[]) const;
+template void
+Surface::evalRegularPatchBasis<double>(double u, double v,
+        double wP[],   double wDu[],  double wDv[],
+        double wDuu[], double wDuv[], double wDvv[]) const;
+
+template int
+Surface::evalRegularPatchStencils<float>(float u, float v,
+        float sP[],   float sDu[],  float sDv[],
+        float sDuu[], float sDuv[], float sDvv[]) const;
+template int
+Surface::evalRegularPatchStencils<double>(double u, double v,
+        double sP[],   double sDu[],  double sDv[],
+        double sDuu[], double sDuv[], double sDvv[]) const;
+
+//  Irregular patch basis and stencil evaluation:
+template ConstIndexArray
+Surface::evalIrregularPatchBasis<float>(float u, float v,
+        float wP[],   float wDu[],  float wDv[],
+        float wDuu[], float wDuv[], float wDvv[]) const;
+template ConstIndexArray
+Surface::evalIrregularPatchBasis<double>(double u, double v,
+        double wP[],   double wDu[],  double wDv[],
+        double wDuu[], double wDuv[], double wDvv[]) const;
+
+template int
+Surface::evalIrregularPatchStencils<float>(float u, float v,
+        float sP[],   float sDu[],  float sDv[],
+        float sDuu[], float sDuv[], float sDvv[]) const;
+template int
+Surface::evalIrregularPatchStencils<double>(double u, double v,
+        double sP[],   double sDu[],  double sDv[],
+        double sDuu[], double sDuv[], double sDvv[]) const;
+
+//  Multi-linear patch basis and stencil evaluation:
+template int
+Surface::evalMultiLinearPatchBasis<float>(float u, float v,
+        float wP[4],   float wDu[4],  float wDv[4],
+        float wDuu[4], float wDuv[4], float wDvv[4]) const;
+template int
+Surface::evalMultiLinearPatchBasis<double>(double u, double v,
+        double wP[4],   double wDu[4],  double wDv[4],
+        double wDuu[4], double wDuv[4], double wDvv[4]) const;
+
+template int
+Surface::evalMultiLinearPatchStencils<float>(float u, float v,
+        float sP[],   float sDu[],  float sDv[],
+        float sDuu[], float sDuv[], float sDvv[]) const;
+template int
+Surface::evalMultiLinearPatchStencils<double>(double u, double v,
+        double sP[],   double sDu[],  double sDv[],
+        double sDuu[], double sDuv[], double sDvv[]) const;
+
+//  Irregular stencil matrix access:
+template float  const *
+Surface::getIrregPatchStencilMatrix<float>() const;
+template double const *
+Surface::getIrregPatchStencilMatrix<double>() const;
 
 } // end namespace Bfr
 

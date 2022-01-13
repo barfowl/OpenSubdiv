@@ -104,10 +104,12 @@ public:
     //  the conversion depends on both the face size and the subdivision
     //  scheme (from which a temporary instance can be trivially created).
     //
-    void ConvertUvToPtex(float   inU,   float   inV,
-                         float * ptexU, float * ptexV, int * ptexFace) const;
-    void ConvertPtexToUv(float   ptexU, float   ptexV, int   ptexFace,
-                         float * outU,  float * outV) const;
+    template <typename REAL>
+    void ConvertUvToPtex(REAL   inU,   REAL   inV,
+                         REAL * ptexU, REAL * ptexV, int * ptexFace) const;
+    template <typename REAL>
+    void ConvertPtexToUv(REAL   ptexU, REAL   ptexV, int   ptexFace,
+                         REAL * outU,  REAL * outV) const;
 
     //  Method to query if parameterizations is continuous, i.e. two or
     //  more (u,v) locations can be interpolated to provide a meaningful
@@ -177,14 +179,15 @@ Parameterization::Resize(int faceSize) {
 //  member -- set to the integer sqrt(faceSize) to reduce roundoff for
 //  large face sizes.  Until then, all UV tiles are sequential in U.
 //
+template <typename REAL>
 inline void
-Parameterization::ConvertUvToPtex(float inU, float inV,
-        float * ptexU, float * ptexV, int * ptexFace) const {
+Parameterization::ConvertUvToPtex(REAL inU, REAL inV,
+        REAL * ptexU, REAL * ptexV, int * ptexFace) const {
 
     if (_type == QPOLY) {
         *ptexFace = (int) inU;
-        *ptexU    = 2.0 * (inU - *ptexFace);
-        *ptexV    = 2.0 *  inV;
+        *ptexU    = 2.0f * (inU - *ptexFace);
+        *ptexV    = 2.0f *  inV;
     } else {
         *ptexFace = 0;
         *ptexU    = inU;
@@ -192,13 +195,14 @@ Parameterization::ConvertUvToPtex(float inU, float inV,
     }
 }
 
+template <typename REAL>
 inline void
-Parameterization::ConvertPtexToUv(float ptexU, float ptexV, int ptexFace,
-        float * outU, float * outV) const {
+Parameterization::ConvertPtexToUv(REAL ptexU, REAL ptexV, int ptexFace,
+        REAL * outU, REAL * outV) const {
 
     if (_type == QPOLY) {
-        *outU = 0.5 * ptexU + ptexFace;
-        *outV = 0.5 * ptexV;
+        *outU = 0.5f * ptexU + ptexFace;
+        *outV = 0.5f * ptexV;
     } else {
         *outU = ptexU;
         *outV = ptexV;
