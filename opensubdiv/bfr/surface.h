@@ -90,17 +90,16 @@ public:
     void PreparePatchPointValues(T const & meshVertices,
                                  U       & patchPoints) const;
 
-    //  WIP - need to template for <REAL> while avoiding ambiguity
     template <class T, class U>
-    void Evaluate(float u, float v, T const & patchPoints, U * P) const;
+    void Evaluate(double u, double v, T const & patchPoints, U * P) const;
 
     template <class T, class U>
-    void Evaluate(float u, float v, T const & patchPoints, U * P,
-                                    U * Du, U * Dv) const;
+    void Evaluate(double u, double v, T const & patchPoints, U * P,
+                                      U * Du, U * Dv) const;
     template <class T, class U>
-    void Evaluate(float u, float v, T const & patchPoints, U * P,
-                                    U * Du,  U * Dv,
-                                    U * Duu, U * Duv, U * Dvv) const;
+    void Evaluate(double u, double v, T const & patchPoints, U * P,
+                                      U * Du,  U * Dv,
+                                      U * Duu, U * Duv, U * Dvv) const;
 
     //
     //  The "control vertices" identify the subset of vertices of the
@@ -119,28 +118,36 @@ public:
 
     ConstIndexArray GetControlVertexIndices() const;
 
-    //  WIP - need to template for <REAL>
-    int EvaluateStencils(float u, float v, float sP[]) const;
+    template <typename REAL>
+    int EvaluateStencils(double u, double v, REAL sP[]) const;
 
-    int EvaluateStencils(float u, float v, float sP[],
-                         float sDu[], float sDv[]) const;
+    template <typename REAL>
+    int EvaluateStencils(double u, double v, REAL sP[],
+                         REAL sDu[], REAL sDv[]) const;
 
-    int EvaluateStencils(float u, float v, float sP[],
-                         float sDu[],  float sDv[],
-                         float sDuu[], float sDuv[], float sDvv[]) const;
+    template <typename REAL>
+    int EvaluateStencils(double u, double v, REAL sP[],
+                         REAL sDu[],  REAL sDv[],
+                         REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
 
-    template <class T, class U>
-    void ApplyStencil(float const sD[], T const & meshVerts, U * D) const;
+    template <typename REAL, class T, class U>
+    void ApplyStencil(REAL const sD[], T const & meshVerts, U * D) const;
 
-    //  Gather control vertices and apply stencil to local array of verts:
+    //  Convenience methods to gather control vertices and apply stencil
+    //  to the resulting local array of control vertices:
     template <class T, class U>
     void GatherControlVertexValues(T const & meshVerts, U & cVerts) const;
 
-    template <class T, class U>
-    void ApplyStencilGathered(float const sD[], T const & cVerts, U * D) const;
+    template <typename REAL, class T, class U>
+    void ApplyStencilGathered(REAL const sD[], T const & cVerts, U * D) const;
 
 private:
     //  Evaluation applying weighted combinations of client type <T>:
+    template <typename REAL, class T, class U>
+    void evaluate(double u, double v, T const & patchPoints, U * P,
+                                      U * Du,  U * Dv,
+                                      U * Duu, U * Duv, U * Dvv) const;
+
     template <typename REAL, class T, class U>
     void evalRegularPatch(REAL u, REAL v, T const & patchPoints,
             U * P, U * Du, U * Dv, U * Duu, U * Dvu, U * Dvv) const;
@@ -181,8 +188,6 @@ private:
     template <typename REAL>
     REAL const * getIrregPatchStencilMatrix() const;
 
-    bool areIrregPatchStencilsDouble() const;
-
     //  WIP - use of StencilTable is likely to be replaced
     bool irregPatchNeedsStencilTable() const;
     Far::StencilTableReal<float> const * getIrregPatchStencilTable() const;
@@ -207,6 +212,7 @@ private:
     unsigned int _isValid   : 1;
     unsigned int _isRegular : 1;
     unsigned int _isLinear  : 1;
+    unsigned int _useDouble : 1;
 
     //  WIP - consider a union here for the reg/irreg members:
     unsigned int _irregOwner : 1;
@@ -267,12 +273,10 @@ Surface::PreparePatchPointValues(T const & meshPoints,
             //  WIP - use of the StencilTable will eventually be removed
             getIrregPatchStencilTable()->UpdateValues(
                 patchPoints, patchPoints, GetNumControlVertices());
+        } else if (_useDouble) {
+            applyIrregPatchStencils<double>(patchPoints);
         } else {
-            if (areIrregPatchStencilsDouble()) {
-                applyIrregPatchStencils<double>(patchPoints);
-            } else {
-                applyIrregPatchStencils<float>(patchPoints);
-            }
+            applyIrregPatchStencils<float>(patchPoints);
         }
     }
 }
@@ -441,26 +445,38 @@ Surface::evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
     }
 }
 
-template <class T, class U>
+template <typename REAL, class T, class U>
 inline void
-Surface::Evaluate(float u, float v, T const & patchPoints,
+Surface::evaluate(double u, double v, T const & patchPoints,
                   U * P, U * Du, U * Dv, U * Duu, U * Duv, U * Dvv) const {
 
     if (_isRegular) {
-        evalRegularPatch<float,T,U>(u,v, patchPoints,
-                                         P, Du, Dv, Duu, Duv, Dvv);
+        evalRegularPatch<REAL,T,U>((REAL)u, (REAL)v, patchPoints,
+                                   P, Du, Dv, Duu, Duv, Dvv);
     } else if (_isLinear) {
-        evalMultiLinearPatch<float,T,U>(u,v, patchPoints,
-                                             P, Du, Dv, Duu, Duv, Dvv);
+        evalMultiLinearPatch<REAL,T,U>((REAL)u, (REAL)v, patchPoints,
+                                       P, Du, Dv, Duu, Duv, Dvv);
     } else {
-        evalIrregularPatch<float,T,U>(u,v, patchPoints,
-                                           P, Du, Dv, Duu, Duv, Dvv);
+        evalIrregularPatch<REAL,T,U>((REAL)u, (REAL)v, patchPoints,
+                                     P, Du, Dv, Duu, Duv, Dvv);
     }
 }
 
 template <class T, class U>
 inline void
-Surface::Evaluate(float u, float v, T const & patchPoints,
+Surface::Evaluate(double u, double v, T const & patchPoints,
+                  U * P, U * Du, U * Dv, U * Duu, U * Duv, U * Dvv) const {
+
+    if (_useDouble) {
+        evaluate<double,T,U>(u, v, patchPoints, P, Du, Dv, Duu, Duv, Dvv);
+    } else {
+        evaluate<float,T,U>(u, v, patchPoints, P, Du, Dv, Duu, Duv, Dvv);
+    }
+}
+
+template <class T, class U>
+inline void
+Surface::Evaluate(double u, double v, T const & patchPoints,
                   U * P, U * Du, U * Dv) const {
 
     Evaluate<T,U>(u, v, patchPoints, P, Du, Dv, 0, 0, 0);
@@ -468,36 +484,38 @@ Surface::Evaluate(float u, float v, T const & patchPoints,
 
 template <class T, class U>
 inline void
-Surface::Evaluate(float u, float v, T const & patchPoints, U * P) const {
+Surface::Evaluate(double u, double v, T const & patchPoints, U * P) const {
 
     Evaluate<T,U>(u, v, patchPoints, P, 0, 0, 0, 0, 0);
 }
 
+template <typename REAL>
 inline int
-Surface::EvaluateStencils(float u, float v,
-                          float sP[], float sDu[], float sDv[]) const {
+Surface::EvaluateStencils(double u, double v,
+                          REAL sP[], REAL sDu[], REAL sDv[]) const {
 
-    return EvaluateStencils(u, v, sP, sDu, sDv, 0, 0, 0);
+    return EvaluateStencils<REAL>(u, v, sP, sDu, sDv, 0, 0, 0);
 }
 
+template <typename REAL>
 inline int
-Surface::EvaluateStencils(float u, float v, float sP[]) const {
+Surface::EvaluateStencils(double u, double v, REAL sP[]) const {
 
-    return EvaluateStencils(u, v, sP, 0, 0, 0, 0, 0);
+    return EvaluateStencils<REAL>(u, v, sP, 0, 0, 0, 0, 0);
 }
 
-template <class T, class U>
+template <typename REAL, class T, class U>
 void
-Surface::ApplyStencil(float const sD[], T const & meshVertices, U * D) const {
+Surface::ApplyStencil(REAL const sD[], T const & meshVertices, U * D) const {
 
     D->Clear();
     for (int i = 0; i < _numControlPoints; ++i) {
         D->AddWithWeight(meshVertices[_controlPoints[i]], sD[i]);
     }
 }
-template <class T, class U>
+template <typename REAL, class T, class U>
 void
-Surface::ApplyStencilGathered(float const sD[], T const & cvs, U * D) const {
+Surface::ApplyStencilGathered(REAL const sD[], T const & cvs, U * D) const {
 
     D->Clear();
     for (int i = 0; i < _numControlPoints; ++i) {

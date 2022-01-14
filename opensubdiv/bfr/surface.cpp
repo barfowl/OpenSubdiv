@@ -44,6 +44,7 @@ Surface::initialize() {
     _isValid   = false;
     _isRegular = true;
     _isLinear  = false;
+    _useDouble = false;
 
     _irregOwner = false;
     _irregPatch = 0;
@@ -276,19 +277,20 @@ Surface::evalMultiLinearPatchStencils(REAL u, REAL v,
 //  Main public stencil evaluation method -- simply dispatches the stencil
 //  evaluation methods for the three types above:
 //
+template <typename REAL>
 int
-Surface::EvaluateStencils(float u, float v,
-                  float sP[],   float sDu[],  float sDv[],
-                  float sDuu[], float sDuv[], float sDvv[]) const {
+Surface::EvaluateStencils(double u, double v,
+                  REAL sP[],   REAL sDu[],  REAL sDv[],
+                  REAL sDuu[], REAL sDuv[], REAL sDvv[]) const {
 
     if (_isRegular) {
-        return evalRegularPatchStencils(u, v,
+        return evalRegularPatchStencils<REAL>((REAL)u, (REAL)v,
                                         sP, sDu, sDv, sDuu, sDuv, sDvv);
     } else if (_isLinear) {
-        return evalMultiLinearPatchStencils(u, v,
+        return evalMultiLinearPatchStencils<REAL>((REAL)u, (REAL)v,
                                             sP, sDu, sDv, sDuu, sDuv, sDvv);
     } else {
-        return evalIrregularPatchStencils(u, v,
+        return evalIrregularPatchStencils<REAL>((REAL)u, (REAL)v,
                                           sP, sDu, sDv, sDuu, sDuv, sDvv);
     }
 }
@@ -297,12 +299,6 @@ Surface::EvaluateStencils(float u, float v,
 //
 //  Access to PatchTree's stencils to compute patch points:
 //
-bool
-Surface::areIrregPatchStencilsDouble() const {
-
-    return _irregPatch->UsesDoubleStencils();
-}
-
 template <typename REAL>
 REAL const *
 Surface::getIrregPatchStencilMatrix() const {
@@ -381,6 +377,16 @@ Surface::evalMultiLinearPatchStencils<float>(float u, float v,
         float sDuu[], float sDuv[], float sDvv[]) const;
 template int
 Surface::evalMultiLinearPatchStencils<double>(double u, double v,
+        double sP[],   double sDu[],  double sDv[],
+        double sDuu[], double sDuv[], double sDvv[]) const;
+
+//  Top-level stencil evaluation:
+template int
+Surface::EvaluateStencils<float>(double u, double v,
+        float sP[],   float sDu[],  float sDv[],
+        float sDuu[], float sDuv[], float sDvv[]) const;
+template int
+Surface::EvaluateStencils<double>(double u, double v,
         double sP[],   double sDu[],  double sDv[],
         double sDuu[], double sDuv[], double sDvv[]) const;
 

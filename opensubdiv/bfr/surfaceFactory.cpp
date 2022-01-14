@@ -312,6 +312,7 @@ SurfaceFactory::assignLinearSurface(Surface * surfacePtr,
 
     surface._isRegular = (faceSize == _regFaceSize);
     surface._isLinear  = true;
+    surface._useDouble = _limitOptions.IsSurfacePrecision<double>();
 
     surface._regPatchType = (_regFaceSize == 4)
                        ?  Far::PatchDescriptor::QUADS
@@ -354,6 +355,7 @@ SurfaceFactory::assignRegularSurface(Surface * surfacePtr,
 
     surface._isRegular = true;
     surface._isLinear  = false;
+    surface._useDouble = _limitOptions.IsSurfacePrecision<double>();
 
     //
     //  Assemble the regular patch:
@@ -407,6 +409,7 @@ SurfaceFactory::assignRegularSurface(Surface * surfacePtr,
 
     surface._isRegular = true;
     surface._isLinear  = false;
+    surface._useDouble = _limitOptions.IsSurfacePrecision<double>();
 
     //
     //  Assemble the regular patch:
@@ -446,6 +449,7 @@ SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
 
     surface._isRegular = false;
     surface._isLinear  = false;
+    surface._useDouble = _limitOptions.IsSurfacePrecision<double>();
 
     //
     //  Construct a new irregular patch or identify one from the cache:
@@ -453,7 +457,7 @@ SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
     IrregularPatchBuilder::Options buildOptions;
     buildOptions.sharpLevel      = _limitOptions.MaxLevelPrimary();
     buildOptions.smoothLevel     = _limitOptions.MaxLevelSecondary();
-    buildOptions.doublePrecision = _limitOptions.UseDoublePrecision();
+    buildOptions.doublePrecision = _limitOptions.IsSurfacePrecision<double>();
     buildOptions.stencilTables   = _limitOptions.UseStencilTables();
 
     IrregularPatchBuilder builder(descriptor, buildOptions);
@@ -506,6 +510,7 @@ SurfaceFactory::copyNonLinearSurface(
 
     surfaceDst._isLinear  = false;
     surfaceDst._isRegular = surfaceSrc._isRegular;
+    surfaceDst._useDouble = surfaceSrc._useDouble;
 
     surfaceDst._numControlPoints = surfaceSrc._numControlPoints;
     surfaceDst._numPatchPoints   = surfaceSrc._numPatchPoints;

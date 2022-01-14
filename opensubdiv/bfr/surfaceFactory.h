@@ -129,8 +129,8 @@ public:
         TopologyCache * ExternalTopologyCache() const { return _extCachePtr; }
 
         //  Other configuration options:
-        void UseDoublePrecision(bool on) { _useDoublePrecision = on; }
-        bool UseDoublePrecision()  const { return _useDoublePrecision; }
+        template <typename REAL> void SetSurfacePrecision();
+        template <typename REAL> bool IsSurfacePrecision() const;
 
         void UseStencilTables(bool on) { _useStencilTables = on; }
         bool UseStencilTables()  const { return _useStencilTables; }
@@ -415,6 +415,31 @@ private:
 
     int  _regFaceSize;
 };
+
+//
+//  Template specializations:
+//
+template <>
+inline void
+SurfaceFactory::Options::SetSurfacePrecision<float>() {
+    _useDoublePrecision = false;
+}
+template <>
+inline void
+SurfaceFactory::Options::SetSurfacePrecision<double>() {
+    _useDoublePrecision = true;
+}
+
+template <>
+inline bool
+SurfaceFactory::Options::IsSurfacePrecision<float>() const {
+    return !_useDoublePrecision;
+}
+template <>
+inline bool
+SurfaceFactory::Options::IsSurfacePrecision<double>() const {
+    return _useDoublePrecision;
+}
 
 } // end namespace Bfr
 
