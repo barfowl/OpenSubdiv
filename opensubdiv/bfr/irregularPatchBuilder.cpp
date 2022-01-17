@@ -928,7 +928,8 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
     bool assigning = (edgeVertPairs != 0) && (edgeSharpness != 0);
 
     //
-    //  First test the forward edge of each corner of the face:
+    //  First test the forward edge of each corner of the face (avoid
+    //  including redundant inf-sharp boundary edges):
     //
     int nSharpEdges = 0;
 
@@ -938,7 +939,8 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
         CornerTopology const & cTop = _surface.GetCornerTopology(corner);
         CornerSubset const   & cSub = _surface.GetCornerSubset(corner);
 
-        if (cSub._tag.HasSharpEdges()) {
+        if (cSub._tag.HasSharpEdges() &&
+                (!cSub.IsBoundary() || cSub._numFacesBefore)) {
             int   cornerFace = cTop.GetFaceInVertex();
             float sharpness  = cTop.GetFaceEdgeSharpness(cornerFace, 0);
             if (Sdc::Crease::IsSharp(sharpness)) {
@@ -1016,6 +1018,7 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
             if (cSub._numFacesBefore) {
                 int nextFace = cTop.GetFaceBefore(cSub._numFacesBefore);
                 for (int i = 1; i < cSub._numFacesBefore; ++i) {
+                    nextVert += cTop.GetFaceSize(nextFace) - 2;
                     float sharpness = cTop.GetFaceEdgeSharpness(nextFace, 1);
                     if (Sdc::Crease::IsSharp(sharpness)) {
                         if (assigning) {
@@ -1027,7 +1030,6 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
                         nSharpEdges++;
                     }
                     nextFace  = cTop.GetFaceNext(nextFace);
-                    nextVert += cTop.GetFaceSize(nextFace) - 2;
                 }
             }
         }
