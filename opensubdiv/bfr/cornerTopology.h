@@ -117,7 +117,9 @@ public:
                               Index const          fvarIndices[],
                               CornerSubset const & vtxSubset) const;
 
+    //  Methods to control sharpness of the corner in a subset:
     void SharpenSubset(CornerSubset * subset) const;
+    void UnSharpenSubset(CornerSubset * subset) const;
 
 public:
     //  Methods to query properties after finalization:
@@ -198,6 +200,8 @@ private:
 
     unsigned short _commonFaceSize : 12;
     unsigned short _regFaceSize    :  4;
+    unsigned short _isExpInfSharp  :  1;
+    unsigned short _isExpSemiSharp :  1;
 
     int   _numFaceVerts;
 

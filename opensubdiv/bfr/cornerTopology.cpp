@@ -42,6 +42,8 @@ CornerTopology::Initialize(int faceSize, int regFaceSize) {
 
     _commonFaceSize = faceSize;
     _regFaceSize    = regFaceSize;
+    _isExpInfSharp  = false;
+    _isExpSemiSharp = false;
     _numFaceVerts   = 0;
 
     _vTop._isInitialized = false;
@@ -106,8 +108,11 @@ CornerTopology::Finalize(int faceInVertex) {
     //  Tags related to vertex sharpness -- simply assign for now (recall
     //  a vertex may later be made sharp due to topology, creasing, etc.):
     //
-    _tag._infSharpVerts  = Sdc::Crease::IsInfinite(_vTop._vertSharpness);
-    _tag._semiSharpVerts = (_vTop._vertSharpness > 0) && !_tag._infSharpVerts;
+    _isExpInfSharp  = Sdc::Crease::IsInfinite(_vTop._vertSharpness);
+    _isExpSemiSharp = Sdc::Crease::IsSemiSharp(_vTop._vertSharpness);
+
+    _tag._infSharpVerts  = _isExpInfSharp;
+    _tag._semiSharpVerts = _isExpSemiSharp;
 
     //
     //  Tags related to edge sharpness -- test for any assigned values and
@@ -349,9 +354,40 @@ CornerTopology::FindFaceVaryingSubset(CornerSubset       * fvarSubsetPtr,
     findFVarSubsetExtent(vtxSub, fvarSubsetPtr, fvarIndices);
 
     //
-    //  Look for occurrences of the FVar corner outside the subset,
-    //  which requires sharpening it due to it being non-manifold
+    //  Several conditions are applied to determine if the corner should
+    //  be made sharp -- all of which are independent of the face-varying
+    //  interpolation options, which will be applied later.
     //
+    //  First, reset the sharpness if the vertex was made inf-sharp for
+    //  some other reason as the rules for face-varying sharpening differ.
+    //
+    //  Two conditions are tested and applied here:
+    //
+    //      - sharpening if the vertex is non-manifold
+    //      - sharpening if the face-varying topology is non-manifold
+    //
+    //  For the first, Far sharpens face-varying values at all non-manifold
+    //  vertices even if the vertex is not sharp (it may be a crease). This
+    //  is questionable (producing a piecewise linear UV boundary along a
+    //  geometrically smooth boundary) and will be revisited in Far later,
+    //  but will be applied here until then.
+    //
+    //  For the second, the face-varying subset is manifold by definition,
+    //  but if any other subset includes the same face-varying corner, it
+    //  will be non-manifold.  So simply look for the face-varying corner
+    //  in other faces and mark non-manifold (sharpend) if found.
+    //
+    //  Reset the sharpness if the vertex was somehow made sharp:
+    if (fvarSub.IsSharp() && !_isExpInfSharp) {
+        UnSharpenSubset(fvarSubsetPtr);
+    }
+
+    //  Sharpen if the vertex is non-manifold:
+    if (!fvarSub.IsSharp() && !_tag.IsManifold()) {
+        SharpenSubset(fvarSubsetPtr);
+    }
+
+    //  Sharpen if the face-varying value is non-manifold:
     if (!fvarSub.IsSharp() && (fvarSub.GetNumFaces() < vtxSub.GetNumFaces())) {
         Index fvarAtCorner = GetFaceVertexAtCorner(fvarIndices);
 
@@ -368,7 +404,11 @@ CornerTopology::FindFaceVaryingSubset(CornerSubset       * fvarSubsetPtr,
         }
     }
 
-    //  Adjust the tags if the fvar subset is a true subset:
+    //
+    //  Finally, adjust other topology tags if the fvar subset is a true
+    //  subset.  Prefer to do this after the above sharpening as being
+    //  made sharp will trivialize some of what is done here:
+    //
     if (!fvarSub.MatchesExtentOfSuperset(vtxSub)) {
         adjustSubsetTags(&fvarSub, &vtxSub);
     }
@@ -387,6 +427,14 @@ CornerTopology::SharpenSubset(CornerSubset * subset) const {
 
     subset->_tag._infSharpVerts  = true;
     subset->_tag._semiSharpVerts = false;
+}
+void
+CornerTopology::UnSharpenSubset(CornerSubset * subset) const {
+
+    //  Restore subset sharpness based on actual sharpness assignment:
+
+    subset->_tag._infSharpVerts  = _isExpInfSharp;
+    subset->_tag._semiSharpVerts = _isExpSemiSharp;
 }
 
 bool
@@ -493,8 +541,11 @@ CornerTopology::adjustSubsetTags(CornerSubset       * subset,
         }
         if (subsetTag._infSharpEdges) {
             subsetTag._infSharpEdges = subsetHasInfSharpEdges(*subset);
-            if (!subsetTag._infSharpEdges || subset->IsBoundary()) {
+            if (!subsetTag._infSharpEdges) {
                 subsetTag._infSharpDarts = false;
+            } else if (subset->IsBoundary()) {
+                subsetTag._infSharpDarts = false;
+                SharpenSubset(subset);
             }
         }
         if (subsetTag._semiSharpEdges) {
