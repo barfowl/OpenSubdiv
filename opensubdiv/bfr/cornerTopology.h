@@ -42,17 +42,17 @@ namespace Bfr {
 //  by higher level classes in conjunction with CornerTopology.
 //
 struct CornerSubset {
-    //  Members defining the extent of the subset:
-    short _numFacesBefore;
-    short _numFacesAfter;
-    short _numFacesTotal;
+    CornerSubset() { }
 
+    void Initialize(CornerTag tag) {
+        _tag = tag;
+        _numFacesBefore = 0;
+        _numFacesAfter  = 0;
+        _numFacesTotal  = 1;
+        _localSharpness = 0.0f;
+    }
 
-    //  The definition is completed with the boundary and sharp bits --
-    //  now part of the CornerTag (and later combined).  Simple get/set
-    //  methods are provided to avoid the tedious syntax of the tag:
-    CornerTag _tag;
-
+    //  Simple get/set methods to avoid the tedious syntax of the tag:
     int GetNumFaces() const { return _numFacesTotal; }
 
     bool IsBoundary() const { return _tag._boundaryVerts; }
@@ -70,6 +70,17 @@ struct CornerSubset {
         return MatchesExtentOfSuperset(sup) &&
                (IsSharp() == sup.IsSharp());
     }
+
+    //  Member tags containing boundary and sharp bits:
+    CornerTag _tag;
+
+    //  Members defining the extent of the subset:
+    short _numFacesBefore;
+    short _numFacesAfter;
+    short _numFacesTotal;
+
+    //  Member to override vertex sharpness (rarely used):
+    float _localSharpness;
 };
 
 //
@@ -119,7 +130,11 @@ public:
 
     //  Methods to control sharpness of the corner in a subset:
     void SharpenSubset(CornerSubset * subset) const;
+    void SharpenSubset(CornerSubset * subset, float sharpness) const;
     void UnSharpenSubset(CornerSubset * subset) const;
+
+    bool  HasImplicitSharpness() const;
+    float GetImplicitSharpness() const;
 
 public:
     //  Methods to query properties after finalization:
@@ -197,12 +212,16 @@ private:
     CornerTag      _tag;
 
     short _faceInRing;
+    short _commonFaceSize;
 
-    unsigned short _commonFaceSize : 12;
     unsigned short _regFaceSize    :  4;
     unsigned short _isExpInfSharp  :  1;
     unsigned short _isExpSemiSharp :  1;
+    unsigned short _isImpInfSharp  :  1;
+    unsigned short _isImpSemiSharp :  1;
 
+    short _numInfSharpEdges;
+    short _numSemiSharpEdges;
     int   _numFaceVerts;
 
     ShortBuffer _faceEdgeNeighbors;

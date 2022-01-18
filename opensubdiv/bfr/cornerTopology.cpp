@@ -42,9 +42,14 @@ CornerTopology::Initialize(int faceSize, int regFaceSize) {
 
     _commonFaceSize = faceSize;
     _regFaceSize    = regFaceSize;
+    _numFaceVerts   = 0;
+
     _isExpInfSharp  = false;
     _isExpSemiSharp = false;
-    _numFaceVerts   = 0;
+    _isImpInfSharp  = false;
+    _isImpSemiSharp = false;
+    _numInfSharpEdges  = 0;
+    _numSemiSharpEdges = 0;
 
     _vTop._isInitialized = false;
 }
@@ -132,32 +137,43 @@ CornerTopology::Finalize(int faceInVertex) {
 
         if (isOrdered) {
             //  Detect any unsharpened boundary edges first:
-            if (_tag._boundaryVerts) {
+            bool isBoundary = _tag._boundaryVerts;
+            if (isBoundary) {
                 int last = 2 * _vTop._numFaces - 1;
                 _tag._boundaryNonSharp =
                         !Sdc::Crease::IsInfinite(sharpness[0]) ||
                         !Sdc::Crease::IsInfinite(sharpness[last]);
             }
 
-            //  Detect the presence of inf-sharp and semi-sharp edges next
-            //  (assuming boundary edges are inf-sharp and skipping):
-            int numInfSharp  = 2 * _tag._boundaryVerts;
-            int numSemiSharp = 0;
-            for (int i = _tag._boundaryVerts; i < _vTop._numFaces; ++i ) {
+            //  Detect the presence of interior inf-sharp and semi-sharp
+            //  edges next (using leading edge of each face):
+            _numInfSharpEdges  = 0;
+            _numSemiSharpEdges = 0;
+            for (int i = isBoundary; i < _vTop._numFaces; ++i ) {
                 if (Sdc::Crease::IsInfinite(sharpness[2*i])) {
-                    ++ numInfSharp;
+                    ++ _numInfSharpEdges;
                 } else if (Sdc::Crease::IsSharp(sharpness[2*i])) {
-                    ++ numSemiSharp;
+                    ++ _numSemiSharpEdges;
                 }
             }
 
-            _tag._infSharpEdges  = (numInfSharp > (2 * _tag._boundaryVerts));
-            _tag._semiSharpEdges = (numSemiSharp > 0);
+            //  Mark the presence of non-boundary/interior edges:
+            _tag._infSharpEdges  = (_numInfSharpEdges > 0);
+            _tag._semiSharpEdges = (_numSemiSharpEdges > 0);
+            _tag._infSharpDarts  = (_numInfSharpEdges == 1) && !isBoundary;
 
-            _tag._infSharpDarts = !_tag._boundaryVerts && (numInfSharp == 1);
+            //  Detect edges effectively making the vertex sharp -- note
+            //  it can be both explicitly and implicitly sharp (e.g. low
+            //  semi-sharp vertex value with a higher semi-sharp edge):
+            int numInfSharpTotal = _numInfSharpEdges + isBoundary * 2;
+            if (numInfSharpTotal > 2) {
+                _isImpInfSharp = true;
+            } else if ((numInfSharpTotal + _numSemiSharpEdges) > 2) {
+                _isImpSemiSharp = true;
+            }
 
-            //  Detect an excess of inf-sharp edges -- making vertex sharp:
-            if (numInfSharp > 2) {
+            //  Mark the vertex inf-sharp if implicitly inf-sharp:
+            if (!_isExpInfSharp && _isImpInfSharp) {
                 _tag._infSharpVerts  = true;
                 _tag._semiSharpVerts = false;
             }
@@ -176,6 +192,37 @@ CornerTopology::Finalize(int faceInVertex) {
     }
 }
 
+bool
+CornerTopology::HasImplicitSharpness() const {
+
+    return _isImpInfSharp || _isImpSemiSharp;
+}
+
+float
+CornerTopology::GetImplicitSharpness() const {
+
+    if (_isImpInfSharp) {
+        return Sdc::Crease::SHARPNESS_INFINITE;
+    }
+    assert(_isImpSemiSharp);
+
+    //
+    //  Since this will be applied at an inf-sharp crease, there will be
+    //  two inf-sharp edges in addition to the semi-sharp, so we only
+    //  need find the max of the semi-sharp edges and whatever explicit
+    //  vertex sharpness may have been assigned:
+    //
+    float sharpness = GetVertexSharpness();
+
+    for (int i = 0; i < GetNumFaces(); ++i) {
+        //  Use the trailing edge of every connected face:
+        if (!_tag._unOrderedFaces || (_faceEdgeNeighbors[2*i+1] >= 0)) {
+            sharpness = std::max(sharpness, GetFaceEdgeSharpness(2*i+1));
+        }
+    }
+    return sharpness;
+}
+
 //
 //  Methods to initialize and/or find subsets of the corner's topology:
 //
@@ -184,7 +231,7 @@ CornerTopology::InitializeCompleteSubset(CornerSubset * subset) const {
 
     assert(GetTag().IsManifold());
 
-    subset->_tag = GetTag();
+    subset->Initialize(GetTag());
 
     subset->_numFacesBefore = subset->IsBoundary() ? GetFaceInVertex() : 0;
     subset->_numFacesAfter  = GetNumFaces() - subset->_numFacesBefore - 1;
@@ -198,9 +245,14 @@ CornerTopology::FindConnectedSubset(CornerSubset * subset) const {
 
     findConnectedSubsetExtent(subset);
 
-    //  If unconnected faces are a manifold set, tags are accurate:
+    //  If unconnected faces form a manifold set, tags are accurate:
     if (!GetTag().IsManifold()) {
         adjustSubsetTags(subset);
+
+        //  If on a non-manifold crease, make use of implicit sharpness:
+        if (!subset->IsSharp() && HasImplicitSharpness()) {
+            SharpenSubset(subset, GetImplicitSharpness());
+        }
     }
     return subset->_numFacesTotal;
 }
@@ -210,7 +262,7 @@ CornerTopology::findConnectedSubsetExtent(CornerSubset * subset) const {
 
     assert(AreUnOrderedFacesConnected());
 
-    subset->_tag = GetTag();
+    subset->Initialize(GetTag());
     subset->_tag._nonManifoldVerts = false;
 
     subset->_numFacesBefore = 0;
@@ -255,20 +307,13 @@ CornerTopology::findFVarSubsetExtent(CornerSubset const & vtxSub,
     //
 
     //
-    //  Initialize as boundary until determined otherwise (periodic)
+    //  Initialize as single face boundary -- return if only one face:
     //
-    fvarSub._tag = vtxSub._tag;
+    fvarSub.Initialize(vtxSub._tag);
 
-    fvarSub._numFacesAfter = 0;
-    fvarSub._numFacesTotal = 0;
-    fvarSub._numFacesBefore = 0;
-
-    fvarSub._tag = vtxSub._tag;
     fvarSub.SetBoundary(true);
 
-    //  Skip the following search if only one face:
     if (vtxSub._numFacesTotal == 1) {
-        fvarSub._numFacesTotal = 1;
         return 1;
     }
 
@@ -435,6 +480,15 @@ CornerTopology::UnSharpenSubset(CornerSubset * subset) const {
 
     subset->_tag._infSharpVerts  = _isExpInfSharp;
     subset->_tag._semiSharpVerts = _isExpSemiSharp;
+}
+void
+CornerTopology::SharpenSubset(CornerSubset * subset, float sharpness) const {
+
+    //  Mark the subset according to sharpness value
+    subset->_localSharpness = sharpness;
+
+    subset->_tag._infSharpVerts  = Sdc::Crease::IsInfinite(sharpness);
+    subset->_tag._semiSharpVerts = Sdc::Crease::IsSemiSharp(sharpness);
 }
 
 bool
@@ -604,19 +658,30 @@ struct CornerTopology::Edge {
     //  Empty constructor intentional since we over-allocate what we need:
     Edge() { }
 
-    unsigned int nonManifold : 1;
-    unsigned int boundary    : 1;
-    unsigned int expInfSharp : 1;
+    unsigned short boundary    : 1;
+    unsigned short interior    : 1;
+    unsigned short nonManifold : 1;
+    unsigned short infSharp    : 1;
+    unsigned short semiSharp   : 1;
 
     short prevFace, nextFace;
     short vertex; // temporary, for debugging only
 
-    void SetNonManifold() { nonManifold = 1, boundary = 0, expInfSharp = 0; }
-    void SetBoundary()    { nonManifold = 0, boundary = 1, expInfSharp = 0; }
-    void SetInterior()    { nonManifold = 0, boundary = 0, expInfSharp = 0; }
+    void Clear() { std::memset(this, 0, sizeof(*this)); }
 
-    void SetInfSharp(float sharpness) {
-        expInfSharp = Sdc::Crease::IsInfinite(sharpness);
+    //  Transition of state as incident faces are added:
+    void SetBoundary()    { boundary = 1; }
+    void SetInterior()    { boundary = 0, interior = 1; }
+    void SetNonManifold() { boundary = 0, interior = 0, nonManifold = 1; }
+
+    void SetSharpness(float sharpness) {
+        if (sharpness > 0.0f) {
+            if (Sdc::Crease::IsInfinite(sharpness)) {
+                infSharp = true;
+            } else {
+                semiSharp = true;
+            }
+        }
     }
 
     void SetFaces(int prev, int next) { prevFace = prev, nextFace = next; }
@@ -773,9 +838,10 @@ CornerTopology::gatherUnOrderedEdges(Edge        edges[],
         }
 
         //  Initialize as boundary, test if explicitly made inf-sharp:
+        E.Clear();
         E.SetBoundary();
-        if (_tag.HasInfSharpEdges()) {
-            E.SetInfSharp(GetFaceEdgeSharpness(eOuter));
+        if (_tag.HasSharpEdges()) {
+            E.SetSharpness(GetFaceEdgeSharpness(eOuter));
         }
 
         //
@@ -903,32 +969,45 @@ CornerTopology::assignUnOrderedTags(Edge const edges[], int numEdges) {
     int numEdgesBoundary         = 0;
     int numEdgesBoundaryNotSharp = 0;
     int numEdgesNonManifold      = 0;
-    int numEdgesInfSharp         = 0;
+    int numEdgesTotalInfSharp    = 0;
+
+    _numInfSharpEdges  = 0;
+    _numSemiSharpEdges = 0;
 
     for (int i = 0; i < numEdges; ++i) {
         Edge const & E = edges[i];
 
-        numEdgesNonManifold      += E.nonManifold;
-        numEdgesBoundary         += E.boundary;
-        numEdgesBoundaryNotSharp += (E.boundary && !E.expInfSharp);
+        if (E.interior) {
+            _numInfSharpEdges  += E.infSharp;
+            _numSemiSharpEdges += E.semiSharp;
+        } else if (E.boundary) {
+            ++ numEdgesBoundary;
+            numEdgesBoundaryNotSharp += !E.infSharp;
+        } else {
+            ++ numEdgesNonManifold;
+        }
 
         //  Non-manifold and boundary edges are implicitly inf-sharp
-        numEdgesInfSharp += E.nonManifold || E.boundary || E.expInfSharp;
+        numEdgesTotalInfSharp += E.nonManifold || E.boundary || E.infSharp;
     }
 
     //
-    //  The presence of any boundary edge, whether manifold or not, is
-    //  noteworthy -- update tags accordingly:
+    //  Assign tags and other members related to the inventory of edges:
     //
     bool hasBoundary = (numEdgesBoundary > 0);
     if (hasBoundary) {
+        //  Relevant if non-manifold as it affects presence of limit surface
         _tag._boundaryVerts = true;
         _tag._boundaryNonSharp = numEdgesBoundaryNotSharp;
     }
 
+    _tag._infSharpEdges  = (_numInfSharpEdges > 0);
+    _tag._semiSharpEdges = (_numSemiSharpEdges > 0);
+    _tag._infSharpDarts  = (_numInfSharpEdges == 1) && !hasBoundary;
+
     //
     //  Determine whether manifold or not.  Some obvious tests quickly
-    //  detrmine if the corner is non-manifold, but ultimately we have
+    //  indicate if the corner is non-manifold, but ultimately we have
     //  to traverse the faces to know for sure to verify they form a
     //  single connected set (e.g. two cones sharing their apex vertex 
     //  appear manifold to this point but form two connected sets).
@@ -948,39 +1027,29 @@ CornerTopology::assignUnOrderedTags(Edge const edges[], int numEdges) {
     _tag._nonManifoldVerts = isNonManifold;
 
     //
-    //  Determine sharpening based on explicit sharpening or other
+    //  Determine and apply sharpening based on implicit or other
     //  non-manifold conditions (sharpening of corners based on the
     //  boundary interpolation options is dealt with later).
     //
-    //  All non-manifold cases are sharpened except for the "radial
-    //  crease" case, i.e. two interior non-manifold edges with more
-    //  than two incident faces:
+    //  All non-manifold cases require sharpening the vertex except
+    //  the "radial crease" case, i.e. two interior non-manifold edges
+    //  with more than two incident faces:
     //
-    if (!_tag._infSharpVerts) {
-        if (numEdgesInfSharp > 2) {
-            _tag._infSharpVerts = true;
-        } else if (isNonManifold) {
-            _tag._infSharpVerts = !((numEdgesNonManifold == 2) &&
-                                    (numEdgesBoundary == 0) &&
-                                    (numFaces > numEdges));
-        }
+    if (numEdgesTotalInfSharp > 2) {
+        _isImpInfSharp = true;
+    } else if ((numEdgesTotalInfSharp + _numSemiSharpEdges) > 2) {
+        _isImpSemiSharp = true;
     }
 
-    //
-    //  Adjust edge sharpness tags if we have a manifold set of faces
-    //  (which may actually unset the tag if sharpness was explicitly
-    //  applied to boundaries).
-    //
-    //  For non-manifold faces, these tags are less critical as they
-    //  will be determined explicitly later for a manifold subset.
-    //
-    if (!isNonManifold) {
-        if (hasBoundary) {
-            _tag._infSharpEdges = (numEdgesInfSharp > 2);
-            _tag._infSharpDarts = false;
-        } else {
-            _tag._infSharpEdges = (numEdgesInfSharp > 0);
-            _tag._infSharpDarts = (numEdgesInfSharp == 1);
+    if (!_isExpInfSharp) {
+        if (!_isImpInfSharp && isNonManifold) {
+            _isImpInfSharp = !((numEdgesNonManifold == 2) &&
+                               (numEdgesBoundary == 0) &&
+                               (numFaces > numEdges));
+        }
+        if (_isImpInfSharp) {
+            _tag._infSharpVerts = true;
+            _tag._semiSharpVerts = false;
         }
     }
 }

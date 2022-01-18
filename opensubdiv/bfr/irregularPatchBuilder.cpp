@@ -894,22 +894,18 @@ int
 IrregularPatchBuilder::gatherControlVertexSharpness(
         int vertIndices[], float vertSharpness[]) const {
 
-    bool assigning = (vertIndices != 0) && (vertSharpness != 0);
-
     int nSharpVerts = 0;
-
     for (int i = 0; i < _surface.GetFaceSize(); ++i) {
-        CornerTopology const & cTop = _surface.GetCornerTopology(i);
-        CornerSubset   const & cSub = _surface.GetSubsets()[i];
+        CornerSubset const & cSub = _surface.GetSubsets()[i];
 
-        if (cSub._tag.IsInfSharp() || cSub._tag.IsSemiSharp()) {
-            if (assigning) {
-                vertIndices[nSharpVerts] = i;
-                vertSharpness[nSharpVerts] = cSub._tag.IsInfSharp()
-                                           ? Sdc::Crease::SHARPNESS_INFINITE
-                                           : cTop.GetVertexSharpness();
-            }
-            ++ nSharpVerts;
+        if (cSub._tag.IsInfSharp()) {
+            vertSharpness[nSharpVerts] = Sdc::Crease::SHARPNESS_INFINITE;
+            vertIndices[nSharpVerts++] = i;
+        } else if (cSub._tag.IsSemiSharp()) {
+            vertSharpness[nSharpVerts] = (cSub._localSharpness > 0.0f) ? 
+                        cSub._localSharpness :
+                        _surface.GetCornerTopology(i).GetVertexSharpness();
+            vertIndices[nSharpVerts++] = i;
         }
     }
     return nSharpVerts;
@@ -918,7 +914,12 @@ IrregularPatchBuilder::gatherControlVertexSharpness(
 int
 IrregularPatchBuilder::countSharpControlVertices() const {
 
-    return gatherControlVertexSharpness(0, 0);
+    int nSharpVerts = 0;
+    for (int i = 0; i < _surface.GetFaceSize(); ++i) {
+        nSharpVerts += _surface.GetSubsets()[i]._tag.IsInfSharp() ||
+                       _surface.GetSubsets()[i]._tag.IsSemiSharp();
+    }
+    return nSharpVerts;
 }
 
 int
