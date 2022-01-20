@@ -661,6 +661,8 @@ struct CornerTopology::Edge {
     unsigned short boundary    : 1;
     unsigned short interior    : 1;
     unsigned short nonManifold : 1;
+    unsigned short degenerate  : 1;
+    unsigned short duplicate   : 1;
     unsigned short infSharp    : 1;
     unsigned short semiSharp   : 1;
 
@@ -673,6 +675,8 @@ struct CornerTopology::Edge {
     void SetBoundary()    { boundary = 1; }
     void SetInterior()    { boundary = 0, interior = 1; }
     void SetNonManifold() { boundary = 0, interior = 0, nonManifold = 1; }
+    void SetDegenerate()  { SetNonManifold(), degenerate = 1; }
+    void SetDuplicate()   { SetNonManifold(), duplicate = 1; }
 
     void SetSharpness(float sharpness) {
         if (sharpness > 0.0f) {
@@ -826,19 +830,18 @@ CornerTopology::gatherUnOrderedEdges(Edge        edges[],
 
         //
         //  Create/initialize new edge before searching for matching edges:
+        //  if degenerate, skip any futher inspection, otherwise initialize
+        //  as a boundary edge and classify its sharpness:
         //
         Edge & E = edges[eIndex];
-
+        E.Clear();
         E.vertex = vIndex;
 
-        //  Skip any further inspection if edges is degenerate:
         if (vIndex == vCorner) {
-            E.SetNonManifold();
+            E.SetDegenerate();
             continue;
         }
 
-        //  Initialize as boundary, test if explicitly made inf-sharp:
-        E.Clear();
         E.SetBoundary();
         if (_tag.HasSharpEdges()) {
             E.SetSharpness(GetFaceEdgeSharpness(eOuter));
@@ -912,8 +915,8 @@ CornerTopology::markDuplicateEdges(Edge        edges[],
         Index const * fvOpposite = fvIndices + 2;
         for (int face = 0; face < numFaces; ++face, fvOpposite += 4) {
             if (*fvOpposite == vCorner) {
-                edges[feEdges[2*face  ]].SetNonManifold();
-                edges[feEdges[2*face+1]].SetNonManifold();
+                edges[feEdges[2*face  ]].SetDuplicate();
+                edges[feEdges[2*face+1]].SetDuplicate();
             }
         }
     } else {
@@ -925,9 +928,9 @@ CornerTopology::markDuplicateEdges(Edge        edges[],
             for (int j = 2; j < (faceSize - 2); ++j) {
                 if (fv[j] == vCorner) {
                     if (fv[j-1] == fv[1])
-                        edges[feEdges[2*face]].SetNonManifold();
+                        edges[feEdges[2*face]].SetDuplicate();
                     if (fv[j+1] == fv[faceSize-1])
-                        edges[feEdges[2*face+1]].SetNonManifold();
+                        edges[feEdges[2*face+1]].SetDuplicate();
                 }
             }
             fv += faceSize;
@@ -962,17 +965,22 @@ void
 CornerTopology::assignUnOrderedTags(Edge const edges[], int numEdges) {
 
     //
-    //  Summarize properties of the corner given the number and nature
-    //  of the edges around its vertex.  First, take inventory of the
-    //  number of edges with relevant properties:
+    //  Summarize properties of the corner given the number and nature of
+    //  the edges around its vertex and initialize remaining members or
+    //  tags that depend on them.
     //
-    int numEdgesBoundary         = 0;
-    int numEdgesBoundaryNotSharp = 0;
-    int numEdgesNonManifold      = 0;
-    int numEdgesTotalInfSharp    = 0;
-
+    //  First, take inventory of relevant properties from the edges:
+    //
     _numInfSharpEdges  = 0;
     _numSemiSharpEdges = 0;
+
+    int numNonManifoldEdges = 0;
+    int numSingularEdges    = 0;
+
+    bool hasBoundaryEdges         = false;
+    bool hasBoundaryEdgesNotSharp = false;
+    bool hasDegenerateEdges       = false;
+    bool hasDuplicateEdges        = false;
 
     for (int i = 0; i < numEdges; ++i) {
         Edge const & E = edges[i];
@@ -981,76 +989,77 @@ CornerTopology::assignUnOrderedTags(Edge const edges[], int numEdges) {
             _numInfSharpEdges  += E.infSharp;
             _numSemiSharpEdges += E.semiSharp;
         } else if (E.boundary) {
-            ++ numEdgesBoundary;
-            numEdgesBoundaryNotSharp += !E.infSharp;
+            hasBoundaryEdges = true;
+            hasBoundaryEdgesNotSharp |= !E.infSharp;
         } else {
-            ++ numEdgesNonManifold;
+            ++ numNonManifoldEdges;
+            hasDegenerateEdges |= E.degenerate;
+            hasDuplicateEdges  |= E.duplicate;
         }
 
-        //  Non-manifold and boundary edges are implicitly inf-sharp
-        numEdgesTotalInfSharp += E.nonManifold || E.boundary || E.infSharp;
+        //  Singular edges include all that are effectively inf-sharp:
+        numSingularEdges += E.nonManifold || E.boundary || E.infSharp;
     }
 
     //
-    //  Assign tags and other members related to the inventory of edges:
+    //  Next determine whether manifold or not.  Some obvious tests quickly
+    //  indicate if the corner is non-manifold, but ultimately it will be
+    //  necessary to traverse the faces to confirm that they form a single
+    //  connected set (e.g. two cones sharing their apex vertex may appear
+    //  manifold to this point but as two connected sets are non-manifold).
     //
-    bool hasBoundary = (numEdgesBoundary > 0);
-    if (hasBoundary) {
-        //  Relevant if non-manifold as it affects presence of limit surface
-        _tag._boundaryVerts = true;
-        _tag._boundaryNonSharp = numEdgesBoundaryNotSharp;
+    bool isNonManifold       = false;
+    bool isNonManifoldCrease = false;
+
+    if (numNonManifoldEdges) {
+        isNonManifold = true;
+
+        if (!hasDegenerateEdges && !hasDuplicateEdges && !hasBoundaryEdges) {
+            //  Special crease case that avoids sharpening: two interior
+            //  non-manifold edges radiating more than two sets of faces:
+            isNonManifoldCrease = (numNonManifoldEdges == 2) &&
+                                  (GetNumFaces() > numEdges);
+        }
+    } else {
+        //  Mismatch between number of incident faces and edges:
+        isNonManifold = ((numEdges - GetNumFaces()) != hasBoundaryEdges);
+
+        if (!isNonManifold) {
+            //  If all faces are not connected, the set is non-manifold:
+            CornerSubset subset;
+            int numFacesInSubset = findConnectedSubsetExtent(&subset);
+            if (numFacesInSubset < GetNumFaces()) {
+                isNonManifold = true;
+            }
+        }
     }
+
+    //
+    //  Assign tags and other members related to the inventory of edges
+    //  (boundary status is relevant if non-manifold as it can affect
+    //  the presence of the limit surface):
+    //
+    _tag._nonManifoldVerts = isNonManifold;
+
+    _tag._boundaryVerts    = hasBoundaryEdges;
+    _tag._boundaryNonSharp = hasBoundaryEdgesNotSharp;
 
     _tag._infSharpEdges  = (_numInfSharpEdges > 0);
     _tag._semiSharpEdges = (_numSemiSharpEdges > 0);
-    _tag._infSharpDarts  = (_numInfSharpEdges == 1) && !hasBoundary;
+    _tag._infSharpDarts  = (_numInfSharpEdges == 1) && !hasBoundaryEdges;
 
-    //
-    //  Determine whether manifold or not.  Some obvious tests quickly
-    //  indicate if the corner is non-manifold, but ultimately we have
-    //  to traverse the faces to know for sure to verify they form a
-    //  single connected set (e.g. two cones sharing their apex vertex 
-    //  appear manifold to this point but form two connected sets).
-    //
-    int numFaces = GetNumFaces();
-
-    bool isNonManifold = (numEdgesNonManifold > 0) ||
-                         ((numEdges - numFaces) != hasBoundary);
-    if (!isNonManifold) {
-        //  If all faces are not connected, the set is non-manifold:
-        CornerSubset subset;
-        int numFacesInSubset = findConnectedSubsetExtent(&subset);
-        if (numFacesInSubset < numFaces) {
-            isNonManifold = true;
-        }
-    }
-    _tag._nonManifoldVerts = isNonManifold;
-
-    //
-    //  Determine and apply sharpening based on implicit or other
-    //  non-manifold conditions (sharpening of corners based on the
-    //  boundary interpolation options is dealt with later).
-    //
-    //  All non-manifold cases require sharpening the vertex except
-    //  the "radial crease" case, i.e. two interior non-manifold edges
-    //  with more than two incident faces:
-    //
-    if (numEdgesTotalInfSharp > 2) {
+    //  Conditions effectively making the vertex sharp, include the usual
+    //  excess of inf-sharp edges plus some non-manifold cases:
+    if ((numSingularEdges > 2) || (isNonManifold && !isNonManifoldCrease)) {
         _isImpInfSharp = true;
-    } else if ((numEdgesTotalInfSharp + _numSemiSharpEdges) > 2) {
+    } else if ((numSingularEdges + _numSemiSharpEdges) > 2) {
         _isImpSemiSharp = true;
     }
 
-    if (!_isExpInfSharp) {
-        if (!_isImpInfSharp && isNonManifold) {
-            _isImpInfSharp = !((numEdgesNonManifold == 2) &&
-                               (numEdgesBoundary == 0) &&
-                               (numFaces > numEdges));
-        }
-        if (_isImpInfSharp) {
-            _tag._infSharpVerts = true;
-            _tag._semiSharpVerts = false;
-        }
+    //  Mark the vertex inf-sharp if implicitly inf-sharp:
+    if (!_isExpInfSharp && _isImpInfSharp) {
+        _tag._infSharpVerts = true;
+        _tag._semiSharpVerts = false;
     }
 }
 
