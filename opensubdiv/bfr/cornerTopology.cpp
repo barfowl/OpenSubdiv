@@ -398,32 +398,12 @@ CornerTopology::FindFaceVaryingSubset(CornerSubset       * fvarSubsetPtr,
 
     findFVarSubsetExtent(vtxSub, fvarSubsetPtr, fvarIndices);
 
-    //
-    //  Several conditions are applied to determine if the corner should
-    //  be made sharp -- all of which are independent of the face-varying
-    //  interpolation options, which will be applied later.
-    //
-    //  First, reset the sharpness if the vertex was made inf-sharp for
-    //  some other reason as the rules for face-varying sharpening differ.
-    //
-    //  Two conditions are tested and applied here:
-    //
-    //      - sharpening if the vertex is non-manifold
-    //      - sharpening if the face-varying topology is non-manifold
-    //
-    //  For the first, Far sharpens face-varying values at all non-manifold
-    //  vertices even if the vertex is not sharp (it may be a crease). This
-    //  is questionable (producing a piecewise linear UV boundary along a
-    //  geometrically smooth boundary) and will be revisited in Far later,
-    //  but will be applied here until then.
-    //
-    //  For the second, the face-varying subset is manifold by definition,
-    //  but if any other subset includes the same face-varying corner, it
-    //  will be non-manifold.  So simply look for the face-varying corner
-    //  in other faces and mark non-manifold (sharpend) if found.
-    //
-    //  Reset the sharpness if the vertex was somehow made sharp:
-    if (fvarSub.IsSharp() && !_isExpInfSharp) {
+    //  Reset the sharpness if face-varying topology differs, as the rules
+    //  for the FVar interpolation options (applied later) take precedence
+    //  over all but those applied below:
+    bool fvarTopologyMatchesVertex = fvarSub.MatchesExtentOfSuperset(vtxSub);
+
+    if (fvarSub.IsSharp() && !fvarTopologyMatchesVertex) {
         UnSharpenSubset(fvarSubsetPtr);
     }
 
@@ -432,29 +412,23 @@ CornerTopology::FindFaceVaryingSubset(CornerSubset       * fvarSubsetPtr,
         SharpenSubset(fvarSubsetPtr);
     }
 
-    //  Sharpen if the face-varying value is non-manifold:
+    //  Sharpen if the face-varying value is non-manifold, i.e. if there
+    //  are any occurrences of the corner FVar index outside the subset:
     if (!fvarSub.IsSharp() && (fvarSub.GetNumFaces() < vtxSub.GetNumFaces())) {
-        Index fvarAtCorner = GetFaceVertexAtCorner(fvarIndices);
+        Index fvarMatch = GetFaceVertexAtCorner(fvarIndices);
 
-        Index const * fvarFaceIndices = fvarIndices;
-
-        int numOccurrences = 0;
+        int numMatches = 0;
         for (int i = 0; i < GetNumFaces(); ++i) {
-            numOccurrences += (fvarFaceIndices[0] == fvarAtCorner);
-            if (numOccurrences > fvarSub.GetNumFaces()) {
+            numMatches += (GetFaceVertexAtCorner(i, fvarIndices) == fvarMatch);
+            if (numMatches > fvarSub.GetNumFaces()) {
                 SharpenSubset(fvarSubsetPtr);
                 break;
             }
-            fvarFaceIndices += GetFaceSize(i);
         }
     }
 
-    //
-    //  Finally, adjust other topology tags if the fvar subset is a true
-    //  subset.  Prefer to do this after the above sharpening as being
-    //  made sharp will trivialize some of what is done here:
-    //
-    if (!fvarSub.MatchesExtentOfSuperset(vtxSub)) {
+    //  Finally, adjust other topology tags if fvar topology differs:
+    if (!fvarTopologyMatchesVertex) {
         adjustSubsetTags(&fvarSub, &vtxSub);
     }
     return fvarSubsetPtr->GetNumFaces();
@@ -485,10 +459,12 @@ void
 CornerTopology::SharpenSubset(CornerSubset * subset, float sharpness) const {
 
     //  Mark the subset according to sharpness value
-    subset->_localSharpness = sharpness;
+    if (sharpness > subset->_localSharpness) {
+        subset->_localSharpness = sharpness;
 
-    subset->_tag._infSharpVerts  = Sdc::Crease::IsInfinite(sharpness);
-    subset->_tag._semiSharpVerts = Sdc::Crease::IsSemiSharp(sharpness);
+        subset->_tag._infSharpVerts  = Sdc::Crease::IsInfinite(sharpness);
+        subset->_tag._semiSharpVerts = Sdc::Crease::IsSemiSharp(sharpness);
+    }
 }
 
 bool
@@ -498,18 +474,11 @@ CornerTopology::subsetHasIrregularFaces(CornerSubset const & subset) const {
 
     if (!_tag._unCommonFaceSizes) return true;
 
-    //
-    //  Search faces forward/backward for any with irregular size:
-    //
-    for (int faceNext = _faceInRing, i = 0; i < subset._numFacesAfter; ++i) {
-        faceNext = GetFaceNext(faceNext);
-        if (GetFaceSize(faceNext) != _regFaceSize) return true;
+    int f = GetFaceBefore(subset._numFacesBefore);
+    for (int i = 0; i < subset.GetNumFaces(); ++i, f = GetFaceNext(f)) {
+        if (GetFaceSize(f) != _regFaceSize) return true;
     }
-    for (int facePrev = _faceInRing, i = 0; i < subset._numFacesBefore; ++i) {
-        facePrev = GetFacePrevious(facePrev);
-        if (GetFaceSize(facePrev) != _regFaceSize) return true;
-    }
-    return (GetFaceSize(_faceInRing) != _regFaceSize);
+    return false;
 }
 
 bool
@@ -517,23 +486,12 @@ CornerTopology::subsetHasInfSharpEdges(CornerSubset const & subset) const {
 
     assert(_tag.HasInfSharpEdges());
 
-    if (subset._numFacesTotal == 1) return false;
-
-    //
-    //  Search faces forward/backward for those with interior sharp edges:
-    //
-    for (int faceNext = _faceInRing, i = 0; i < subset._numFacesAfter; ++i) {
-        faceNext = GetFaceNext(faceNext);
-        //  Test the leading face-edge of a forward face:
-        if (Sdc::Crease::IsInfinite(GetFaceEdgeSharpness(faceNext, 0))) {
-            return true;
-        }
-    }
-    for (int facePrev = _faceInRing, i = 0; i < subset._numFacesBefore; ++i) {
-        facePrev = GetFacePrevious(facePrev);
-        //  Test the trailing face-edge of a backward face:
-        if (Sdc::Crease::IsInfinite(GetFaceEdgeSharpness(facePrev, 1))) {
-            return true;
+    int n = subset.GetNumFaces();
+    if (n > 1) {
+        int f = GetFaceBefore(subset._numFacesBefore);
+        //  Skip first face of a boundary when inspecting leading edges:
+        for (int i = subset.IsBoundary(); i < n; ++i, f = GetFaceNext(f)) {
+            if (IsFaceEdgeInfSharp(f, 1)) return true;
         }
     }
     return false;
@@ -544,23 +502,12 @@ CornerTopology::subsetHasSemiSharpEdges(CornerSubset const & subset) const {
 
     assert(_tag.HasSemiSharpEdges());
 
-    if (subset._numFacesTotal == 1) return false;
-
-    //
-    //  Search faces forward/backward for those with interior sharp edges:
-    //
-    for (int faceNext = _faceInRing, i = 0; i < subset._numFacesAfter; ++i) {
-        faceNext = GetFaceNext(faceNext);
-        //  Test the leading face-edge of a forward face:
-        if (Sdc::Crease::IsSemiSharp(GetFaceEdgeSharpness(faceNext, 0))) {
-            return true;
-        }
-    }
-    for (int facePrev = _faceInRing, i = 0; i < subset._numFacesBefore; ++i) {
-        facePrev = GetFacePrevious(facePrev);
-        //  Test the trailing face-edge of a backward face:
-        if (Sdc::Crease::IsSemiSharp(GetFaceEdgeSharpness(facePrev, 1))) {
-            return true;
+    int n = subset.GetNumFaces();
+    if (n > 1) {
+        int f = GetFaceBefore(subset._numFacesBefore);
+        //  Skip first face of a boundary when inspecting leading edges:
+        for (int i = subset.IsBoundary(); i < n; ++i, f = GetFaceNext(f)) {
+            if (IsFaceEdgeSemiSharp(f, 1)) return true;
         }
     }
     return false;

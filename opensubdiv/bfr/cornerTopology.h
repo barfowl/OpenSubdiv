@@ -29,6 +29,7 @@
 
 #include "../bfr/cornerTag.h"
 #include "../bfr/vertexTopology.h"
+#include "../sdc/crease.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -52,9 +53,12 @@ struct CornerSubset {
         _localSharpness = 0.0f;
     }
 
-    //  Simple get/set methods to avoid the tedious syntax of the tag:
+    //  Queries consistent with other classes:
+    CornerTag GetTag() const { return _tag; }
+
     int GetNumFaces() const { return _numFacesTotal; }
 
+    //  Simple get/set methods to avoid the tedious syntax of the tag:
     bool IsBoundary() const { return _tag._boundaryVerts; }
     bool IsSharp()    const { return _tag._infSharpVerts; }
 
@@ -169,8 +173,13 @@ public:
 
     //  Methods to access sharpness of the vertex or its incident edges:
     float GetVertexSharpness() const;
+
     float GetFaceEdgeSharpness(int faceEdge) const;
     float GetFaceEdgeSharpness(int face, bool trailingEdge) const;
+
+    bool IsFaceEdgeSharp(    int face, bool trailingEdge) const;
+    bool IsFaceEdgeInfSharp( int face, bool trailingEdge) const;
+    bool IsFaceEdgeSemiSharp(int face, bool trailingEdge) const;
 
 private:
     //  Private methods for managing CornerSubsets:
@@ -326,6 +335,7 @@ inline float
 CornerTopology::GetVertexSharpness() const {
     return _vTop._vertSharpness;
 }
+
 inline float
 CornerTopology::GetFaceEdgeSharpness(int faceEdge) const {
     return _vTop._faceEdgeSharpness[faceEdge];
@@ -333,6 +343,19 @@ CornerTopology::GetFaceEdgeSharpness(int faceEdge) const {
 inline float
 CornerTopology::GetFaceEdgeSharpness(int face, bool trailing) const {
     return _vTop._faceEdgeSharpness[face*2 + trailing];
+}
+
+inline bool
+CornerTopology::IsFaceEdgeSharp(int face, bool trailing) const {
+    return Sdc::Crease::IsSharp(_vTop._faceEdgeSharpness[face*2+trailing]);
+}
+inline bool
+CornerTopology::IsFaceEdgeInfSharp(int face, bool trailing) const {
+    return Sdc::Crease::IsInfinite(_vTop._faceEdgeSharpness[face*2+trailing]);
+}
+inline bool
+CornerTopology::IsFaceEdgeSemiSharp(int face, bool trailing) const {
+    return Sdc::Crease::IsSemiSharp(_vTop._faceEdgeSharpness[face*2+trailing]);
 }
 
 } // end namespace Bfr

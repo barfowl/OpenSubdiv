@@ -113,7 +113,7 @@ FaceSurface::Initialize(FaceTopology const & vtxTopology,
         if (useInfSharpSubsets && vtxTopTag.HasInfSharpEdges()) {
             //  WIP - potentially reduce to a smaller subset here
         }
-        _combinedTag.Combine(vtxSub._tag);
+        _combinedTag.Combine(vtxSub.GetTag());
     }
     postInitialize();
 }
@@ -144,7 +144,7 @@ FaceSurface::Initialize(FaceSurface const  & vtxSurface,
             sharpenBySdcFVarLinearInterpolation(&fvarSub, fvarIndices,
                     vtxSub, vtxTop);
         }
-        _combinedTag.Combine(fvarSub._tag);
+        _combinedTag.Combine(fvarSub.GetTag());
 
         _matchesVertex &= fvarSub.MatchesShapeOfSuperset(vtxSub);
 
@@ -303,26 +303,142 @@ FaceSurface::sharpenBySdcVtxBoundaryInterpolation(CornerSubset * vtxSub,
     }
 }
 
-namespace {
-    //  Local function to support application of face-varying interpolation:
+namespace fvar_plus {
+    //
+    //  This local namespace includes a few utilities for dealing solely
+    //  with the CORNERS_PLUS1 and PLUS2 face-varying interpolation options.
+    //
+    //  These "plus" options differ from the others in that the behavior
+    //  within a face-varying subset is influenced by factors outside the
+    //  subset, i.e. the presence of external face-varying indices or sharp
+    //  edges.
+    //
+
+    //
+    //  If more than two distinct face-varying subsets are present, the
+    //  corner is sharpened regardless of any other conditions -- leaving
+    //  cases of only one or two subsets to be dealt with.
+    //
     bool
-    moreThanTwoFVarIndicesAtCorner(CornerTopology const & topology,
-                                   Index          const   fvarIndices[]) {
+    hasMoreThanTwoFVarSubsets(CornerTopology const & top,
+                              Index          const   fvarIndices[]) {
 
-        Index iFirst  = fvarIndices[0];
-        Index iSecond = -1;
+        Index indexCorner = top.GetFaceVertexAtCorner(fvarIndices);
+        Index indexOther = -1;
 
-        for (int corner = 1; corner < topology.GetNumFaces(); ++corner) {
-            Index index = topology.GetFaceVertexAtCorner(corner, fvarIndices);
-            if (index == iFirst) continue;
-            if (index == iSecond) continue;
-            if (iSecond >= 0) return true;
-            iSecond = index;
+        int numOtherEdgesDiscts = 1;
+
+        //
+        //  Iterate through the faces and return if more than two unique
+        //  fvar indices encountered, or more than two discts edges are
+        //  found in the only other subset:
+        //
+        int  numFaces = top.GetNumFaces();
+        bool isOrderedBoundary = top.GetTag().IsOrdered() &&
+                                 top.GetTag().IsBoundary();
+
+        for (int face = 0; face < numFaces; ++face) {
+            Index index = top.GetFaceVertexAtCorner(face, fvarIndices);
+
+            //  Matches the corner's subset -- skip:
+            if (index == indexCorner) continue;
+
+            //  Does not match corner's subset or the other subset -- done:
+            if ((indexOther >= 0) && (index != indexOther)) return true;
+
+            //  Matches the "other" subset -- check for discontinuities
+            //  with the leading edge of the next connected face:
+            indexOther = index;
+
+            int faceNext = isOrderedBoundary
+                         ? ((face < (numFaces - 1)) ? (face + 1) : -1)
+                         : top.GetFaceNext(face);
+
+            numOtherEdgesDiscts += (faceNext < 0) ||
+                    (top.GetFaceVertexAtCorner(faceNext, fvarIndices)
+                        != indexOther) ||
+                    (top.GetFaceVertexLeading(faceNext, fvarIndices)
+                        != top.GetFaceVertexTrailing(face, fvarIndices));
+
+            if (numOtherEdgesDiscts > 2) return true;
         }
         return false;
     }
+
+    //
+    //  Two face-varying subsets are said to have "dependent sharpness"
+    //  when the sharpness of one influences the other. This is applied
+    //  when one subset has no sharp interior edges while the other does.
+    //
+    //  NOTE that while these match the behavior of Far, it is unclear if
+    //  Far's conditions are what was intended (need to compare to Hbr).
+    //  If both subsets have a semi-sharp interior edge, the largest of
+    //  the two should probably influence the other -- as is the case as
+    //  one of those semi-sharp edges becomes inf-sharp.
+    //
+    bool
+    hasDependentSharpness(CornerTopology const & topology,
+                          CornerSubset   const & subset) {
+
+        return ((topology.GetNumFaces() - subset.GetNumFaces()) > 1) &&
+                topology.GetTag().HasSharpEdges() &&
+               !subset.GetTag().HasSharpEdges();
+    }
+
+    //
+    //  After the conditions for dependent sharpness have been confirmed,
+    //  retrieve the desired value.  The result is the maximum sharpness
+    //  of interior edges that are outside the subset -- and do not lie
+    //  on the seams between the two subsets.
+    //
+    float
+    getDependentSharpness(CornerTopology const & top,
+                          CornerSubset   const & subset) {
+
+        int numFaces    = top.GetNumFaces();
+        bool isOrdered  = top.GetTag().IsOrdered();
+        bool isBoundary = top.GetTag().IsBoundary();
+
+        //  Identify the first and last faces of the subset which will be
+        //  skipped when searching for the largest interior sharp edge:
+        int  firstFace = top.GetFaceBefore(subset._numFacesBefore);
+        int  lastFace  = top.GetFaceAfter(subset._numFacesAfter);
+
+        bool isFirstFaceEdgeInterior = true;
+        bool isLastFaceEdgeInterior  = true;
+        if (!isOrdered) {
+            isFirstFaceEdgeInterior = (top.GetFacePrevious(firstFace) >= 0);
+            isLastFaceEdgeInterior  = (top.GetFaceNext(lastFace) >= 0);
+        } else if (isBoundary) {
+            isFirstFaceEdgeInterior = (firstFace > 0);
+            isLastFaceEdgeInterior  = (lastFace < (numFaces - 1));
+        }
+
+        firstFace = !isFirstFaceEdgeInterior ? -1 : firstFace;
+        lastFace  = !isLastFaceEdgeInterior  ? -1 : top.GetFaceNext(lastFace);
+
+        //  Search for the largest interior sharp edge using the leading
+        //  edges of each face (skipping the first face of a boundary):
+        float sharp = 0.0f;
+
+        for (int i = (isOrdered && isBoundary); i < numFaces; ++i) {
+            if ((i != firstFace) && (i != lastFace)) {
+                if (isOrdered || (top.GetFacePrevious(i) >= 0)) {
+                    sharp = std::max(sharp, top.GetFaceEdgeSharpness(i, 0));
+                }
+            }
+        }
+        //  Must exceed vert sharpness to have any effect, otherwise ignore:
+        return (sharp > top.GetVertexSharpness()) ? sharp : 0.0f;
+    }
 }
 
+
+//
+//  The main method for affecting face-varying subsets according to the
+//  face-varying interpolation options.  Most of these are trivial, with
+//  only the LINEAR_CORNERS_PLUS* cases requiring much effort.
+//
 void
 FaceSurface::sharpenBySdcFVarLinearInterpolation(CornerSubset * fvarSub,
         Index          const   fvarIndices[],
@@ -331,12 +447,7 @@ FaceSurface::sharpenBySdcFVarLinearInterpolation(CornerSubset * fvarSub,
 
     assert(fvarSub->IsBoundary() && !fvarSub->IsSharp());
 
-    //
-    //  Sharpen according to Sdc::Options::FVarLinearInterpolation:
-    //
-    //  Most cases are trivial, with the LINEAR_CORNERS_PLUS* cases being
-    //  the only ones that require inspection outside the subset.
-    //
+    //  Each option applies rules to make the corner "linear", i.e. sharp:
     bool isSharp = false;
 
     switch (_topology->_schemeOptions.GetFVarLinearInterpolation()) {
@@ -351,32 +462,45 @@ FaceSurface::sharpenBySdcFVarLinearInterpolation(CornerSubset * fvarSub,
 
     case Sdc::Options::FVAR_LINEAR_CORNERS_PLUS1:
         //
-        //  Sharpen corners and vertices with three or more fvar indices --
-        //  and so three or more disjoint fvar regions:
+        //  Sharpen corners with more than two disjoint face-varying subsets
+        //  and apply "dependent sharpness" (see above) when necessary:
         //
         isSharp = (fvarSub->GetNumFaces() == 1) ||
-                  moreThanTwoFVarIndicesAtCorner(vtxTop, fvarIndices);
+                  fvar_plus::hasMoreThanTwoFVarSubsets(vtxTop, fvarIndices);
+        if (!isSharp && fvar_plus::hasDependentSharpness(vtxTop, *fvarSub)) {
+            //  Sharpen if sharp edges of other subset affects this one
+            vtxTop.SharpenSubset(fvarSub,
+                    fvar_plus::getDependentSharpness(vtxTop, *fvarSub));
+        }
         break;
 
     case Sdc::Options::FVAR_LINEAR_CORNERS_PLUS2:
         //
-        //  Sharpen corners, vertices with three or more fvar regions (see
-        //  "plus1" above), concave corners or darts.
+        //  Sharpen as with "plus1" above, in addition to sharpening both
+        //  concave corners and darts.
         //
         //  In other words, the only situations unsharpened are when either
-        //  the fvar and vertex subsets exactly match, or there are two
-        //  disjoint subsets that both have two or more faces.
+        //  the face-varying and vertex subsets exactly match, or there
+        //  are two fvar subsets that both have two or more faces (and no
+        //  dependent sharpness between them).
         //
         isSharp = (fvarSub->GetNumFaces() == 1) ||
-                  moreThanTwoFVarIndicesAtCorner(vtxTop, fvarIndices);
+                  fvar_plus::hasMoreThanTwoFVarSubsets(vtxTop, fvarIndices);
         if (!isSharp) {
-            int numFacesLess = vtxSub.GetNumFaces() - fvarSub->GetNumFaces();
-            if (numFacesLess > 0) {
-                //  Sharpen if the only other potential subset is a corner
-                isSharp = (numFacesLess == 1);
-            } else {
-                //  Sharpen if a dart created from a periodic vertex subset
+            //  Distinguish by the number of faces outside the subset:
+            int numOtherFaces = vtxSub.GetNumFaces() - fvarSub->GetNumFaces();
+            if (numOtherFaces == 0) {
+                //  Sharpen if a dart was created from a periodic vertex
                 isSharp = !vtxSub.IsBoundary();
+            } else if (numOtherFaces == 1) {
+                //  Sharpen this concave corner since other subset is a corner
+                isSharp = true;
+            } else {
+                //  Sharpen if sharp edges of other subset affects this one
+                if (fvar_plus::hasDependentSharpness(vtxTop, *fvarSub)) {
+                    vtxTop.SharpenSubset(fvarSub,
+                            fvar_plus::getDependentSharpness(vtxTop, *fvarSub));
+                }
             }
         }
         break;
