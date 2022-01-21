@@ -112,21 +112,18 @@ public:
     CornerTopology() { }
     ~CornerTopology() { }
 
-    //  Methods to invoke before/after assigning VertexTopology:
+    //  Methods supporting construction/initialization (subclass required
+    //  to populate VertexTopology between Initialize and Finalize):
     void Initialize(int faceSize, int regFaceSize);
     void Finalize(int faceInVertex);
 
     VertexTopology & GetVertexTopology() { return _vTop; }
 
-    //  Methods to deal with connecting unordered incident faces:
     void ConnectUnOrderedFaces(Index const faceVertexIndices[]);
 
-    bool AreUnOrderedFacesConnected() const;
-
-    //  Methods to initialize/find subsets:
-    int InitializeCompleteSubset(CornerSubset * subset) const;
-
-    int FindConnectedSubset(CornerSubset * subset) const;
+public:
+    //  Methods to initialize and find subsets:
+    int GetVertexSubset(CornerSubset * subset) const;
 
     int FindFaceVaryingSubset(CornerSubset       * fvarSubset,
                               Index const          fvarIndices[],
@@ -137,41 +134,58 @@ public:
     void SharpenSubset(CornerSubset * subset, float sharpness) const;
     void UnSharpenSubset(CornerSubset * subset) const;
 
-    bool  HasImplicitSharpness() const;
-    float GetImplicitSharpness() const;
-
 public:
-    //  Methods to query properties after finalization:
+    //
+    //  Public methods to query simple properties:
+    //
     CornerTag GetTag() const { return _tag; }
 
-    int GetNumFaces() const { return _vTop._numFaces; }
+    int GetFace() const { return _faceInRing; }
 
-    int GetFaceInVertex() const { return _faceInRing; }
-
+    int GetNumFaces()        const { return _vTop._numFaces; }
     int GetNumFaceVertices() const { return _numFaceVerts; }
 
     bool HasCommonFaceSize() const { return (_commonFaceSize > 0); }
     int  GetCommonFaceSize() const { return _commonFaceSize; }
 
 public:
-    //  Methods to inspect and iterate through the incident faces:
+    //
+    //  Public methods to inspect incident faces and connected neighbors:
+    //
     int GetFaceSize(int face) const;
 
+    //  Get neighbors of a specific face (return -1 if unconnected):
     int GetFaceNext(    int face) const;
     int GetFacePrevious(int face) const;
 
-    int GetFaceAfter(int step) const;
-    int GetFaceBefore(int step) const;
+    //  Find faces relative to this face (require a known safe step size):
+    int GetFaceAfter (int stepForwardFromCornerFace) const;
+    int GetFaceBefore(int stepBackwardFromCornerFace) const;
 
-    //  Methods to access indices associated with face-vertices:
-    int GetFaceVertexOffset(int face) const;
+    //  Get first and last faces of a subset:
+    int GetFaceFirst(CornerSubset const & subset) const;
+    int GetFaceLast( CornerSubset const & subset) const;
 
-    int GetFaceVertexAtCorner(          Index const indices[]) const;
-    int GetFaceVertexAtCorner(int face, Index const indices[]) const;
-    int GetFaceVertexTrailing(int face, Index const indices[]) const;
-    int GetFaceVertexLeading( int face, Index const indices[]) const;
+public:
+    //
+    //  Public methods to access indices assigned to incident faces:
+    //
+    int GetFaceIndexOffset(int face) const;
 
-    //  Methods to access sharpness of the vertex or its incident edges:
+    Index GetFaceIndexAtCorner(Index const indices[]) const;
+
+    Index GetFaceIndexAtCorner(int face, Index const indices[]) const;
+    Index GetFaceIndexTrailing(int face, Index const indices[]) const;
+    Index GetFaceIndexLeading( int face, Index const indices[]) const;
+
+    bool FaceIndicesMatchAtCorner(  int f1, int f2, Index const indices[])const;
+    bool FaceIndicesMatchAtEdgeEnd( int f1, int f2, Index const indices[])const;
+    bool FaceIndicesMatchAcrossEdge(int f1, int f2, Index const indices[])const;
+
+public:
+    //
+    //  Public methods for sharpness of the vertex or its incident edges:
+    //
     float GetVertexSharpness() const;
 
     float GetFaceEdgeSharpness(int faceEdge) const;
@@ -181,8 +195,24 @@ public:
     bool IsFaceEdgeInfSharp( int face, bool trailingEdge) const;
     bool IsFaceEdgeSemiSharp(int face, bool trailingEdge) const;
 
+    bool  HasImplicitVertexSharpness() const;
+    float GetImplicitVertexSharpness() const;
+
 private:
-    //  Private methods for managing CornerSubsets:
+    //  Internal convenience methods:
+    bool isOrdered()   const { return _tag.IsOrdered(); }
+    bool isUnOrdered() const { return _tag.IsUnOrdered(); }
+    bool isBoundary()  const { return _tag.IsBoundary(); }
+    bool isInterior()  const { return _tag.IsInterior(); }
+    bool isManifold()  const { return _tag.IsManifold(); }
+
+    int getConnectedFaceNext(int face) const;
+    int getConnectedFacePrev(int face) const;
+
+private:
+    //  Internal methods for assembling and managing subsets:
+    int initCompleteSubset(CornerSubset * subset) const;
+
     int findConnectedSubsetExtent(CornerSubset * subset) const;
 
     int findFVarSubsetExtent(CornerSubset const & vtxSubset,
@@ -197,11 +227,11 @@ private:
     bool subsetHasIrregularFaces(CornerSubset const & subset) const;
 
 private:
-    //  Internal types and methods to connect and assess the topology for
-    //  unordered faces given their associated face-vertex indices:
+    //  Internal methods to connect a set of unordered faces (given their
+    //  associated face-vertex indices) and assess the resulting topology:
     struct Edge;
 
-    int  gatherUnOrderedEdges(Edge        edges[],
+    int  createUnOrderedEdges(Edge        edges[],
                               short       faceEdgeIndices[],
                               Index const faceVertIndices[]) const;
 
@@ -212,11 +242,15 @@ private:
     void assignUnOrderedFaceNeighbors(Edge const  edges[],
                                       short const faceEdgeIndices[]);
 
-    void assignUnOrderedTags(Edge const edges[], int numEdges);
+    void finalizeUnOrderedTags(Edge const edges[], int numEdges);
+
+    //  Ordered counterpart to the above method for finalizing tags
+    void finalizeOrderedTags();
 
 private:
     typedef Vtr::internal::StackBuffer<short,16,true> ShortBuffer;
 
+    //  Private members:
     VertexTopology _vTop;
     CornerTag      _tag;
 
@@ -229,15 +263,14 @@ private:
     unsigned short _isImpInfSharp  :  1;
     unsigned short _isImpSemiSharp :  1;
 
-    short _numInfSharpEdges;
-    short _numSemiSharpEdges;
-    int   _numFaceVerts;
+    int _numFaceVerts;
 
     ShortBuffer _faceEdgeNeighbors;
 };
 
+
 //
-//  Inline methods for traversing incident faces of the vertex:
+//  Inline methods for inspecting/traversing incident faces of the vertex:
 //
 inline int
 CornerTopology::GetFaceSize(int face) const {
@@ -246,90 +279,127 @@ CornerTopology::GetFaceSize(int face) const {
 }
 
 inline int
+CornerTopology::getConnectedFaceNext(int face) const {
+    return _faceEdgeNeighbors[2*face + 1];
+}
+inline int
+CornerTopology::getConnectedFacePrev(int face) const {
+    return _faceEdgeNeighbors[2*face];
+}
+
+inline int
 CornerTopology::GetFaceNext(int face) const {
-    if (_tag._unOrderedFaces) {
-        assert(_faceEdgeNeighbors.GetSize());
-        return _faceEdgeNeighbors[2*face + 1];
+    if (isUnOrdered()) {
+        return getConnectedFaceNext(face);
+    } else if (face < (_vTop._numFaces - 1)) {
+        return face + 1;
     } else {
-        return ((face + 1) == _vTop._numFaces ) ? 0 : (face + 1);
+        return isBoundary() ? -1 : 0;
     }
 }
 inline int
 CornerTopology::GetFacePrevious(int face) const {
-    if (_tag._unOrderedFaces) {
-        assert(_faceEdgeNeighbors.GetSize());
-        return _faceEdgeNeighbors[2*face];
+    if (isUnOrdered()) {
+        return getConnectedFacePrev(face);
+    } else if (face) {
+        return face - 1;
     } else {
-        return face ? (face - 1) : (_vTop._numFaces - 1);
+        return isBoundary() ? -1 : (_vTop._numFaces - 1);
     }
 }
 
 inline int
 CornerTopology::GetFaceAfter(int step) const {
     assert(step >= 0);
-    if (_tag._unOrderedFaces) {
-        assert(_faceEdgeNeighbors.GetSize());
-
+    if (isOrdered()) {
+        return (_faceInRing + step) % _vTop._numFaces;
+    } else if (step == 1) {
+        return getConnectedFaceNext(_faceInRing);
+    } else if (step == 2) {
+        return getConnectedFaceNext(getConnectedFaceNext(_faceInRing));
+    } else {
         int face = _faceInRing;
         for ( ; step > 0; --step) {
-            face =_faceEdgeNeighbors[2*face + 1];
-            assert(face >= 0);
+            face = getConnectedFaceNext(face);
         }
         return face;
-    } else {
-        return (_faceInRing + step) % _vTop._numFaces;
     }
 }
 inline int
 CornerTopology::GetFaceBefore(int step) const {
     assert(step >= 0);
-    if (_tag._unOrderedFaces) {
-        assert(_faceEdgeNeighbors.GetSize());
-
+    if (isOrdered()) {
+        return (_faceInRing - step + _vTop._numFaces) % _vTop._numFaces;
+    } else if (step == 1) {
+        return getConnectedFacePrev(_faceInRing);
+    } else if (step == 2) {
+        return getConnectedFacePrev(getConnectedFacePrev(_faceInRing));
+    } else {
         int face = _faceInRing;
         for ( ; step > 0; --step) {
-            face =_faceEdgeNeighbors[2*face];
-            assert(face >= 0);
+            face = getConnectedFacePrev(face);
         }
         return face;
-    } else {
-        return (_faceInRing - step + _vTop._numFaces) % _vTop._numFaces;
     }
 }
-inline bool
-CornerTopology::AreUnOrderedFacesConnected() const {
-    return _faceEdgeNeighbors.GetSize() > 0;
+
+inline int
+CornerTopology::GetFaceFirst(CornerSubset const & subset) const {
+    return GetFaceBefore(subset._numFacesBefore);
+}
+inline int
+CornerTopology::GetFaceLast( CornerSubset const & subset) const {
+    return GetFaceAfter(subset._numFacesAfter);
 }
 
 //
 //  Inline methods for accessing indices associated with indicent faces:
 //
 inline int
-CornerTopology::GetFaceVertexOffset(int face) const {
+CornerTopology::GetFaceIndexOffset(int face) const {
     return _commonFaceSize ? (face * _commonFaceSize) :
                              _vTop._faceSizeOffsets[face];
 }
 
-inline int
-CornerTopology::GetFaceVertexAtCorner(Index const indices[]) const {
-    return indices[GetFaceVertexOffset(_faceInRing)];
+inline Index
+CornerTopology::GetFaceIndexAtCorner(Index const indices[]) const {
+    return indices[GetFaceIndexOffset(_faceInRing)];
 }
-inline int
-CornerTopology::GetFaceVertexAtCorner(int face, Index const indices[]) const {
-    return indices[GetFaceVertexOffset(face)];
+inline Index
+CornerTopology::GetFaceIndexAtCorner(int face, Index const indices[]) const {
+    return indices[GetFaceIndexOffset(face)];
 }
-inline int
-CornerTopology::GetFaceVertexLeading(int face, Index const indices[]) const {
-    return indices[GetFaceVertexOffset(face) + 1];
+inline Index
+CornerTopology::GetFaceIndexLeading(int face, Index const indices[]) const {
+    return indices[GetFaceIndexOffset(face) + 1];
 }
-inline int
-CornerTopology::GetFaceVertexTrailing(int face, Index const indices[]) const {
+inline Index
+CornerTopology::GetFaceIndexTrailing(int face, Index const indices[]) const {
     // It is safe to use "face+1" here for the last face:
-    return indices[GetFaceVertexOffset(face+1) - 1];
+    return indices[GetFaceIndexOffset(face+1) - 1];
+}
+
+inline bool
+CornerTopology::FaceIndicesMatchAtCorner(int facePrev, int faceNext,
+                                         Index const indices[]) const {
+    return GetFaceIndexAtCorner(facePrev, indices) ==
+           GetFaceIndexAtCorner(faceNext, indices);
+}
+inline bool
+CornerTopology::FaceIndicesMatchAtEdgeEnd(int facePrev, int faceNext,
+                                         Index const indices[]) const {
+    return GetFaceIndexTrailing(facePrev, indices) ==
+           GetFaceIndexLeading(faceNext, indices);
+}
+inline bool
+CornerTopology::FaceIndicesMatchAcrossEdge(int facePrev, int faceNext,
+                                         Index const indices[]) const {
+    return FaceIndicesMatchAtCorner (facePrev, faceNext, indices) &&
+           FaceIndicesMatchAtEdgeEnd(facePrev, faceNext, indices);
 }
 
 //
-//  Inline methods for accessing face-edge sharpness values:
+//  Inline methods for accessing vertex and edge sharpness:
 //
 inline float
 CornerTopology::GetVertexSharpness() const {

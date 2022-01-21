@@ -27,6 +27,7 @@
 
 #include <cstring>
 #include <cstdio>
+#include <map>
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -48,8 +49,6 @@ CornerTopology::Initialize(int faceSize, int regFaceSize) {
     _isExpSemiSharp = false;
     _isImpInfSharp  = false;
     _isImpSemiSharp = false;
-    _numInfSharpEdges  = 0;
-    _numSemiSharpEdges = 0;
 
     _vTop._isInitialized = false;
 }
@@ -59,147 +58,119 @@ CornerTopology::Finalize(int faceInVertex) {
 
     assert(_vTop._isFinalized);
 
-    //
-    //  Initialize tags and other members based on the finalized content
-    //  of the VertexTopology.  The tags can be grouped as follows:
-    //
-    //      - overall topology (ordering, boundary, manifold, etc.)
-    //      - sizes of incident faces (common, ordered, etc.)
-    //      - vertex sharpness
-    //      - edge sharpness
-    //
-    //  Explicit information provided in VertexTopology may be ignored
-    //  via tags set here if values do not deviate from the default.
-    //
-    _tag.Clear();
-
-    //
-    //  General topological properties:
-    //
-    bool isOrdered = _vTop.IsOrdered();
-    if (isOrdered) {
-        _tag._unOrderedFaces   = false;
-        _tag._nonManifoldVerts = false;
-
-        _tag._boundaryVerts    = _vTop.IsBoundary();
-        _tag._boundaryNonSharp = _vTop.IsBoundary();
-    } else {
-        _tag._unOrderedFaces   = true;
-        _tag._nonManifoldVerts = true;
-
-        _tag._boundaryVerts    = false;
-        _tag._boundaryNonSharp = false;
-    }
-
     _faceInRing = faceInVertex;
 
     //
-    //  Tags and members related to incident face sizes -- recall that
-    //  face sizes are made available as the differences between offsets:
+    //  Initialize members from the VertexTopology:
     //
-    _tag._unCommonFaceSizes = !_vTop.HasCommonFaceSize();
-    if (_tag._unCommonFaceSizes) {
-        //  WIP - consider testing for degenerate faces (< 3) here and tag
-        //      - may want to convert sizes to offsets here to combine
-        _numFaceVerts = _vTop._faceSizeOffsets[_vTop._numFaces];
-        _commonFaceSize = 0;
-    } else {
+    if (_vTop.HasCommonFaceSize()) {
+        //  Common face size was previously initialized to the face size
         _numFaceVerts = _vTop._numFaces * _commonFaceSize;
+    } else {
+        _commonFaceSize = 0;
+        //  Recall face sizes are available as differences between offsets:
+        _numFaceVerts = _vTop._faceSizeOffsets[_vTop._numFaces];
     }
 
-    _tag._irregularFaceSizes = (_commonFaceSize != _regFaceSize);
-
-    //
-    //  Tags related to vertex sharpness -- simply assign for now (recall
-    //  a vertex may later be made sharp due to topology, creasing, etc.):
-    //
+    //  Vertex sharpness:
     _isExpInfSharp  = Sdc::Crease::IsInfinite(_vTop._vertSharpness);
     _isExpSemiSharp = Sdc::Crease::IsSemiSharp(_vTop._vertSharpness);
+
+    //
+    //  Initialize tags from VertexTopology and other members
+    //
+    //  Note that not all tags can be assigned at this point if the vertex
+    //  is defined by a set of unordered faces. In such cases, the tags
+    //  will be assigned later when the connectivity between incident faces
+    //  is determined. Those that can be assigned regardless of ordering
+    //  are set here -- splitting the assignment of those remaining between
+    //  ordered and unordered cases.
+    //
+    _tag.Clear();
+
+    _tag._unCommonFaceSizes  = !_vTop.HasCommonFaceSize();
+    _tag._irregularFaceSizes = (_commonFaceSize != _regFaceSize);
 
     _tag._infSharpVerts  = _isExpInfSharp;
     _tag._semiSharpVerts = _isExpSemiSharp;
 
-    //
-    //  Tags related to edge sharpness -- test for any assigned values and
-    //  set related tags based on inspection.
-    // 
-    //  We can do more here for a set or ordered faces, which are required
-    //  to be manifold.  For unordered, all we can do is test for the
-    //  presence of explicit sharpness values -- their association must be
-    //  made later once the faces are connected (and so ordered).
-    //
-    _tag._infSharpEdges  = false;
-    _tag._semiSharpEdges = false;
-    _tag._infSharpDarts  = false;
+    _tag._unOrderedFaces = !_vTop.IsOrdered();
 
+    if (_vTop.IsOrdered()) {
+        finalizeOrderedTags();
+    }
+}
+
+void
+CornerTopology::finalizeOrderedTags() {
+
+    //
+    //  A vertex with a set of ordered faces is required to be manifold:
+    //
+    _tag._unOrderedFaces   = false;
+    _tag._nonManifoldVerts = false;
+
+    _tag._boundaryVerts    = _vTop.IsBoundary();
+    _tag._boundaryNonSharp = _vTop.IsBoundary();
+
+    //
+    //  Assign tags (and other members) affected by edge sharpness:
+    //
     if (_vTop.HasEdgeSharpness()) {
         float const * sharpness = &_vTop._faceEdgeSharpness[0];
 
-        if (isOrdered) {
-            //  Detect any unsharpened boundary edges first:
-            bool isBoundary = _tag._boundaryVerts;
-            if (isBoundary) {
-                int last = 2 * _vTop._numFaces - 1;
-                _tag._boundaryNonSharp =
-                        !Sdc::Crease::IsInfinite(sharpness[0]) ||
-                        !Sdc::Crease::IsInfinite(sharpness[last]);
-            }
+        //  Detect unsharpened boundary edges:
+        bool isBoundary = _tag._boundaryVerts;
+        if (isBoundary) {
+            int last = 2 * _vTop._numFaces - 1;
+            _tag._boundaryNonSharp =
+                    !Sdc::Crease::IsInfinite(sharpness[0]) ||
+                    !Sdc::Crease::IsInfinite(sharpness[last]);
+        }
 
-            //  Detect the presence of interior inf-sharp and semi-sharp
-            //  edges next (using leading edge of each face):
-            _numInfSharpEdges  = 0;
-            _numSemiSharpEdges = 0;
-            for (int i = isBoundary; i < _vTop._numFaces; ++i ) {
-                if (Sdc::Crease::IsInfinite(sharpness[2*i])) {
-                    ++ _numInfSharpEdges;
-                } else if (Sdc::Crease::IsSharp(sharpness[2*i])) {
-                    ++ _numSemiSharpEdges;
-                }
-            }
+        //  Detect interior inf-sharp and semi-sharp edges:
+        int numInfSharpEdges  = 0;
+        int numSemiSharpEdges = 0;
 
-            //  Mark the presence of non-boundary/interior edges:
-            _tag._infSharpEdges  = (_numInfSharpEdges > 0);
-            _tag._semiSharpEdges = (_numSemiSharpEdges > 0);
-            _tag._infSharpDarts  = (_numInfSharpEdges == 1) && !isBoundary;
+        for (int i = isBoundary; i < _vTop._numFaces; ++i ) {
+            if (Sdc::Crease::IsInfinite(sharpness[2*i])) {
+                ++ numInfSharpEdges;
+            } else if (Sdc::Crease::IsSharp(sharpness[2*i])) {
+                ++ numSemiSharpEdges;
+            }
+        }
 
-            //  Detect edges effectively making the vertex sharp -- note
-            //  it can be both explicitly and implicitly sharp (e.g. low
-            //  semi-sharp vertex value with a higher semi-sharp edge):
-            int numInfSharpTotal = _numInfSharpEdges + isBoundary * 2;
-            if (numInfSharpTotal > 2) {
-                _isImpInfSharp = true;
-            } else if ((numInfSharpTotal + _numSemiSharpEdges) > 2) {
-                _isImpSemiSharp = true;
-            }
+        //  Mark the presence of interior sharp edges:
+        _tag._infSharpEdges  = (numInfSharpEdges > 0);
+        _tag._semiSharpEdges = (numSemiSharpEdges > 0);
+        _tag._infSharpDarts  = (numInfSharpEdges == 1) && !isBoundary;
 
-            //  Mark the vertex inf-sharp if implicitly inf-sharp:
-            if (!_isExpInfSharp && _isImpInfSharp) {
-                _tag._infSharpVerts  = true;
-                _tag._semiSharpVerts = false;
-            }
-        } else {
-            //  Detect explicit sharpness values and set the associated tag:
-            int numSharpness = 2 * _vTop._numFaces;
-            for (int i = 0; i < numSharpness; ++i) {
-                if (Sdc::Crease::IsInfinite(sharpness[i])) {
-                    _tag._infSharpEdges = true;
-                } else if (Sdc::Crease::IsSharp(sharpness[i])) {
-                    _tag._semiSharpEdges = true;
-                }
-                if (_tag._infSharpEdges && _tag._semiSharpEdges) break;
-            }
+        //  Detect edges effectively making the vertex sharp -- note that
+        //  a vertex can be both explicitly and implicitly sharp (e.g. low
+        //  semi-sharp vertex value with a higher semi-sharp edge):
+        int numInfSharpTotal = numInfSharpEdges + isBoundary * 2;
+        if (numInfSharpTotal > 2) {
+            _isImpInfSharp = true;
+        } else if ((numInfSharpTotal + numSemiSharpEdges) > 2) {
+            _isImpSemiSharp = true;
+        }
+
+        //  Mark the vertex inf-sharp if implicitly inf-sharp:
+        if (!_isExpInfSharp && _isImpInfSharp) {
+            _tag._infSharpVerts  = true;
+            _tag._semiSharpVerts = false;
         }
     }
 }
 
 bool
-CornerTopology::HasImplicitSharpness() const {
+CornerTopology::HasImplicitVertexSharpness() const {
 
     return _isImpInfSharp || _isImpSemiSharp;
 }
 
 float
-CornerTopology::GetImplicitSharpness() const {
+CornerTopology::GetImplicitVertexSharpness() const {
 
     if (_isImpInfSharp) {
         return Sdc::Crease::SHARPNESS_INFINITE;
@@ -210,14 +181,14 @@ CornerTopology::GetImplicitSharpness() const {
     //  Since this will be applied at an inf-sharp crease, there will be
     //  two inf-sharp edges in addition to the semi-sharp, so we only
     //  need find the max of the semi-sharp edges and whatever explicit
-    //  vertex sharpness may have been assigned:
+    //  vertex sharpness may have been assigned.  Iterate through all
+    //  faces and inspect the sharpness of each leading interior edge:
     //
     float sharpness = GetVertexSharpness();
 
     for (int i = 0; i < GetNumFaces(); ++i) {
-        //  Use the trailing edge of every connected face:
-        if (!_tag._unOrderedFaces || (_faceEdgeNeighbors[2*i+1] >= 0)) {
-            sharpness = std::max(sharpness, GetFaceEdgeSharpness(2*i+1));
+        if (GetFacePrevious(i) >= 0) {
+            sharpness = std::max(sharpness, GetFaceEdgeSharpness(2*i));
         }
     }
     return sharpness;
@@ -227,64 +198,86 @@ CornerTopology::GetImplicitSharpness() const {
 //  Methods to initialize and/or find subsets of the corner's topology:
 //
 int
-CornerTopology::InitializeCompleteSubset(CornerSubset * subset) const {
+CornerTopology::initCompleteSubset(CornerSubset * subsetPtr) const {
 
-    assert(GetTag().IsManifold());
+    CornerSubset & subset = *subsetPtr;
 
-    subset->Initialize(GetTag());
+    //
+    //  Initialize with tags and assign the extent:
+    //
+    subset.Initialize(GetTag());
 
-    subset->_numFacesBefore = subset->IsBoundary() ? GetFaceInVertex() : 0;
-    subset->_numFacesAfter  = GetNumFaces() - subset->_numFacesBefore - 1;
-    subset->_numFacesTotal  = GetNumFaces();
-
-    return subset->_numFacesTotal;
-}
-
-int
-CornerTopology::FindConnectedSubset(CornerSubset * subset) const {
-
-    findConnectedSubsetExtent(subset);
-
-    //  If unconnected faces form a manifold set, tags are accurate:
-    if (!GetTag().IsManifold()) {
-        adjustSubsetTags(subset);
-
-        //  If on a non-manifold crease, make use of implicit sharpness:
-        if (!subset->IsSharp() && HasImplicitSharpness()) {
-            SharpenSubset(subset, GetImplicitSharpness());
+    subset._numFacesTotal = GetNumFaces();
+    if (isInterior()) {
+        subset._numFacesBefore = 0;
+        subset._numFacesAfter  = GetNumFaces() - 1;
+    } else if (isOrdered()) {
+        subset._numFacesBefore = _faceInRing;
+        subset._numFacesAfter  = GetNumFaces() - 1 - subset._numFacesBefore;
+    } else {
+        //  Unordered faces -- boundary needs to identify its orientation:
+        subset._numFacesAfter = 0;
+        for (int f = GetFaceNext(_faceInRing); f >= 0; f = GetFaceNext(f)) {
+            ++ subset._numFacesAfter;
         }
+        subset._numFacesBefore = GetNumFaces() - 1 - subset._numFacesAfter;
     }
-    return subset->_numFacesTotal;
+    return subset._numFacesTotal;
 }
 
 int
-CornerTopology::findConnectedSubsetExtent(CornerSubset * subset) const {
+CornerTopology::findConnectedSubsetExtent(CornerSubset * subsetPtr) const {
 
-    assert(AreUnOrderedFacesConnected());
+    CornerSubset & subset = *subsetPtr;
 
-    subset->Initialize(GetTag());
-    subset->_tag._nonManifoldVerts = false;
+    //
+    //  Initialize with tags and mark manifold:
+    //
+    subset.Initialize(GetTag());
 
-    subset->_numFacesBefore = 0;
-    subset->_numFacesAfter  = 0;
-    subset->_numFacesTotal  = 1;
+    subset._tag._nonManifoldVerts = false;
 
-    int fStart = GetFaceInVertex();
+    //  Add faces to the dflt single face extent by seeking forward/backward:
+    int fStart = _faceInRing;
 
     for (int f = GetFaceNext(fStart); f >= 0; f = GetFaceNext(f)) {
         if (f == fStart) {
-            subset->SetBoundary(false);
-            return subset->_numFacesTotal;
+            //  Periodic -- tag as such and return:
+            subset.SetBoundary(false);
+            return subset._numFacesTotal;
         }
-        subset->_numFacesAfter ++;
-        subset->_numFacesTotal ++;
+        subset._numFacesAfter ++;
+        subset._numFacesTotal ++;
     }
     for (int f = GetFacePrevious(fStart); f >= 0; f = GetFacePrevious(f)) {
-        subset->_numFacesBefore ++;
-        subset->_numFacesTotal ++;
+        subset._numFacesBefore ++;
+        subset._numFacesTotal ++;
     }
-    subset->SetBoundary(true);
-    return subset->_numFacesTotal;
+    subset.SetBoundary(true);
+    return subset._numFacesTotal;
+}
+
+int
+CornerTopology::GetVertexSubset(CornerSubset * subsetPtr) const {
+
+    //
+    //  The subset from a manifold vertex is trivially complete (ordered
+    //  or not), but for non-manifold cases we need to search and update
+    //  the tags according to the content of the subset:
+    //
+    if (isManifold()) {
+        initCompleteSubset(subsetPtr);
+    } else {
+        findConnectedSubsetExtent(subsetPtr);
+
+        adjustSubsetTags(subsetPtr);
+
+        //  And if on a non-manifold crease, test for implicit sharpness:
+        if (!subsetPtr->IsSharp() && HasImplicitVertexSharpness()) {
+            SharpenSubset(subsetPtr, GetImplicitVertexSharpness());
+        }
+    }
+    return subsetPtr->_numFacesTotal;
 }
 
 int
@@ -295,97 +288,69 @@ CornerTopology::findFVarSubsetExtent(CornerSubset const & vtxSub,
     CornerSubset & fvarSub = *fvarSubsetPtr;
 
     //
-    //  Initialize the face-varying subset by seeking forward and backward
-    //  from the corner face to find edges that are not continuous wrt
-    //  face-varying indices, and so delimit the relevant neighborhood
-    //  contributing to the face-varying limit surface.  This is done in
-    //  three steps:
-    //
-    //      - seeking counter-clockwise from the corner face
-    //      - testing if a periodic subset is continuous at its end
-    //      - seeking clockwise from the corner face
-    //
-
-    //
-    //  Initialize as single face boundary -- return if only one face:
+    //  Initialize with tags and declare as a boundary to start:
     //
     fvarSub.Initialize(vtxSub._tag);
 
     fvarSub.SetBoundary(true);
 
-    if (vtxSub._numFacesTotal == 1) {
-        return 1;
-    }
+    if (vtxSub._numFacesTotal == 1) return 1;
 
     //
-    //  Inspect/gather faces "after" (counter-clockwise order from)
-    //  the corner face.  If all are included and the vtx subset is
-    //  periodic, check the seam for the fvar subset.
+    //  Inspect/gather faces "after" (counter-clockwise order from) the
+    //  corner face.  If we arrive back at the corner face, a periodic
+    //  set is complete, but check the continuity of the seam and apply
+    //  before returning:
     //
-    int cornerFace = GetFaceInVertex();
+    int cornerFace = _faceInRing;
 
     int numFacesAfterToVisit = vtxSub._numFacesAfter;
     if (numFacesAfterToVisit) {
         int thisFace = cornerFace;
+        int nextFace = GetFaceNext(thisFace);
         for (int i = 0; i < numFacesAfterToVisit; ++i) {
-            int nextFace = GetFaceNext(thisFace);
-
-            if (GetFaceVertexAtCorner(thisFace, fvarIndices) != 
-                GetFaceVertexAtCorner(nextFace, fvarIndices)) {
-                break;
-            }
-            if (GetFaceVertexTrailing(thisFace, fvarIndices) != 
-                GetFaceVertexLeading(nextFace, fvarIndices)) {
+            if (!FaceIndicesMatchAcrossEdge(thisFace, nextFace, fvarIndices)) {
                 break;
             }
             ++ fvarSub._numFacesAfter;
+            ++ fvarSub._numFacesTotal;
 
             thisFace = nextFace;
+            nextFace = GetFaceNext(thisFace);
         }
-    }
-    int numFacesAfterUnvisited = vtxSub._numFacesAfter -
-                                 fvarSub._numFacesAfter;
-    if (!vtxSub.IsBoundary() && (numFacesAfterUnvisited == 0)) {
-        assert(vtxSub._numFacesBefore == 0);
-        int prevFace = GetFacePrevious(cornerFace);
 
-        if (GetFaceVertexLeading(cornerFace, fvarIndices) == 
-            GetFaceVertexTrailing(prevFace, fvarIndices)) {
-            fvarSub.SetBoundary(false);
+        if (nextFace == cornerFace) {
+            assert(vtxSub._numFacesBefore == 0);
+            if (FaceIndicesMatchAtEdgeEnd(thisFace, cornerFace, fvarIndices)) {
+                fvarSub.SetBoundary(false);
+            }
+            return fvarSub._numFacesTotal;
         }
     }
 
     //
     //  Inspect/gather faces "before" (clockwise order from) the corner
-    //  face.  Include any faces "after" in the periodic case that were
-    //  interrupted by a discontinuity:
+    //  face.  Include any faces "after" in the case of a periodic vertex
+    //  that was interrupted by a discontinuity above:
     //
     int numFacesBeforeToVisit = vtxSub._numFacesBefore;
     if (!vtxSub.IsBoundary()) {
-        numFacesBeforeToVisit += numFacesAfterUnvisited;
+        numFacesBeforeToVisit += vtxSub._numFacesAfter - fvarSub._numFacesAfter;
     }
     if (numFacesBeforeToVisit) {
         int thisFace = cornerFace;
+        int prevFace = GetFacePrevious(thisFace);
         for (int i = 0; i < numFacesBeforeToVisit; ++i) {
-            int prevFace = GetFacePrevious(thisFace);
-
-            if (GetFaceVertexAtCorner(thisFace, fvarIndices) != 
-                GetFaceVertexAtCorner(prevFace, fvarIndices)) {
-                break;
-            }
-            if (GetFaceVertexLeading(thisFace, fvarIndices) != 
-                GetFaceVertexTrailing(prevFace, fvarIndices)) {
+            if (!FaceIndicesMatchAcrossEdge(prevFace, thisFace, fvarIndices)) {
                 break;
             }
             ++ fvarSub._numFacesBefore;
+            ++ fvarSub._numFacesTotal;
 
             thisFace = prevFace;
+            prevFace = GetFacePrevious(thisFace);
         }
     }
-
-    fvarSub._numFacesTotal = 1 + fvarSub._numFacesBefore +
-                                 fvarSub._numFacesAfter;
-
     return fvarSub._numFacesTotal;
 }
 
@@ -396,42 +361,42 @@ CornerTopology::FindFaceVaryingSubset(CornerSubset       * fvarSubsetPtr,
 
     CornerSubset & fvarSub = *fvarSubsetPtr;
 
-    findFVarSubsetExtent(vtxSub, fvarSubsetPtr, fvarIndices);
+    //
+    //  Find the face-varying extent and update the tags if its topology
+    //  is a true subset of the vertex.  Also reset the sharpness in this
+    //  case as the rules for the FVar interpolation options (applied
+    //  later) take precedence over those of the vertex:
+    //
+    findFVarSubsetExtent(vtxSub, &fvarSub, fvarIndices);
 
-    //  Reset the sharpness if face-varying topology differs, as the rules
-    //  for the FVar interpolation options (applied later) take precedence
-    //  over all but those applied below:
     bool fvarTopologyMatchesVertex = fvarSub.MatchesExtentOfSuperset(vtxSub);
-
-    if (fvarSub.IsSharp() && !fvarTopologyMatchesVertex) {
-        UnSharpenSubset(fvarSubsetPtr);
+    if (!fvarTopologyMatchesVertex) {
+        if (fvarSub.IsSharp()) {
+            UnSharpenSubset(&fvarSub);
+        }
+        adjustSubsetTags(&fvarSub, &vtxSub);
     }
 
     //  Sharpen if the vertex is non-manifold:
-    if (!fvarSub.IsSharp() && !_tag.IsManifold()) {
-        SharpenSubset(fvarSubsetPtr);
+    if (!fvarSub.IsSharp() && !isManifold()) {
+        SharpenSubset(&fvarSub);
     }
 
     //  Sharpen if the face-varying value is non-manifold, i.e. if there
     //  are any occurrences of the corner FVar index outside the subset:
     if (!fvarSub.IsSharp() && (fvarSub.GetNumFaces() < vtxSub.GetNumFaces())) {
-        Index fvarMatch = GetFaceVertexAtCorner(fvarIndices);
+        Index fvarMatch = GetFaceIndexAtCorner(fvarIndices);
 
         int numMatches = 0;
         for (int i = 0; i < GetNumFaces(); ++i) {
-            numMatches += (GetFaceVertexAtCorner(i, fvarIndices) == fvarMatch);
+            numMatches += (GetFaceIndexAtCorner(i, fvarIndices) == fvarMatch);
             if (numMatches > fvarSub.GetNumFaces()) {
-                SharpenSubset(fvarSubsetPtr);
+                SharpenSubset(&fvarSub);
                 break;
             }
         }
     }
-
-    //  Finally, adjust other topology tags if fvar topology differs:
-    if (!fvarTopologyMatchesVertex) {
-        adjustSubsetTags(&fvarSub, &vtxSub);
-    }
-    return fvarSubsetPtr->GetNumFaces();
+    return fvarSub.GetNumFaces();
 }
 
 //
@@ -443,7 +408,6 @@ CornerTopology::SharpenSubset(CornerSubset * subset) const {
 
     //  Mark the subset sharp and ensure any related tags are also
     //  updated accordingly:
-
     subset->_tag._infSharpVerts  = true;
     subset->_tag._semiSharpVerts = false;
 }
@@ -451,7 +415,6 @@ void
 CornerTopology::UnSharpenSubset(CornerSubset * subset) const {
 
     //  Restore subset sharpness based on actual sharpness assignment:
-
     subset->_tag._infSharpVerts  = _isExpInfSharp;
     subset->_tag._semiSharpVerts = _isExpSemiSharp;
 }
@@ -474,7 +437,7 @@ CornerTopology::subsetHasIrregularFaces(CornerSubset const & subset) const {
 
     if (!_tag._unCommonFaceSizes) return true;
 
-    int f = GetFaceBefore(subset._numFacesBefore);
+    int f = GetFaceFirst(subset);
     for (int i = 0; i < subset.GetNumFaces(); ++i, f = GetFaceNext(f)) {
         if (GetFaceSize(f) != _regFaceSize) return true;
     }
@@ -488,8 +451,8 @@ CornerTopology::subsetHasInfSharpEdges(CornerSubset const & subset) const {
 
     int n = subset.GetNumFaces();
     if (n > 1) {
-        int f = GetFaceBefore(subset._numFacesBefore);
-        //  Skip first face of a boundary when inspecting leading edges:
+        int f = GetFaceFirst(subset);
+        //  Reduce number of faces to visit when inspecting trailing edges:
         for (int i = subset.IsBoundary(); i < n; ++i, f = GetFaceNext(f)) {
             if (IsFaceEdgeInfSharp(f, 1)) return true;
         }
@@ -504,8 +467,8 @@ CornerTopology::subsetHasSemiSharpEdges(CornerSubset const & subset) const {
 
     int n = subset.GetNumFaces();
     if (n > 1) {
-        int f = GetFaceBefore(subset._numFacesBefore);
-        //  Skip first face of a boundary when inspecting leading edges:
+        int f = GetFaceFirst(subset);
+        //  Reduce number of faces to visit when inspecting trailing edges:
         for (int i = subset.IsBoundary(); i < n; ++i, f = GetFaceNext(f)) {
             if (IsFaceEdgeSemiSharp(f, 1)) return true;
         }
@@ -519,20 +482,19 @@ CornerTopology::adjustSubsetTags(CornerSubset       * subset,
 
     CornerTag & subsetTag = subset->_tag;
 
-    //  Adjust any tags related to boundary or sharpness status (no other
-    //  action for boundary at present):
+    //  Adjust any tags related to boundary or sharpness status:
     if (subsetTag.IsBoundary()) {
+        subsetTag._infSharpDarts = false;
     }
-
     if (subsetTag.IsInfSharp()) {
         subsetTag._semiSharpVerts = false;
     }
 
     //  Adjust for the presence of irregular faces or sharp edges if the
-    //  subset is actually a proper subset of the corner or the optionally
-    //  provided superset:
+    //  subset is actually a proper subset of this entire corner or the
+    //  optionally provided superset:
     int  numSuperFaces = superset ? superset->GetNumFaces() : GetNumFaces();
-    bool superBoundary = superset ? superset->IsBoundary()  : _tag.IsBoundary();
+    bool superBoundary = superset ? superset->IsBoundary()  : isBoundary();
 
     if ((subset->GetNumFaces() < numSuperFaces) ||
         (subset->IsBoundary() != superBoundary)) {
@@ -542,10 +504,7 @@ CornerTopology::adjustSubsetTags(CornerSubset       * subset,
         }
         if (subsetTag._infSharpEdges) {
             subsetTag._infSharpEdges = subsetHasInfSharpEdges(*subset);
-            if (!subsetTag._infSharpEdges) {
-                subsetTag._infSharpDarts = false;
-            } else if (subset->IsBoundary()) {
-                subsetTag._infSharpDarts = false;
+            if (subsetTag._infSharpEdges && subset->IsBoundary()) {
                 SharpenSubset(subset);
             }
         }
@@ -555,73 +514,30 @@ CornerTopology::adjustSubsetTags(CornerSubset       * subset,
     }
 }
 
+
 //
-//  Main and supporting internal methods to connect unordered faces and
-//  so allow for topological traversals of the incident faces:
+//  Main and supporting internal datatypes and methods to connect unordered
+//  faces and allow for topological traversals of the incident faces:
 //
-//  While still rough, the process can be broken down as follows -- first
-//  the following data is needed:
-//
-//    - local buffer of face-edge vertices, size = 2*N
-//    - local buffer of face-edge edges, size = 2*N
-//    - local array of Edges, dynamic (max 2*N)
-//    - member buffer neighbors, size = 2*N
-//
-//  and is processed as follows:
-//
-//    - initialize/connect the set of dynamic Edges:
-//        - assignUnOrderedEdges()
-//        - requires:
-//            - input:   CornerTopology, face-vertex indices
-//            - output:  array of Edges, array of face-edge edges
-//        - gather/assign the local face-edge vertex buffer
-//        - initialize the output face-edge edge buffer (-1)
-//        - for each face-edge vertex, intialize new Edge
-//            - look for remaining face-edges with matching vertices
-//            - change state of Edge based on occurrence
-//        - post-process the set of dynamic Edges:
-//            - test for duplicate corner vertex in face and adjust
-//
-//    - assign neighboring/connected faces from Edges
-//        - assignUnOrderedFaceNeighbors()
-//        - requires:
-//            - input:   CornerTopology, array of Edges,
-//                       array of face-edge edges
-//            - output:  array of neighboring/connected faces
-//        - inspects Edge for each face-edge edge
-//        - assigns neighboring face for connected/interior edges
-//
-//    - determine overall vertex properties (non-manifold, sharp):
-//        - assignUnOrderedProperties()
-//        - requires:
-//            - input:   CornerTopology, array of Edges
-//            - output:  CornerTopology or give CornerTag?
-//        - take inventory of the given Edges:
-//            - count non-manifold, boundary, inf-sharp edges
-//        - perform any remaining analysis
-//        - assign vertex manifold and sharpness status
+//  The fundamental element of this process is the following definition of
+//  an Edge. It is lightweight and only stores a state (boundary, interior,
+//  or non-manifold) along with the one or two faces for a manifold edge.
+//  It is initialized as a boundary when first created and is then modified
+//  by adding additional incident faces.
 //
 struct CornerTopology::Edge {
     //  Empty constructor intentional since we over-allocate what we need:
     Edge() { }
 
-    unsigned short boundary    : 1;
-    unsigned short interior    : 1;
-    unsigned short nonManifold : 1;
-    unsigned short degenerate  : 1;
-    unsigned short duplicate   : 1;
-    unsigned short infSharp    : 1;
-    unsigned short semiSharp   : 1;
-
-    short prevFace, nextFace;
-    short vertex; // temporary, for debugging only
-
-    void Clear() { std::memset(this, 0, sizeof(*this)); }
+    void clear() { std::memset(this, 0, sizeof(*this)); }
+    void Initialize(int vtx) { clear(), vertex = (short) vtx; }
 
     //  Transition of state as incident faces are added:
     void SetBoundary()    { boundary = 1; }
     void SetInterior()    { boundary = 0, interior = 1; }
     void SetNonManifold() { boundary = 0, interior = 0, nonManifold = 1; }
+
+    //  Special cases forcing non-manifold
     void SetDegenerate()  { SetNonManifold(), degenerate = 1; }
     void SetDuplicate()   { SetNonManifold(), duplicate = 1; }
 
@@ -635,38 +551,50 @@ struct CornerTopology::Edge {
         }
     }
 
-    void SetFaces(int prev, int next) { prevFace = prev, nextFace = next; }
+    void SetFace(int newFace, bool newTrailing) {
+        trailing = newTrailing;
+        *(trailing ? &prevFace : &nextFace) = (short) newFace;
+    }
+
+    void AddFace(int newFace, bool newTrailing) {
+
+        //  Update the state of the Edge based on the added incident face:
+        if (boundary) {
+            if (newTrailing == trailing) {
+                //  Edge is reversed
+                SetNonManifold();
+            } else if (newFace == (trailing ? prevFace : nextFace)) {
+                //  Edge is repeated in the face
+                SetNonManifold();
+            } else {
+                //  Edge is manifold thus far -- promote to interior
+                SetInterior();
+                SetFace(newFace, newTrailing);
+            }
+        } else if (interior) {
+            //  More than two incident faces -- make non-manifold
+            SetNonManifold();
+        }
+    }
+
+    unsigned short boundary    : 1;
+    unsigned short interior    : 1;
+    unsigned short nonManifold : 1;
+    unsigned short trailing    : 1;
+    unsigned short degenerate  : 1;
+    unsigned short duplicate   : 1;
+    unsigned short infSharp    : 1;
+    unsigned short semiSharp   : 1;
+
+    short vertex;
+    short prevFace, nextFace;
 };
 
 void
 CornerTopology::ConnectUnOrderedFaces(Index const fvIndices[]) {
 
-bool debug = false;
-if (debug) {
-    Index vCorner = fvIndices[0];
-    printf("        corner vertex:   %d\n", vCorner);
-
-    printf("        face vertices:\n");
-    Index const * fv = fvIndices;
-    for (int i = 0; i < this->GetNumFaces(); ++i) {
-        int fSize = this->GetFaceSize(i);
-        printf("            face %2d (%d):  ", i, fSize);
-        for (int j = 0; j < fSize; ++j) {
-            printf(" %3d", fv[j]);
-        }
-        printf("\n");
-        fv += this->GetFaceSize(i);
-    }
-    printf("        face-edge vertices:\n");
-    for (int i = 0; i < GetNumFaces(); ++i) {
-        printf("            face %2d:       %3d %3d\n", i,
-            GetFaceVertexTrailing(i, fvIndices),
-            GetFaceVertexLeading( i, fvIndices));
-    }
-}
-
     //
-    //  There are two transient sets of data we need here:  a set of Edges
+    //  There are two transient sets of data needed here:  a set of Edges
     //  that connect adjoining faces, and a set of indices (one for each
     //  of the 2*N face-edges) to identify the Edge for each face-edge.
     //
@@ -677,57 +605,25 @@ if (debug) {
     //
     int numFaceEdges = GetNumFaces() * 2;
 
-    Vtr::internal::StackBuffer<Edge,32,true> edges(numFaceEdges);
-
     _faceEdgeNeighbors.SetSize(numFaceEdges);
 
-    short * feEdges = &_faceEdgeNeighbors[0];
-    std::fill(feEdges, feEdges + numFaceEdges, -1);
+    //  Allocate and populate the edges and indices referring to them.
+    //  Initialization fails to detect some "duplicate" edges in a face,
+    //  so post-process to catch these before continuing:
+    Vtr::internal::StackBuffer<Edge,32,true> edges(numFaceEdges);
 
-    //  Edge initialization fails to detect some "duplicate" edges in a
-    //  face, so post-process to catch these before continuing:
-    int numEdges = gatherUnOrderedEdges(edges, feEdges, fvIndices);
+    short * feEdges = &_faceEdgeNeighbors[0];
+
+    int numEdges = createUnOrderedEdges(edges, feEdges, fvIndices);
 
     markDuplicateEdges(edges, feEdges, fvIndices);
 
     //  Use the connecting edges to assign neighboring faces (overwriting
-    //  our edge indices) and update the properties of the corner:
+    //  our edge indices) and finish initializing the tags retaining the
+    //  properties of the corner:
     assignUnOrderedFaceNeighbors(edges, feEdges);
 
-    assignUnOrderedTags(edges, numEdges);
-
-if (debug) {
-    Index vCorner = fvIndices[0];
-    printf("        connecting edges:\n");
-    for (int i = 0; i < numEdges; ++i) {
-        Edge const & E = edges[i];
-        printf("            edge %d (%3d to %3d):  ", i, vCorner, E.vertex);
-        printf("non-manifold = %d, boundary = %d", E.nonManifold, E.boundary);
-        bool edgeIsSingular = E.nonManifold || E.boundary;
-        if (!edgeIsSingular) {
-            printf(", prevFace = %d, nextFace = %d", E.prevFace, E.nextFace);
-        }
-        printf("\n");
-    }
-
-    printf("        neighboring faces:\n");
-    short * feFaces = &_faceEdgeNeighbors[0];
-    for (int i = 0; i < (numFaceEdges / 2); ++i) {
-        printf("            face %2d:       prev =%3d, next =%3d\n", i,
-            feFaces[i*2], feFaces[i*2+1]);
-    }
-
-    bool isNonManifold = _tag._nonManifoldVerts;
-    printf("            manifold = %s\n", isNonManifold ? "false" : "TRUE");
-    printf("            boundary = %d\n", _tag._boundaryVerts);
-    printf("            sharp    = %d\n", _tag._infSharpVerts);
-    //  WIP - test/assert here only when expecting RefinerSurfaceFactory's
-    //        non-manifold verts to match:
-    if (!isNonManifold) {
-        printf("WARNING:  unordered vertex is MANIFOLD!\n");
-    }
-    assert(isNonManifold);
-}
+    finalizeUnOrderedTags(edges, numEdges);
 }
 
 //
@@ -737,98 +633,82 @@ if (debug) {
 //  The "face-edge edges" are really just half-edges that refer (by index)
 //  to potentially shared Edges.  As Edges are created, these half-edges
 //  are made to refer to them, after which the state of the edge may change
-//  due to the presence or orientation of additional matching half-edges.
+//  due to the presence or orientation of additional incident faces.
 //
 int
-CornerTopology::gatherUnOrderedEdges(Edge        edges[],
+CornerTopology::createUnOrderedEdges(Edge        edges[],
                                      short       feEdges[],
                                      Index const fvIndices[]) const {
 
-    //
-    //  Gather the face-edge vertex indices into local buffer:
-    //
-    int feCount = 2 * this->GetNumFaces();
+    //  Optional map to help construction for high valence:
+    typedef std::map<int,int> EdgeMap;
 
-    std::vector<Index> feVerts(feCount, -1);
+    EdgeMap edgeMap;
 
-    for (int i = 0; i < feCount; ++i) {
-        feVerts[i] = (i & 1) ?
-            this->GetFaceVertexTrailing((i >> 1), fvIndices) :
-            this->GetFaceVertexLeading( (i >> 1), fvIndices);
-    }
+    bool useMap = (GetNumFaces() > 16);
 
     //
-    //  Iterate through the face-edge vertices to find connecting edges:
+    //  Iterate through the face-edge pairs to find connecting edges:
     //
-    Index vCorner = this->GetFaceVertexAtCorner(0, fvIndices);
+    Index vCorner = GetFaceIndexAtCorner(0, fvIndices);
 
-    int nEdges = 0;
+    int numFaceEdges = 2 * GetNumFaces();
+    int numEdges = 0;
 
-    for (int eOuter = 0; eOuter < feCount; ++eOuter) {
-        if (feEdges[eOuter] >= 0) continue;
+    //  Don't rely on the tag yet to determine presence of sharpness:
+    bool hasSharpness = _vTop.HasEdgeSharpness();
 
-        //
-        //  Identify the next end-vertex and its newly created edge:
-        //
-        Index vIndex = feVerts[eOuter];
-        int  eIndex  = nEdges++;
+    for (int feIndex = 0; feIndex < numFaceEdges; ++feIndex) {
+        Index vIndex = (feIndex & 1) ?
+                       GetFaceIndexTrailing((feIndex >> 1), fvIndices) :
+                       GetFaceIndexLeading( (feIndex >> 1), fvIndices);
 
-        feEdges[eOuter] = eIndex;
-
-        //
-        //  Create/initialize new edge before searching for matching edges:
-        //  if degenerate, skip any futher inspection, otherwise initialize
-        //  as a boundary edge and classify its sharpness:
-        //
-        Edge & E = edges[eIndex];
-        E.Clear();
-        E.vertex = vIndex;
-
-        if (vIndex == vCorner) {
-            E.SetDegenerate();
-            continue;
-        }
-
-        E.SetBoundary();
-        if (_tag.HasSharpEdges()) {
-            E.SetSharpness(GetFaceEdgeSharpness(eOuter));
-        }
-
-        //
-        //  Search remaining face-edges for the same end-vertex:
-        //
-        int  eOuterFace       = (eOuter >> 1);
-        bool eOuterIsTrailing = (eOuter & 1);
-
-        for (int eInner = eOuter + 1; eInner < feCount; ++eInner) {
-            if (feEdges[eInner] >= 0) continue;
-            if (feVerts[eInner] != vIndex) continue;
-
-            feEdges[eInner] = eIndex;
-
-            //  If already non-manifold, nothing more to do, otherwise
-            //  update the state of the edge based on this end-vertex:
-            if (!E.nonManifold) {
-                int  eInnerFace       = (eInner >> 1);
-                bool eInnerIsTrailing = (eInner & 1);
-
-                bool isReversed = (eInnerIsTrailing == eOuterIsTrailing);
-                bool isRepeated = (eInnerFace == eOuterFace);
-                if (isReversed || isRepeated || !E.boundary) {
-                    //  Edge is reversed, repeated in the face or has more
-                    //  than two incident faces -- make non-manifold:
-                    E.SetNonManifold();
-                } else if (E.boundary) {
-                    //  Edge is a manifold boundary -- propote to interior
-                    //  and assign the two connected faces:
-                    E.SetInterior();
-                    E.SetFaces(eInnerIsTrailing ? eInnerFace : eOuterFace,
-                               eInnerIsTrailing ? eOuterFace : eInnerFace);
+        int eIndex = -1;
+        if (vIndex != vCorner) {
+            if (useMap) {
+                EdgeMap::iterator eFound = edgeMap.find(vIndex);
+                if (eFound != edgeMap.end()) {
+                    eIndex = eFound->second;
+                } else {
+                    //  Make sure to create the new edge below at this index
+                    edgeMap[vIndex] = numEdges;
+                }
+            } else {
+                for (int j = 0; j < numEdges; ++j) {
+                    if (edges[j].vertex == vIndex) {
+                        eIndex = j;
+                        break;
+                    }
                 }
             }
+
+            //  Update an existing edge or create a new one
+            if (eIndex >= 0) {
+                edges[eIndex].AddFace(feIndex >> 1, feIndex & 1);
+            } else {
+                //  Index of the new (pre-allocated) edge:
+                eIndex = numEdges ++;
+
+                //  Initialize a new edge as boundary (manifold)
+                Edge & E = edges[eIndex];
+                E.Initialize(vIndex);
+                E.SetBoundary();
+                E.SetFace(feIndex >> 1, feIndex & 1);
+                if (hasSharpness) {
+                    E.SetSharpness(GetFaceEdgeSharpness(feIndex));
+                }
+            }
+        } else {
+            //  If degenerate, create unique edge (non-manifold)
+            eIndex = numEdges++;
+
+            edges[eIndex].Initialize(vIndex);
+            edges[eIndex].SetDegenerate();
         }
+        assert(eIndex >= 0);
+        feEdges[feIndex] = eIndex;
     }
-    return nEdges;
+    return numEdges;
 }
 
 void
@@ -872,12 +752,19 @@ CornerTopology::markDuplicateEdges(Edge        edges[],
         for (int face = 0; face < numFaces; ++face) {
             int faceSize = GetFaceSize(face);
 
-            for (int j = 2; j < (faceSize - 2); ++j) {
-                if (fv[j] == vCorner) {
-                    if (fv[j-1] == fv[1])
-                        edges[feEdges[2*face]].SetDuplicate();
-                    if (fv[j+1] == fv[faceSize-1])
-                        edges[feEdges[2*face+1]].SetDuplicate();
+            if (faceSize == 4) {
+                if (fv[2] == vCorner) {
+                    edges[feEdges[2*face  ]].SetDuplicate();
+                    edges[feEdges[2*face+1]].SetDuplicate();
+                }
+            } else {
+                for (int j = 2; j < (faceSize - 2); ++j) {
+                    if (fv[j] == vCorner) {
+                        if (fv[j-1] == fv[1])
+                            edges[feEdges[2*face  ]].SetDuplicate();
+                        if (fv[j+1] == fv[faceSize-1])
+                            edges[feEdges[2*face+1]].SetDuplicate();
+                    }
                 }
             }
             fv += faceSize;
@@ -890,9 +777,6 @@ CornerTopology::assignUnOrderedFaceNeighbors(Edge const  edges[],
                                              short const feEdges[]) {
 
     int numFaceEdges = 2 * GetNumFaces();
-    assert((int)_faceEdgeNeighbors.GetSize() == numFaceEdges);
-
-    short * feFaces = &_faceEdgeNeighbors[0];
 
     for (int i = 0; i < numFaceEdges; ++i) {
         assert(feEdges[i] >= 0);
@@ -900,16 +784,15 @@ CornerTopology::assignUnOrderedFaceNeighbors(Edge const  edges[],
         Edge const & E = edges[feEdges[i]];
         bool edgeIsSingular = E.nonManifold || E.boundary;
         if (edgeIsSingular) {
-            feFaces[i] = -1;
+            _faceEdgeNeighbors[i] = -1;
         } else {
-            bool faceEdgeIsTrailing = (i & 1);
-            feFaces[i] = faceEdgeIsTrailing ? E.nextFace : E.prevFace;
+            _faceEdgeNeighbors[i] = (i & 1) ? E.nextFace : E.prevFace;
         }
     }
 }
 
 void
-CornerTopology::assignUnOrderedTags(Edge const edges[], int numEdges) {
+CornerTopology::finalizeUnOrderedTags(Edge const edges[], int numEdges) {
 
     //
     //  Summarize properties of the corner given the number and nature of
@@ -918,10 +801,9 @@ CornerTopology::assignUnOrderedTags(Edge const edges[], int numEdges) {
     //
     //  First, take inventory of relevant properties from the edges:
     //
-    _numInfSharpEdges  = 0;
-    _numSemiSharpEdges = 0;
-
     int numNonManifoldEdges = 0;
+    int numInfSharpEdges    = 0;
+    int numSemiSharpEdges   = 0;
     int numSingularEdges    = 0;
 
     bool hasBoundaryEdges         = false;
@@ -933,8 +815,8 @@ CornerTopology::assignUnOrderedTags(Edge const edges[], int numEdges) {
         Edge const & E = edges[i];
 
         if (E.interior) {
-            _numInfSharpEdges  += E.infSharp;
-            _numSemiSharpEdges += E.semiSharp;
+            numInfSharpEdges  += E.infSharp;
+            numSemiSharpEdges += E.semiSharp;
         } else if (E.boundary) {
             hasBoundaryEdges = true;
             hasBoundaryEdgesNotSharp |= !E.infSharp;
@@ -991,15 +873,15 @@ CornerTopology::assignUnOrderedTags(Edge const edges[], int numEdges) {
     _tag._boundaryVerts    = hasBoundaryEdges;
     _tag._boundaryNonSharp = hasBoundaryEdgesNotSharp;
 
-    _tag._infSharpEdges  = (_numInfSharpEdges > 0);
-    _tag._semiSharpEdges = (_numSemiSharpEdges > 0);
-    _tag._infSharpDarts  = (_numInfSharpEdges == 1) && !hasBoundaryEdges;
+    _tag._infSharpEdges  = (numInfSharpEdges > 0);
+    _tag._semiSharpEdges = (numSemiSharpEdges > 0);
+    _tag._infSharpDarts  = (numInfSharpEdges == 1) && !hasBoundaryEdges;
 
     //  Conditions effectively making the vertex sharp, include the usual
     //  excess of inf-sharp edges plus some non-manifold cases:
     if ((numSingularEdges > 2) || (isNonManifold && !isNonManifoldCrease)) {
         _isImpInfSharp = true;
-    } else if ((numSingularEdges + _numSemiSharpEdges) > 2) {
+    } else if ((numSingularEdges + numSemiSharpEdges) > 2) {
         _isImpSemiSharp = true;
     }
 

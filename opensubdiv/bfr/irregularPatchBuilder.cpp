@@ -189,7 +189,7 @@ IrregularPatchBuilder::initializeControlHullInventory() {
                 }
             }
         } else {
-            int cornerFace = cTop.GetFaceInVertex();
+            int cornerFace = cTop.GetFace();
 
             if (!cSub.IsBoundary()) {
                 int nextFace = cTop.GetFaceAfter(2);
@@ -215,7 +215,7 @@ IrregularPatchBuilder::initializeControlHullInventory() {
                     nVerts ++;
                 }
                 if (cSub._numFacesBefore) {
-                    int nextFace = cTop.GetFaceBefore(cSub._numFacesBefore);
+                    int nextFace = cTop.GetFaceFirst(cSub);
                     for (int i = 0; i < cSub._numFacesBefore; ++i) {
                         int S = cTop.GetFaceSize(nextFace);
                         nVerts += S - 2;
@@ -706,7 +706,7 @@ IrregularPatchBuilder::GatherControlVertexIndices(Index cvIndices[]) const {
     int N = _surface.GetFaceSize();
 
     CornerTopology const & cTop0 = _surface.GetCornerTopology(0);
-    int baseOffset = cTop0.GetFaceVertexOffset(cTop0.GetFaceInVertex());
+    int baseOffset = cTop0.GetFaceIndexOffset(cTop0.GetFace());
 
     Index const * baseIndices = &_surface.GetIndices()[baseOffset];
     std::memcpy(cvIndices, baseIndices, N * sizeof(Index));
@@ -740,13 +740,13 @@ IrregularPatchBuilder::GatherControlVertexIndices(Index cvIndices[]) const {
             int nextFace = cTop.GetFaceAfter(2);
             if ((numFaces == 1) && (cTop.GetFaceSize(nextFace) == 3)) {
                 //  Special case for val-3 adjacent triangle:
-                int fvOffset = cTop.GetFaceVertexOffset(nextFace);
+                int fvOffset = cTop.GetFaceIndexOffset(nextFace);
 
                 cvIndices[numIndices++] = faceVertIndices[fvOffset + 1];
             } else {
                 for (int j = 0; j < numFaces; ++j) {
                     int S = cTop.GetFaceSize(nextFace);
-                    int fvOffset = cTop.GetFaceVertexOffset(nextFace);
+                    int fvOffset = cTop.GetFaceIndexOffset(nextFace);
 
                     int L = (j < (numFaces-1)) ? 0 : (1 + nVal2Overlap);
                     int M = (S - 2) - L;
@@ -768,7 +768,7 @@ IrregularPatchBuilder::GatherControlVertexIndices(Index cvIndices[]) const {
                     nextFace = cTop.GetFaceNext(nextFace);
 
                     int S = cTop.GetFaceSize(nextFace);
-                    int fvOffset = cTop.GetFaceVertexOffset(nextFace);
+                    int fvOffset = cTop.GetFaceIndexOffset(nextFace);
 
                     int M = (S - 2);
                     for (int k = 1; k <= M; ++k) {
@@ -776,14 +776,14 @@ IrregularPatchBuilder::GatherControlVertexIndices(Index cvIndices[]) const {
                     }
                 }
                 cvIndices[numIndices++] =
-                        cTop.GetFaceVertexTrailing(nextFace, faceVertIndices);
+                        cTop.GetFaceIndexTrailing(nextFace, faceVertIndices);
             }
             if (cSub._numFacesBefore) {
                 int numFaces = cSub._numFacesBefore;
-                int nextFace = cTop.GetFaceBefore(cSub._numFacesBefore);
+                int nextFace = cTop.GetFaceFirst(cSub);
                 for (int j = 0; j < numFaces; ++j) {
                     int S = cTop.GetFaceSize(nextFace);
-                    int fvOffset = cTop.GetFaceVertexOffset(nextFace);
+                    int fvOffset = cTop.GetFaceIndexOffset(nextFace);
 
                     int L = (j < (numFaces-1)) ? 0 : (1 + nVal2Overlap);
                     int M = (S - 2) - L;
@@ -876,7 +876,7 @@ IrregularPatchBuilder::gatherControlFaceSizes(int faceSizes[]) const {
                 }
             }
             if (cSub._numFacesBefore) {
-                int nextFace = cTop.GetFaceBefore(cSub._numFacesBefore);
+                int nextFace = cTop.GetFaceFirst(cSub);
                 for (int j = 0; j < cSub._numFacesBefore; ++j) {
                     int S = cTop.GetFaceSize(nextFace);
                     faceSizes[nFaces++] = S;
@@ -942,7 +942,7 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
 
         if (cSub._tag.HasSharpEdges() &&
                 (!cSub.IsBoundary() || cSub._numFacesBefore)) {
-            int   cornerFace = cTop.GetFaceInVertex();
+            int   cornerFace = cTop.GetFace();
             float sharpness  = cTop.GetFaceEdgeSharpness(cornerFace, 0);
             if (Sdc::Crease::IsSharp(sharpness)) {
                 if (assigning) {
@@ -967,7 +967,7 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
 
         if (!cSub._tag.HasSharpEdges()) continue;
 
-        int cornerFace = cTop.GetFaceInVertex();
+        int cornerFace = cTop.GetFace();
 
         //
         //  Inspect interior edges of the subset -- test sharpness of
@@ -1017,7 +1017,7 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
                 nextVert ++;
             }
             if (cSub._numFacesBefore) {
-                int nextFace = cTop.GetFaceBefore(cSub._numFacesBefore);
+                int nextFace = cTop.GetFaceFirst(cSub);
                 for (int i = 1; i < cSub._numFacesBefore; ++i) {
                     nextVert += cTop.GetFaceSize(nextFace) - 2;
                     float sharpness = cTop.GetFaceEdgeSharpness(nextFace, 1);
@@ -1106,7 +1106,7 @@ IrregularPatchBuilder::gatherControlFaceVertices(int faceVertices[]) const {
             nextVert ++;
         }
         if (cSub._numFacesBefore) {
-            int nextFace = cTop.GetFaceBefore(cSub._numFacesBefore);
+            int nextFace = cTop.GetFaceFirst(cSub);
 
             int N = cSub._numFacesBefore;
             for (int j = 0; j < N; ++j) {

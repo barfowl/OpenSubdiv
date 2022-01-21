@@ -96,21 +96,12 @@ FaceSurface::Initialize(FaceTopology const & vtxTopology,
         CornerTopology const & vtxTop = GetCornerTopology(corner);
         CornerSubset         & vtxSub = _corners[corner];
 
-        //  We can initialize the subset from the full topology in some
-        //  cases, but others require search (non-manifold, unordered):
-        CornerTag vtxTopTag = vtxTop.GetTag();
-        if (vtxTopTag.IsOrdered()) {
-            vtxTop.InitializeCompleteSubset(&vtxSub);
-        } else if (!vtxTopTag.IsManifold() || vtxTopTag.IsBoundary()) {
-            vtxTop.FindConnectedSubset(&vtxSub);
-        } else {
-            vtxTop.InitializeCompleteSubset(&vtxSub);
-        }
+        vtxTop.GetVertexSubset(&vtxSub);
 
         if (vtxSub.IsBoundary() && !vtxSub.IsSharp()) {
             sharpenBySdcVtxBoundaryInterpolation(&vtxSub, vtxTop);
         }
-        if (useInfSharpSubsets && vtxTopTag.HasInfSharpEdges()) {
+        if (useInfSharpSubsets && vtxTop.GetTag().HasInfSharpEdges()) {
             //  WIP - potentially reduce to a smaller subset here
         }
         _combinedTag.Combine(vtxSub.GetTag());
@@ -323,7 +314,7 @@ namespace fvar_plus {
     hasMoreThanTwoFVarSubsets(CornerTopology const & top,
                               Index          const   fvarIndices[]) {
 
-        Index indexCorner = top.GetFaceVertexAtCorner(fvarIndices);
+        Index indexCorner = top.GetFaceIndexAtCorner(fvarIndices);
         Index indexOther = -1;
 
         int numOtherEdgesDiscts = 1;
@@ -334,11 +325,9 @@ namespace fvar_plus {
         //  found in the only other subset:
         //
         int  numFaces = top.GetNumFaces();
-        bool isOrderedBoundary = top.GetTag().IsOrdered() &&
-                                 top.GetTag().IsBoundary();
 
         for (int face = 0; face < numFaces; ++face) {
-            Index index = top.GetFaceVertexAtCorner(face, fvarIndices);
+            Index index = top.GetFaceIndexAtCorner(face, fvarIndices);
 
             //  Matches the corner's subset -- skip:
             if (index == indexCorner) continue;
@@ -346,19 +335,14 @@ namespace fvar_plus {
             //  Does not match corner's subset or the other subset -- done:
             if ((indexOther >= 0) && (index != indexOther)) return true;
 
-            //  Matches the "other" subset -- check for discontinuities
-            //  with the leading edge of the next connected face:
+            //  Matches the "other" subset -- check for discontinuity
+            //  between this face and the next:
             indexOther = index;
 
-            int faceNext = isOrderedBoundary
-                         ? ((face < (numFaces - 1)) ? (face + 1) : -1)
-                         : top.GetFaceNext(face);
+            int faceNext = top.GetFaceNext(face);
 
             numOtherEdgesDiscts += (faceNext < 0) ||
-                    (top.GetFaceVertexAtCorner(faceNext, fvarIndices)
-                        != indexOther) ||
-                    (top.GetFaceVertexLeading(faceNext, fvarIndices)
-                        != top.GetFaceVertexTrailing(face, fvarIndices));
+                !top.FaceIndicesMatchAcrossEdge(face, faceNext, fvarIndices);
 
             if (numOtherEdgesDiscts > 2) return true;
         }
@@ -395,36 +379,24 @@ namespace fvar_plus {
     getDependentSharpness(CornerTopology const & top,
                           CornerSubset   const & subset) {
 
-        int numFaces    = top.GetNumFaces();
-        bool isOrdered  = top.GetTag().IsOrdered();
-        bool isBoundary = top.GetTag().IsBoundary();
-
-        //  Identify the first and last faces of the subset which will be
+        //  Identify the first and last faces of the subset -- to be
         //  skipped when searching for the largest interior sharp edge:
-        int  firstFace = top.GetFaceBefore(subset._numFacesBefore);
-        int  lastFace  = top.GetFaceAfter(subset._numFacesAfter);
+        int firstFace = top.GetFaceFirst(subset);
+        int lastFace  = top.GetFaceLast(subset);
 
-        bool isFirstFaceEdgeInterior = true;
-        bool isLastFaceEdgeInterior  = true;
-        if (!isOrdered) {
-            isFirstFaceEdgeInterior = (top.GetFacePrevious(firstFace) >= 0);
-            isLastFaceEdgeInterior  = (top.GetFaceNext(lastFace) >= 0);
-        } else if (isBoundary) {
-            isFirstFaceEdgeInterior = (firstFace > 0);
-            isLastFaceEdgeInterior  = (lastFace < (numFaces - 1));
-        }
+        //  Skip the face or its neighbor with the shared leading edge:
+        int firstFacePrev = top.GetFacePrevious(firstFace);
+        int lastFaceNext  = top.GetFaceNext(lastFace);
 
-        firstFace = !isFirstFaceEdgeInterior ? -1 : firstFace;
-        lastFace  = !isLastFaceEdgeInterior  ? -1 : top.GetFaceNext(lastFace);
+        firstFace = (firstFacePrev < 0) ? -1 : firstFace;
+        lastFace  = (lastFaceNext  < 0) ? -1 : lastFaceNext;
 
-        //  Search for the largest interior sharp edge using the leading
-        //  edges of each face (skipping the first face of a boundary):
+        //  Search for largest interior sharp edge using leading edges:
         float sharp = 0.0f;
-
-        for (int i = (isOrdered && isBoundary); i < numFaces; ++i) {
-            if ((i != firstFace) && (i != lastFace)) {
-                if (isOrdered || (top.GetFacePrevious(i) >= 0)) {
-                    sharp = std::max(sharp, top.GetFaceEdgeSharpness(i, 0));
+        for (int i = 0; i < top.GetNumFaces(); ++i) {
+            if (top.GetFacePrevious(i) >= 0) {
+                if ((i != firstFace) && (i != lastFace)) {
+                    sharp = std::max(sharp, top.GetFaceEdgeSharpness(2*i));
                 }
             }
         }
