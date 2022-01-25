@@ -849,9 +849,9 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
                 if (!initFaceNeighborhoodTopology(faceIndex, &faceTopology)) {
                     return false;
                 }
-                vtxIndices.SetSize(faceTopology._numFaceVertsTotal);
                 vtxSurfDesc.Initialize(faceTopology, 0);
             }
+            fvIndices.SetSize(faceTopology._numFaceVertsTotal);
 
             //  Gather FVar indices and initialize FVar surface descriptor:
             if (gatherFaceNeighborhoodIndices(faceIndex, faceTopology,
