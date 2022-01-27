@@ -28,7 +28,7 @@
 #include "../version.h"
 
 #include "../bfr/surfaceFactory.h"
-#include "../bfr/topologyCache.h"
+#include "../bfr/surfaceFactoryCache.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -47,9 +47,9 @@ namespace Bfr {
 //  This subclass provides additional public interface methods specific to
 //  TopologyRefiner along with most requirements of the base class related
 //  to the TopologyRefiner. The requirement not completed here is that of
-//  providing a local TopologyCache -- that is deferred to a template below
-//  so that a wide range of clients desiring a thread-safe cache can easily
-//  declare a subclass for a preferred thread-safe type.
+//  providing a local SurfaceFactoryCache -- that is deferred to a template
+//  below so that a wide range of clients desiring a thread-safe cache can
+//  easily declare a subclass for a preferred thread-safe type.
 //
 class RefinerSurfaceFactoryBase : public SurfaceFactory {
 public:
@@ -123,11 +123,11 @@ private:
 //
 //  Template for concrete subclasses with the addition of management of an
 //  internal cache. This makes it possible for clients to simply declare a
-//  subclass that manages an internal thread-safe TopologyCache using their
-//  preferred thread-safe type.
+//  subclass that manages an internal thread-safe SurfaceFactoryCache using
+//  their preferred thread-safe type.
 //
-template <class CACHE_TYPE = TopologyCache>
-class RefinerSurfaceFactoryCached: public RefinerSurfaceFactoryBase {
+template <class CACHE_TYPE = SurfaceFactoryCache>
+class RefinerSurfaceFactoryCached : public RefinerSurfaceFactoryBase {
 public:
     RefinerSurfaceFactoryCached(Far::TopologyRefiner const & mesh,
                                 Options options = Options()) :
@@ -136,14 +136,14 @@ public:
     ~RefinerSurfaceFactoryCached() { }
 
 protected:
-    TopologyCache * getInternalTopologyCache() const { return & _localCache; }
+    SurfaceFactoryCache * getInternalCache() const { return & _localCache; }
 
 private:
     CACHE_TYPE mutable _localCache;
 };
 
 //  WIP - naming is uncertain here, this typedef may eventually be removed
-typedef RefinerSurfaceFactoryCached<TopologyCache> RefinerSurfaceFactory;
+typedef RefinerSurfaceFactoryCached<SurfaceFactoryCache> RefinerSurfaceFactory;
 
 } // end namespace Bfr
 

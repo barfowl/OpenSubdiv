@@ -37,8 +37,8 @@ set(SOURCE_FILES
      regularPatchBuilder.cpp
      surface.cpp
      surfaceFactory.cpp
+     surfaceFactoryCache.cpp
      tessellation.cpp
-     topologyCache.cpp
      vertexTopology.cpp
 )
 
@@ -57,8 +57,8 @@ set(PUBLIC_HEADER_FILES
      refinerSurfaceFactory.h
      surface.h
      surfaceFactory.h
+     surfaceFactoryCache.h
      tessellation.h
-     topologyCache.h
      types.h
      vertexTopology.h
 )

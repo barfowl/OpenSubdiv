@@ -28,8 +28,9 @@
 #include "../version.h"
 
 #include "../bfr/faceSurface.h"
-#include "../bfr/topologyCache.h"
 #include "../vtr/stackBuffer.h"
+
+#include <cstdint>
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -86,22 +87,19 @@ public:
     int GatherControlVertexIndices(Index cvIndices[]) const;
 
 public:
-    //  High level methods for building or searching/updating a cache:
+    //  Methods to build irregular patches:
     typedef Far::PatchTree IrregPatchType;
-
-    IrregPatchType const * Find(TopologyCache * topologyCachePtr,
-                                bool          * patchIsNewPtr,
-                                bool          * patchIsCachedPtr);
 
     IrregPatchType const * Build();
 
+public:
+    //  Methods to help encode topology for caching:
+    typedef std::uint64_t KeyIntType;
+
+    bool GetPackedTopologyKey(KeyIntType * keyValue) const;
+    bool GetHashedTopologyKey(KeyIntType * keyValue) const;
+
 private:
-    //  Private methods to determine keys for topology caching:
-    TopologyCache::Key computeTopologyKey() const;
-
-    bool packTopologyKey(TopologyCache::Key * key) const;
-    bool hashTopologyKey(TopologyCache::Key * key) const;
-
     //  Private methods to assemble the topology of the control hull:
     //  WIP - revisit the need for these separate methods (and repeated
     //        iteration) now that we can put results in member buffers

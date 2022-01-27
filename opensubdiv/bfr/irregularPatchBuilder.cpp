@@ -237,16 +237,16 @@ IrregularPatchBuilder::initializeControlHullInventory() {
 
 
 //
-//  Computation of the cache key:
+//  Computation of the topology hashing value:
 //
 bool
-IrregularPatchBuilder::packTopologyKey(TopologyCache::Key * key) const {
+IrregularPatchBuilder::GetPackedTopologyKey(KeyIntType * keyValuePtr) const {
 
     //
     //  Keep the bitfield struct local in scope unless needed elsewhere:
     //
     struct KeyBits {
-        typedef TopologyCache::Key::IntType IntType;
+        typedef KeyIntType IntType;
 
         //  Bits for general options:
         IntType subdScheme   :  2;
@@ -383,18 +383,15 @@ IrregularPatchBuilder::packTopologyKey(TopologyCache::Key * key) const {
         keyBits.v3IsSharp    = subsets[3].IsSharp();
     }
 
-    //  Assign the bitfields to the resulting TopologyKey:
-    key->SetFormat(TopologyCache::Key::BITFIELDS);
-    key->SetValue(keyBits.GetAsInt());
-
+    *keyValuePtr = keyBits.GetAsInt();
     return true;
 }
 
 bool
-IrregularPatchBuilder::hashTopologyKey(TopologyCache::Key * key) const {
+IrregularPatchBuilder::GetHashedTopologyKey(KeyIntType * keyValuePtr) const {
 
     //  WIP - quickly disable hashed caching for debugging, profiling...
-    //if (key) return false;
+    //if (keyValuePtr) return false;
 
     //
     //  Hashing topology descriptions into 64-bit uints is currently
@@ -410,7 +407,9 @@ IrregularPatchBuilder::hashTopologyKey(TopologyCache::Key * key) const {
     //      - arrays for indices and sharpness of vertices (when present)
     //      - arrays for indices and sharpness of edges (when present)
     //
-    TopologyCache::Key::IntType topHash = 0;
+    KeyIntType & topHash = * keyValuePtr;
+
+    topHash = 0;
 
     CombinedTag tags = _surface.GetTag();
 
@@ -512,87 +511,9 @@ IrregularPatchBuilder::hashTopologyKey(TopologyCache::Key * key) const {
         topHash = internal::Hash64(iArray, 2 * nEdges * sizeof(int),   topHash);
         topHash = internal::Hash64(fArray,     nEdges * sizeof(float), topHash);
     }
-
-    //  Assign the bitfields to the resulting TopologyKey:
-    key->SetFormat(TopologyCache::Key::HASHED);
-    key->SetValue(topHash);
-
     return true;
 }
 
-TopologyCache::Key
-IrregularPatchBuilder::computeTopologyKey() const {
-
-    TopologyCache::Key key;
-
-    //
-    //  Dispatch the different key encoding strategies here:
-    //
-    if (packTopologyKey(&key)) {
-        return key;
-    } else if (hashTopologyKey(&key)) {
-        return key;
-    } else {
-        return TopologyCache::Key();
-    }
-}
-
-//
-//  Search and update of a TopologyCache:
-//
-IrregularPatchBuilder::IrregPatchType const *
-IrregularPatchBuilder::Find(TopologyCache * topologyCachePtr,
-        bool * patchIsNewPtr, bool * patchIsCachedPtr) {
-
-    TopologyCache & topologyCache = *topologyCachePtr;
-
-    bool & patchIsNew    = *patchIsNewPtr;
-    bool & patchIsCached = *patchIsCachedPtr;
-
-    //
-    //  If cache key is not valid, just create and return:
-    //
-    TopologyCache::Key patchKey = computeTopologyKey();
-    if (!patchKey.IsValid()) {
-        patchIsCached = false;
-        patchIsNew = true;
-        return Build();
-    }
-
-    //
-    //  If found in the cache, just return:
-    //
-    IrregPatchType const * patch = topologyCache.Find(patchKey);
-    if (patch) {
-        patchIsNew    = false;
-        patchIsCached = false;
-        return patch;
-    }
-
-    //
-    //  Create a new patch and add to the cache -- but beware of the race
-    //  condition: a patch with the same key may have been added while this
-    //  one was being built, so be sure to return that one if the case:
-    //
-    patch = Build();
-
-    IrregPatchType const * patchWithKey = topologyCache.Add(patchKey, patch);
-    if (patchWithKey == patch) {
-        patchIsNew    = true;
-        patchIsCached = true;
-        return patch;
-    }
-
-    //  The rare case where another thread has added a patch with the same
-    //  key/topology while this one was being built -- so delete the patch
-    //  created here and return the one added to the cache elsewhere:
-    delete patch;
-    patch = patchWithKey;
-
-    patchIsNew    = false;
-    patchIsCached = true;
-    return patch;
-}
 
 //
 //  The main build/assembly method to create a PatchTree:

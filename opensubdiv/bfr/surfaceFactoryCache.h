@@ -22,8 +22,8 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#ifndef OPENSUBDIV3_BFR_TOPOLOGY_CACHE_H
-#define OPENSUBDIV3_BFR_TOPOLOGY_CACHE_H
+#ifndef OPENSUBDIV3_BFR_SURFACE_FACTORY_CACHE_H
+#define OPENSUBDIV3_BFR_SURFACE_FACTORY_CACHE_H
 
 #include "../version.h"
 
@@ -42,10 +42,10 @@ class PatchTree;
 namespace Bfr {
 
 //
-//  TopologyCache is a container for storing/caching instances of the
+//  SurfaceFactoryCache is a container for storing/caching instances of the
 //  internal representation of complex patches (currently via PatchTrees)
-//  so that they can be quickly identified and retrieved by some topology
-//  hashing mechanism.
+//  used by the SurfaceFactory so that they can be quickly identified and
+//  retrieved for reuse.
 //
 //  Initial/expected use requires simple searches of and additions to the
 //  cache by the SurfaceFactory or its Builders.  Longer term, with the
@@ -53,18 +53,18 @@ namespace Bfr {
 //  factories, additional options and/or methods may be warranted to limit
 //  what is cached or to prune the cache if it gets too large.
 //
-class TopologyCache {
+class SurfaceFactoryCache {
 public:
-    TopologyCache();
-    virtual ~TopologyCache();
+    SurfaceFactoryCache();
+    virtual ~SurfaceFactoryCache();
 
     size_t Size() const { return _mapBits.size() + _mapHash.size(); }
 
 protected:
     //  Access restricted to the Factory, its Builders, etc.
-    friend class IrregularPatchBuilder;
+    friend class SurfaceFactory;
 
-    //  WIP - TopologyCache::Key may yet be a separate class (see below)
+    //  Forward declaration of the Key type
     class Key;
 
     //  WIP - use of STL-style type names for containers is questionable
@@ -90,8 +90,6 @@ protected:
     //  integer value that may be computed in at least two different ways:
     //  the most common, simple topologies are encoded into a simple set
     //  of bitfields, while those more complex require a hashing function.
-    //
-    //  WIP - TopologyCache::Key may yet be a separate class
     //
     class Key {
     public:
@@ -127,26 +125,26 @@ private:
 };
 
 //
-//  Template for simple thread-safe subclasses of TopologyCache:
+//  Template for simple thread-safe subclasses of SurfaceFactoryCache:
 //
 //  Separate read and write locks are provided to support mutex types
 //  allowing shared (read) or exclusive (write) access.
 //
-template <class MUTEX_TYPE, class SCOPED_READ_LOCK_TYPE,
-                            class SCOPED_WRITE_LOCK_TYPE>
-class ThreadSafeTopologyCache : public TopologyCache {
+template <class MUTEX_TYPE, class READ_LOCK_GUARD_TYPE,
+                            class WRITE_LOCK_GUARD_TYPE>
+class ThreadSafeSurfaceFactoryCache : public SurfaceFactoryCache {
 public:
-    ThreadSafeTopologyCache() : TopologyCache() { }
-    ~ThreadSafeTopologyCache() { }
+    ThreadSafeSurfaceFactoryCache() : SurfaceFactoryCache() { }
+    ~ThreadSafeSurfaceFactoryCache() { }
 
 protected:
     data_type const * Find(key_type const & key) const {
-        SCOPED_READ_LOCK_TYPE lockGuard(_mutex);
+        READ_LOCK_GUARD_TYPE lockGuard(_mutex);
         return find(key);
     }
 
     data_type const * Add(key_type const & key, data_type const * data) {
-        SCOPED_WRITE_LOCK_TYPE lockGuard(_mutex);
+        WRITE_LOCK_GUARD_TYPE lockGuard(_mutex);
         return add(key, data);
     }
 
@@ -161,4 +159,4 @@ using namespace OPENSUBDIV_VERSION;
 
 } // end namespace OpenSubdiv
 
-#endif /* OPENSUBDIV3_BFR_TOPOLOGY_CACHE_H */
+#endif /* OPENSUBDIV3_BFR_SURFACE_FACTORY_CACHE_H */

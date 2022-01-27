@@ -22,7 +22,7 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#include "../bfr/topologyCache.h"
+#include "../bfr/surfaceFactoryCache.h"
 #include "../far/patchTree.h"
 
 namespace OpenSubdiv {
@@ -33,10 +33,10 @@ namespace Bfr {
 //
 //  Trivial constructor and destructor:
 //
-TopologyCache::TopologyCache() : _mapBits(), _mapHash() {
+SurfaceFactoryCache::SurfaceFactoryCache() : _mapBits(), _mapHash() {
 }
 
-TopologyCache::~TopologyCache() {
+SurfaceFactoryCache::~SurfaceFactoryCache() {
 
     clear();
 }
@@ -46,14 +46,14 @@ TopologyCache::~TopologyCache() {
 //  when explicitly cleared or the destructor is called:
 //
 void
-TopologyCache::clear() {
+SurfaceFactoryCache::clear() {
 
     clear(&_mapBits);
     clear(&_mapHash);
 }
 
 void
-TopologyCache::clear(map_type * mapPtr) {
+SurfaceFactoryCache::clear(map_type * mapPtr) {
 
     map_type & map = *mapPtr;
 
@@ -67,8 +67,8 @@ TopologyCache::clear(map_type * mapPtr) {
 //  These definitions do not yet account for the two types of keys --
 //  which in turn require a map corresponding to each type:
 //
-TopologyCache::data_type const *
-TopologyCache::find(Key const & key) const {
+SurfaceFactoryCache::data_type const *
+SurfaceFactoryCache::find(Key const & key) const {
 
     assert(key.IsValid());
 
@@ -79,8 +79,8 @@ TopologyCache::find(Key const & key) const {
     return (mapIt == map.end()) ? 0 : mapIt->second;
 }
 
-TopologyCache::data_type const *
-TopologyCache::add(Key const & key, data_type const * data) {
+SurfaceFactoryCache::data_type const *
+SurfaceFactoryCache::add(Key const & key, data_type const * data) {
 
     assert(key.IsValid());
 
@@ -97,14 +97,14 @@ TopologyCache::add(Key const & key, data_type const * data) {
 //
 //  Virtual methods -- intended to be overridden for thread-safety:
 //
-TopologyCache::data_type const *
-TopologyCache::Find(Key const & key) const {
+SurfaceFactoryCache::data_type const *
+SurfaceFactoryCache::Find(Key const & key) const {
 
     return find(key);
 }
 
-TopologyCache::data_type const *
-TopologyCache::Add(Key const & key, data_type const * data) {
+SurfaceFactoryCache::data_type const *
+SurfaceFactoryCache::Add(Key const & key, data_type const * data) {
 
     return add(key, data);
 }

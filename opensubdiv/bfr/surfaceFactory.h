@@ -38,12 +38,12 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 
 //
-//  Forward declarations of internal classes used by the factories:
+//  Forward declarations of public and internal classes used by factories:
 //
+class SurfaceFactoryCache;
 class VertexTopology;
 class FaceTopology;
 class FaceSurface;
-class TopologyCache;
 
 //
 //  SurfaceFactory is an abstract class that provides both the interface
@@ -119,14 +119,14 @@ public:
     public:
         Options() : _maxLevelPrimary(6), _maxLevelSecondary(2),
                     _useDoublePrecision(false), _useStencilTables(false),
-                    _disableCache(false), _extCachePtr(0) { }
+                    _disableCache(false), _sharedCache(0) { }
 
-        //  Alternatives to the default internal TopologyCache:
+        //  Alternatives to the default internal topology cache:
         void DisableTopologyCache(bool on) { _disableCache = on; }
         bool DisableTopologyCache()  const { return _disableCache; }
 
-        void ExternalTopologyCache(TopologyCache * c) { _extCachePtr = c; }
-        TopologyCache * ExternalTopologyCache() const { return _extCachePtr; }
+        void SharedTopologyCache(SurfaceFactoryCache * c) { _sharedCache=c; }
+        SurfaceFactoryCache * SharedTopologyCache() const {return _sharedCache;}
 
         //  Other configuration options:
         template <typename REAL> void SetSurfacePrecision();
@@ -145,12 +145,13 @@ public:
 
     private:
         //  Member variables:
-        short           _maxLevelPrimary;
-        short           _maxLevelSecondary;
-        unsigned int    _useDoublePrecision;
-        unsigned int    _useStencilTables;
-        unsigned int    _disableCache;
-        TopologyCache * _extCachePtr;
+        unsigned int _maxLevelPrimary    : 4;
+        unsigned int _maxLevelSecondary  : 4;
+        unsigned int _useDoublePrecision : 1;
+        unsigned int _useStencilTables   : 1;
+        unsigned int _disableCache       : 1;
+
+        SurfaceFactoryCache * _sharedCache;
     };
 
 public:
@@ -337,11 +338,11 @@ protected:
     //  for the faster linear interpolation of UVs.
     //
     //  The subclass is also responsible for providing a reference to a
-    //  mutable instance of a TopologyCache for use by the base class. The
-    //  subclass is free to use any type of TopologyCache that it requires
-    //  (e.g. one it has defined/declared for thread-safety) and manages
-    //  the lifetime of that instance.  (WIP - currently this is provided
-    //  by an additional virtual method, but other means are still under
+    //  mutable instance of a SurfaceFactoryCache for use by the base class.
+    //  The subclass is free to use any type of SurfaceFactoryCache that it
+    //  requires (e.g. one it has defined/declared for thread-safety) and
+    //  manages the lifetime of that instance. (WIP - currently this is
+    //  provided by an additional virtual method, but other means are under
     //  consideration, e.g. a separate initializer, via Options, etc.)
     //
     SurfaceFactory(Sdc::SchemeType schemeType,
@@ -349,7 +350,7 @@ protected:
                    Options         limitOptions);
     virtual ~SurfaceFactory();
 
-    virtual TopologyCache * getInternalTopologyCache() const = 0;
+    virtual SurfaceFactoryCache * getInternalCache() const = 0;
 
 private:
     //  Supporting internal methods:
@@ -396,7 +397,7 @@ private:
                               FaceSurface const & surfaceDescription) const;
 
     //  Methods for dealing with optional cache:
-    TopologyCache * getTopologyCache() const;
+    SurfaceFactoryCache * getAssignedCache() const;
 
 private:
     //  Members describing options and subdivision properties (very little

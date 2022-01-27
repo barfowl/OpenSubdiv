@@ -22,9 +22,9 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#include "../bfr/surfaceFactory.h"
 #include "../bfr/surface.h"
-#include "../bfr/topologyCache.h"
+#include "../bfr/surfaceFactory.h"
+#include "../bfr/surfaceFactoryCache.h"
 #include "../bfr/faceTopology.h"
 #include "../bfr/faceSurface.h"
 #include "../bfr/regularPatchBuilder.h"
@@ -139,15 +139,16 @@ SurfaceFactory::SurfaceFactory(
                                 _rejectIrregularFacesForLimit;
 }
 
-inline TopologyCache *
-SurfaceFactory::getTopologyCache() const {
+inline SurfaceFactoryCache *
+SurfaceFactory::getAssignedCache() const {
 
-    if (_limitOptions.ExternalTopologyCache()) {
-        return _limitOptions.ExternalTopologyCache();
-    } else if (!_limitOptions.DisableTopologyCache()) {
-        return getInternalTopologyCache();
+    if (_limitOptions.DisableTopologyCache()) {
+        return 0;
+    } else if (_limitOptions.SharedTopologyCache()) {
+        return _limitOptions.SharedTopologyCache();
+    } else {
+        return getInternalCache();
     }
-    return 0;
 }
 
 SurfaceFactory::~SurfaceFactory() {
@@ -159,7 +160,7 @@ printf("    __numLinearPatches     = %6d\n", __numLinearPatches);
 printf("    __numExpRegularPatches = %6d\n", __numExpRegularPatches);
 printf("    __numRegularPatches    = %6d\n", __numRegularPatches);
 printf("    __numIrregularPatches  = %6d\n", __numIrregularPatches);
-if (!_limitOptions.DisableTopologyCache()) {
+if (!_limitOptions.DisableTopologyCaching()) {
 printf("\n");
 printf("    __numIrregularUncached = %6d\n", __numIrregularUncached);
 printf("    __numIrregularInCache  = %6d\n", __numIrregularInCache);
@@ -454,6 +455,8 @@ SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
     //
     //  Construct a new irregular patch or identify one from the cache:
     //
+    typedef IrregularPatchBuilder::IrregPatchType PatchType;
+
     IrregularPatchBuilder::Options buildOptions;
     buildOptions.sharpLevel      = _limitOptions.MaxLevelPrimary();
     buildOptions.smoothLevel     = _limitOptions.MaxLevelSecondary();
@@ -462,23 +465,54 @@ SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
 
     IrregularPatchBuilder builder(descriptor, buildOptions);
 
-    TopologyCache * topCachePtr = getTopologyCache();
-    if (topCachePtr == 0) {
-        surface._irregPatch = builder.Build();
-        surface._irregOwner = true;
-    } else {
-        bool isNew    = false;
-        bool isCached = false;
-        surface._irregPatch = builder.Find(topCachePtr, &isNew, &isCached);
-        surface._irregOwner = isNew && !isCached;
+    //  Retrieve an irregular patch representation from cache if possible:
+    surface._irregPatch = 0;
+
+    SurfaceFactoryCache * cache = getAssignedCache();
+    if (cache) {
+        //  Construct a key to identify a patch in the cache:
+        //  WIP - eventually move key computation from builder to Factory
+        //      - surface topology is independent of the representation built
+        SurfaceFactoryCache::Key key;
+        SurfaceFactoryCache::Key::IntType keyValue = 0;
+
+        if (builder.GetPackedTopologyKey(&keyValue)) {
+            key.SetFormat(SurfaceFactoryCache::Key::BITFIELDS);
+            key.SetValue(keyValue);
+        } else if (builder.GetHashedTopologyKey(&keyValue)) {
+            key.SetFormat(SurfaceFactoryCache::Key::HASHED);
+            key.SetValue(keyValue);
+        }
+
+        //  Use a valid key to find and/or add a patch in the cache:
+        if (key.IsValid()) {
+            PatchType const * patchFound = cache->Find(key);
+            if (patchFound) {
+                surface._irregPatch = patchFound;
+            } else {
+                //  Add a new patch to the cache. Beware that another thread
+                //  may have added the same patch while it was being built.
+                //  If so, use the one added and delete the instance created:
+                PatchType const * patchCreated = builder.Build();
+                PatchType const * patchAdded   = cache->Add(key, patchCreated);
+
+                surface._irregPatch = patchAdded;
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
-__numIrregularInCache += isCached && isNew;
+__numIrregularInCache += (patchAdded == patchCreated);
 #endif
+                if (patchAdded != patchCreated) delete patchCreated;
+            }
+            surface._irregOwner = false;
+        }
     }
 
-    //
-    //  Gather the patch control points from the given indices:
-    //
+    //  If no patch found in or created for the cache, create it now:
+    if (surface._irregPatch == 0) {
+        surface._irregPatch = builder.Build();
+        surface._irregOwner = true;
+    }
+
+    //  Gather the patch control points for the irregular patch:
     surface._numControlPoints = surface._irregPatch->GetNumControlPoints();
     surface._numPatchPoints   = surface._irregPatch->GetNumPointsTotal();
 
