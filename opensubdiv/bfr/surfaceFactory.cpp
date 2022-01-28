@@ -22,6 +22,7 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
+#include "../bfr/hash.h"
 #include "../bfr/surface.h"
 #include "../bfr/surfaceFactory.h"
 #include "../bfr/surfaceFactoryCache.h"
@@ -297,6 +298,336 @@ SurfaceFactory::GetFaceParameterization(Index faceIndex) const {
     return Parameterization(_schemeType, getFaceSize(faceIndex));
 }
 
+
+//
+//  Internal namespace with utilities for computing topology keys:
+//
+namespace {
+    //  Need to redefine since SurfaceFactoryCache::Key is protected:
+    typedef std::uint64_t KeyIntType;
+
+    //
+    //  Note that the data used in determining a topology key is not
+    //  purely topological.  While most data detemines a unique limit
+    //  surface, a few parameters determine the approximation to it
+    //  (e.g. the various adaptive refinement levels) or dictate other
+    //  properties of its representation (e.g. double precision).
+    //
+    //  It may be worth separating these -- writing a method to deal
+    //  with the pure topology first, then combining it with details
+    //  of the representation.  But that would only help the hashing
+    //  case -- packing everything tightly into bit-fields cannot
+    //  easily avoid consideration of both at once.
+    //
+
+    //
+    //  Function to pack the topology for common cases (low-valence,
+    //  no creasing, irregular faces, etc.) into the desired integer
+    //  using bitfields:
+    //
+    bool
+    packTopologyKey(FaceSurface const & surface,
+                    SurfaceFactory::Options options,
+                    KeyIntType * keyValue) {
+        //
+        //  Keep the bitfield struct local in scope unless needed elsewhere:
+        //
+        struct KeyBits {
+            //  Be sure to clear to avoid uninitialized bits:
+            KeyBits() { std::memset(this, 0, sizeof(*this)); }
+
+            //  Bits for general options:
+            KeyIntType subdScheme       :  2;
+            KeyIntType sharpLevel       :  4;
+            KeyIntType smoothLevel      :  4;
+            KeyIntType usesDouble       :  1;
+            KeyIntType unused           :  1;  // future use
+            //  Bits for the corners:
+            KeyIntType v0Valence        :  6;
+            KeyIntType v1Valence        :  6;
+            KeyIntType v2Valence        :  6;
+            KeyIntType v3Valence        :  6;
+            KeyIntType v0IsSharp        :  1;
+            KeyIntType v1IsSharp        :  1;
+            KeyIntType v2IsSharp        :  1;
+            KeyIntType v3IsSharp        :  1;
+            KeyIntType v0IsBoundary     :  1;
+            KeyIntType v1IsBoundary     :  1;
+            KeyIntType v2IsBoundary     :  1;
+            KeyIntType v3IsBoundary     :  1;
+            KeyIntType v0FaceInBoundary :  5;
+            KeyIntType v1FaceInBoundary :  5;
+            KeyIntType v2FaceInBoundary :  5;
+            KeyIntType v3FaceInBoundary :  5;
+
+            //
+            //  Static methods to determine if bitfields can be used:
+            //
+            static bool InteriorValenceFits(int n) { return n < (1 << 6); }
+            static bool BoundaryValenceFits(int n) { return n < (1 << 5); }
+
+            //  A place holder if future Sdc::Options inhibit use of bitfields:
+            static bool OptionsInhibitUsage(Sdc::Options) { return false; }
+        };
+        assert(sizeof(KeyBits) == sizeof(KeyIntType));
+
+        //
+        //  Quickly test if the topology can be packed into bitfields, or
+        //  if hashing must be used.  Bitfields cannot be used when the
+        //  following features are present:
+        //
+        //      - any sharp edges of any kind (semi-sharp or inf-sharp)
+        //      - any semi-sharp vertices (inf-sharp is 1-bit per corner)
+        //      - any incident irregular faces
+        //
+        //  These can quickly be determined by inspecting the topology tags.
+        //  Two other situations are:
+        //
+        //      - any vertex with valence too high (more than ~6 bits)
+        //      - any Sdc::Option that cannot be encoded (in theory only)
+        //
+        //  The former must inspect the valence of each face-vertex, while
+        //  the latter requires inspecting the Sdc::Options -- and this is
+        //  called out more as a future possibility...
+        //
+        //  In theory, if certain Sdc::Options impact the limit surface,
+        //  they might need to be encoded, or might not be able to be fully
+        //  encoded in future.  This is not currently the case in practice:
+        //  boundary interpolation options are essentially unused as the
+        //  boundary conditions are explicitly applied; the creasing method
+        //  can be ignored here because creases cannot be packed; and the
+        //  Catmark triangle subdivision option can be ignored because the
+        //  presence of any irregular faces cannot be packed.
+        //
+
+        //  Immediate rejection of bitfields:
+        CombinedTag combinedTag = surface.GetTag();
+        if (combinedTag.HasSharpEdges() ||
+            combinedTag.HasSemiSharpVertices() ||
+            combinedTag.HasIrregularFaceSizes()) {
+            return false;
+        }
+
+        //  Conditional rejection of bitfields for high valence:
+        CornerSubset const * subsets = surface.GetSubsets();
+
+        for (int i = 0; i < surface.GetFaceSize(); ++i) {
+            int valence = subsets[i]._numFacesTotal;
+            if (subsets[i].IsBoundary()) {
+                if (!KeyBits::BoundaryValenceFits(valence)) return false;
+            } else {
+                if (!KeyBits::InteriorValenceFits(valence)) return false;
+            }
+        }
+
+        //  Conditional rejection of bitfields for specific Sdc::Options:
+        if (KeyBits::OptionsInhibitUsage(surface.GetSdcOptionsInEffect())) {
+            return false;
+        }
+
+        //
+        //  Pack the topology of each CornerSubset into bitfields:
+        //
+        KeyBits keyBits;
+
+        keyBits.subdScheme  = surface.GetSdcScheme();
+        keyBits.sharpLevel  = options.MaxLevelPrimary();
+        keyBits.smoothLevel = options.MaxLevelSecondary();
+        keyBits.usesDouble  = options.IsSurfacePrecision<double>();
+
+        keyBits.v0Valence        = subsets[0]._numFacesTotal;
+        keyBits.v0IsSharp        = subsets[0].IsSharp();
+        keyBits.v0IsBoundary     = subsets[0].IsBoundary();
+        keyBits.v0FaceInBoundary = subsets[0]._numFacesBefore;
+
+        keyBits.v1Valence        = subsets[1]._numFacesTotal;
+        keyBits.v1IsSharp        = subsets[1].IsSharp();
+        keyBits.v1IsBoundary     = subsets[1].IsBoundary();
+        keyBits.v1FaceInBoundary = subsets[1]._numFacesBefore;
+
+        keyBits.v2Valence        = subsets[2]._numFacesTotal;
+        keyBits.v2IsSharp        = subsets[2].IsSharp();
+        keyBits.v2IsBoundary     = subsets[2].IsBoundary();
+        keyBits.v2FaceInBoundary = subsets[2]._numFacesBefore;
+
+        if (surface.GetFaceSize() == 4) {
+            keyBits.v3Valence        = subsets[3]._numFacesTotal;
+            keyBits.v3IsSharp        = subsets[3].IsSharp();
+            keyBits.v3IsBoundary     = subsets[3].IsBoundary();
+            keyBits.v3FaceInBoundary = subsets[3]._numFacesBefore;
+        }
+
+        std::memcpy(keyValue, &keyBits, sizeof(*keyValue));
+        return true;
+    }
+
+    //
+    //  Function to assign the topology of any FaceSurface to the desired
+    //  integer using a hashing function that considers all topological
+    //  features (incident face sizes, crease and corner sharpness, etc.):
+    //
+    bool
+    hashTopologyKey(FaceSurface const & surface,
+                    SurfaceFactory::Options options,
+                    KeyIntType * keyValue) {
+
+        //
+        //  Structs for "headers" for the entire surface and each corner,
+        //  to be assigned and copied into a larger buffer to be hashed:
+        //
+        struct SurfaceHeader {
+            //  Be sure to clear to avoid uninitialized bits:
+            SurfaceHeader() { std::memset(this, 0, sizeof(*this)); }
+
+            short          faceSize;
+            unsigned short subdScheme    :  1;
+            unsigned short subdCreasing  :  1;
+            unsigned short subdTriSmooth :  1;
+            unsigned short sharpLevel    :  4;
+            unsigned short smoothLevel   :  4;
+            unsigned short usesDouble    :  1;
+        };
+        struct CornerHeader {
+            //  Be sure to clear to avoid uninitialized bits:
+            CornerHeader() { std::memset(this, 0, sizeof(*this)); }
+
+            short          numFaces;
+            short          faceInBoundary;
+            unsigned short isBoundary    : 1;
+            unsigned short isInfSharp    : 1;
+            unsigned short isSemiSharp   : 1;
+            unsigned short hasFaceSizes  : 1;
+            unsigned short hasSharpEdges : 1;
+        };
+
+        //
+        //  Consider using a "delimiter" between corners in the buffer of
+        //  data to be hashed, i.e. a value with a distinct bit pattern
+        //  such as -1, to help prevent aliasing (may not be needed):
+        //
+        int  delimiter = -1;
+        bool useCornerDelimiter = false;
+
+        //
+        //  Local buffers for accumulating and hashing:
+        //
+        Vtr::internal::StackBuffer<float,16,true> floatBuffer;
+        Vtr::internal::StackBuffer<short,16,true> shortBuffer;
+
+        Vtr::internal::StackBuffer<char,256,true> hashBuffer;
+
+        //
+        //  Determine size of the main buffer to hash ahead of time:
+        //
+        //  Note there is some redundancy in the use of the uncommon
+        //  faces sizes and sharp edges around each corner due to the
+        //  way the corners' incident faces overlap. For typical cases
+        //  the extra data used is not large. Only in extreme cases is
+        //  it likely to be an issue -- but then the added processing
+        //  and construction costs associated with such cases (e.g.
+        //  high valence vertices, heavy use of creasing) will make
+        //  make the overhead here insignificant.
+        //
+        int hashBufferSize = sizeof(SurfaceHeader);
+
+        int faceSize = surface.GetFaceSize();
+        for (int i = 0; i < faceSize; ++i) {
+            CornerSubset const & cSub = surface.GetCornerSubset(i);
+
+            int N = cSub.GetNumFaces();
+
+            hashBufferSize += sizeof(CornerHeader);
+
+            hashBufferSize += cSub._tag.IsSemiSharp() ?
+                              sizeof(float) : 0;
+            hashBufferSize += cSub._tag.HasUnCommonFaceSizes() ?
+                             (sizeof(short) * N) : 0;
+            hashBufferSize += cSub._tag.HasSharpEdges() ?
+                             (sizeof(float) * (N - cSub.IsBoundary())) : 0;
+
+            hashBufferSize += useCornerDelimiter ? sizeof(delimiter) : 0;
+        }
+        hashBuffer.SetSize(hashBufferSize);
+
+        //
+        //  Start populating the buffer with the surface header:
+        //
+        Sdc::Options subdOptions = surface.GetSdcOptionsInEffect();
+
+        SurfaceHeader sHeader;
+        sHeader.faceSize      = faceSize;
+        sHeader.subdScheme    = surface.GetSdcScheme();
+        sHeader.subdCreasing  = subdOptions.GetCreasingMethod();
+        sHeader.subdTriSmooth = subdOptions.GetTriangleSubdivision();
+        sHeader.sharpLevel    = options.MaxLevelPrimary();
+        sHeader.smoothLevel   = options.MaxLevelSecondary();
+        sHeader.usesDouble    = options.IsSurfacePrecision<double>();
+
+        std::memcpy(hashBuffer, &sHeader, sizeof(sHeader));
+
+        //
+        //  Populate the buffer for each corner of the surface:
+        //
+        char * bufferPtr = hashBuffer + sizeof(sHeader);
+
+        for (int i = 0; i < faceSize; ++i) {
+            CornerTopology const & cTop = surface.GetCornerTopology(i);
+            CornerSubset   const & cSub = surface.GetCornerSubset(i);
+
+            //  Assign the corner header:
+            CornerHeader cHeader;
+            cHeader.numFaces       = cSub.GetNumFaces();
+            cHeader.faceInBoundary = cSub._numFacesBefore;
+            cHeader.isBoundary     = cSub.IsBoundary();
+            cHeader.isInfSharp     = cSub.IsSharp();
+            cHeader.isSemiSharp    = cSub._tag.IsSemiSharp();
+            cHeader.hasFaceSizes   = cSub._tag.HasUnCommonFaceSizes();
+            cHeader.hasSharpEdges  = cSub._tag.HasSharpEdges();
+
+            std::memcpy(bufferPtr, &cHeader, sizeof(cHeader));
+            bufferPtr += sizeof(cHeader);
+
+            if (cHeader.isSemiSharp) {
+                float sharpness = (cSub._localSharpness > 0.0f)
+                                ?  cSub._localSharpness
+                                :  cTop.GetVertexSharpness();
+                std::memcpy(bufferPtr, &sharpness, sizeof(sharpness));
+                bufferPtr += sizeof(sharpness);
+            }
+            if (cHeader.hasFaceSizes) {
+                int n = cSub.GetNumFaces();
+                shortBuffer.SetSize(n);
+                for (int i = 0, f = cTop.GetFaceFirst(cSub); i < n;
+                                f = cTop.GetFaceNext(f), ++i) {
+                    shortBuffer[i] = cTop.GetFaceSize(f);
+                }
+                std::memcpy(bufferPtr, shortBuffer, n * sizeof(short));
+                bufferPtr += n * sizeof(short);
+            }
+            if (cHeader.hasSharpEdges) {
+                int n = cSub.GetNumFaces() - cSub.IsBoundary();
+                floatBuffer.SetSize(n);
+                for (int i = 0, f = cTop.GetFaceFirst(cSub); i < n;
+                                f = cTop.GetFaceNext(f), ++i) {
+                    floatBuffer[i] = cTop.GetFaceEdgeSharpness(f, 1);
+                }
+                std::memcpy(bufferPtr, floatBuffer, n * sizeof(float));
+                bufferPtr += n * sizeof(float);
+            }
+
+            if (useCornerDelimiter) {
+                std::memcpy(bufferPtr, &delimiter, sizeof(delimiter));
+                bufferPtr += sizeof(delimiter);
+            }
+        }
+        assert((bufferPtr - hashBuffer) == hashBufferSize);
+
+        *keyValue = internal::Hash64(hashBuffer, hashBufferSize);
+
+        return true;
+    }
+}
+
 //
 //  Methods supporting construction of linear, regular and irregular patches:
 //
@@ -471,15 +802,13 @@ SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
     SurfaceFactoryCache * cache = getAssignedCache();
     if (cache) {
         //  Construct a key to identify a patch in the cache:
-        //  WIP - eventually move key computation from builder to Factory
-        //      - surface topology is independent of the representation built
         SurfaceFactoryCache::Key key;
         SurfaceFactoryCache::Key::IntType keyValue = 0;
 
-        if (builder.GetPackedTopologyKey(&keyValue)) {
+        if (packTopologyKey(descriptor, _limitOptions, &keyValue)) {
             key.SetFormat(SurfaceFactoryCache::Key::BITFIELDS);
             key.SetValue(keyValue);
-        } else if (builder.GetHashedTopologyKey(&keyValue)) {
+        } else if (hashTopologyKey(descriptor, _limitOptions, &keyValue)) {
             key.SetFormat(SurfaceFactoryCache::Key::HASHED);
             key.SetValue(keyValue);
         }

@@ -30,8 +30,6 @@
 #include "../bfr/faceSurface.h"
 #include "../vtr/stackBuffer.h"
 
-#include <cstdint>
-
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
@@ -49,11 +47,6 @@ namespace Bfr {
 //  of the limit surface from its clients, i.e. the SurfaceFactory.  If the
 //  preferred representation changes, or more than one is made available, it
 //  should have minimal impact on its clients (ideally none).
-//
-//  In addition to building and providing a representation of an irregular
-//  surface, it also deals with the hashing and caching of the instances
-//  that it creates.  It computes the hashing keys from the topology and
-//  coordinates with a given cache to find or add new instances.
 //
 //  WIP - the nature of the approximating options needs more work...
 //      - we need some way of specifying the options of Far::PatchTree in
@@ -91,13 +84,6 @@ public:
     typedef Far::PatchTree IrregPatchType;
 
     IrregPatchType const * Build();
-
-public:
-    //  Methods to help encode topology for caching:
-    typedef std::uint64_t KeyIntType;
-
-    bool GetPackedTopologyKey(KeyIntType * keyValue) const;
-    bool GetHashedTopologyKey(KeyIntType * keyValue) const;
 
 private:
     //  Private methods to assemble the topology of the control hull:
