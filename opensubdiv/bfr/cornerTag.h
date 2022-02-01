@@ -144,6 +144,8 @@ public:
     bool HasUnOrderedVertices()    const { return _unOrderedFaces; }
     bool HasNonManifoldVertices()  const { return _nonManifoldVerts; }
     bool HasNonSharpBoundary()     const { return _boundaryNonSharp; }
+    bool HasSharpVertices()        const { return  HasInfSharpVertices() ||
+                                                   HasSemiSharpVertices(); }
     bool HasSharpEdges()           const { return  HasInfSharpEdges() ||
                                                    HasSemiSharpEdges(); }
 

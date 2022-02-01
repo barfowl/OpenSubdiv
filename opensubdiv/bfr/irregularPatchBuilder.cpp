@@ -107,53 +107,32 @@ void
 IrregularPatchBuilder::initializeControlHullInventory() {
 
     //
-    //  This process is not done locally for each corner as there are
-    //  rare but legitimate cases where the inventory of one corner
-    //  depends on one or more others:
+    //  Determine if we have any val-2 interior vertices -- which wreak
+    //  havoc on the control hull perimeter as it overlaps the faces:
     //
-    int N = _surface.GetFaceSize();
+    int faceSize = _surface.GetFaceSize();
 
-    //
-    //  First iterate through the corners to get the number of control
-    //  faces -- while also identifying val-2 and other features that
-    //  complicate dealing with control vertices:
-    //
-    int nVal2IntCorners = 0;
-
-    _numControlFaces = 1;
-    _cornerCFaceCount.SetSize(N);
-
-    for (int corner = 0; corner < N; ++corner) {
-        CornerSubset   const & cSub = _surface.GetCornerSubset(corner);
-
-        int nFaces = 0;
-        if (cSub.IsBoundary()) {
-            nFaces += cSub._numFacesAfter ? (cSub._numFacesAfter - 1) : 0;
-            nFaces += cSub._numFacesBefore;
-        } else if (cSub._numFacesTotal > 2) {
-            assert(cSub._numFacesBefore == 0);
-            nFaces += cSub._numFacesTotal - 2;
-        } else {
-            //  If all corners val-2 interior, we have an extra face:
-            nFaces += (++nVal2IntCorners == N);
-        }
-        _numControlFaces += nFaces;
-        _cornerCFaceCount[corner] = nFaces;
+    _hasVal2IntCorners = false;
+    for (int corner = 0; corner < faceSize; ++corner) {
+        CornerSubset const & cSub = _surface.GetCornerSubset(corner);
+        _hasVal2IntCorners |= (cSub.GetNumFaces() == 2) && !cSub.IsBoundary();
     }
 
-    _hasVal2IntCorners = (nVal2IntCorners > 0);
-
     //
-    //  Now iterate through the corners to get the number of control
-    //  vertices -- taking into account complications identified above:
+    //  Iterate through the corners to identify the vertices, faces and
+    //  face-vertices that contribute to the collective control hull:
     //
-    int nVal3IntAdjTris   = 0;
+    int numVal3IntAdjTris = 0;
+    int numVal2IntCorners = 0;
+    int numSrcFaceIndices = 0;
 
-    _numControlVerts = N;
-    _cornerCVertStart.SetSize(N+1);
-    _cornerCVertStart[0] = N;
+    _cornerControlInfo.SetSize(faceSize);
 
-    for (int corner = 0; corner < N; ++corner) {
+    _numControlVerts     = faceSize;
+    _numControlFaces     = 1;
+    _numControlFaceVerts = faceSize;
+
+    for (int corner = 0; corner < faceSize; ++corner) {
         CornerTopology const & cTop = _surface.GetCornerTopology(corner);
         CornerSubset   const & cSub = _surface.GetCornerSubset(corner);
 
@@ -161,176 +140,96 @@ IrregularPatchBuilder::initializeControlHullInventory() {
         //  Need to keep track of corners at and adjacent to valence-2
         //  interior corners to detect and avoid overlaps:
         //
-        int nVal2Overlap = _hasVal2IntCorners ?
-                           val2::getFaceOverlap(_surface, corner) : 0;
+        int numVal2Overlap = _hasVal2IntCorners ?
+                             val2::getFaceOverlap(_surface, corner) : 0;
 
         //
-        //  If all incident faces share a common face size, we can use
-        //  formulae to determine contributions -- otherwise inspection
-        //  if relevant incident faces is required:
+        //  Inspect faces after the corner face first -- dealing with a few
+        //  special cases for interior vertices of low valence -- followed
+        //  by those faces before the corner face:
         //
-        int nVerts = 0;
-        if (cTop.GetCommonFaceSize()) {
-            int S = cTop.GetCommonFaceSize();
+        CornerControl & cControl = _cornerControlInfo[corner];
+        cControl.Clear();
 
-            if (!cSub.IsBoundary()) {
-                if ((cSub._numFacesTotal == 3) && (S == 3)) {
-                    nVerts += (++nVal3IntAdjTris == N);
-                } else if (cSub._numFacesTotal > 2) {
-                    nVerts += (cSub._numFacesTotal - 2) * (S - 2) - 1;
-                }
-            } else {
-                if (cSub._numFacesAfter) {
-                    nVerts += (cSub._numFacesAfter - 1) * (S - 2) + 1;
-                }
-                if (cSub._numFacesBefore) {
-                    nVerts += cSub._numFacesBefore * (S - 2) - 1;
-                }
-            }
-        } else {
-            int cornerFace = cTop.GetFace();
+        int numCornerFaceVerts = 0;
 
-            if (!cSub.IsBoundary()) {
-                int nextFace = cTop.GetFaceAfter(2);
-                if ((cSub._numFacesTotal == 3) &&
-                    (cTop.GetFaceSize(nextFace) == 3)) {
-                    nVerts += (++nVal3IntAdjTris == N);
-                } else if (cSub._numFacesTotal > 2) {
-                    for (int i = 2; i < cSub._numFacesTotal; ++i) {
-                        int S = cTop.GetFaceSize(nextFace);
-                        nVerts += S - 2;
-                        nextFace = cTop.GetFaceNext(nextFace);
-                    }
-                    nVerts --;
+        if (cSub._numFacesAfter) {
+            int nextFace = cTop.GetFaceNext(cTop.GetFace());
+
+            if (cSub.IsBoundary()) {
+                //  Boundary -- no special cases:
+                for (int i = 1; i < cSub._numFacesAfter; ++i) {
+                    nextFace = cTop.GetFaceNext(nextFace);
+                    int S = cTop.GetFaceSize(nextFace);
+
+                    cControl.numVerts  += S - 2;
+                    numCornerFaceVerts += S;
                 }
-            } else {
-                if (cSub._numFacesAfter) {
-                    int nextFace = cTop.GetFaceNext(cornerFace);
-                    for (int i = 1; i < cSub._numFacesAfter; ++i) {
-                        nextFace = cTop.GetFaceNext(nextFace);
-                        int S = cTop.GetFaceSize(nextFace);
-                        nVerts += S - 2;
-                    }
-                    nVerts ++;
+                cControl.numFaces = cSub._numFacesAfter - 1;
+                //  Include unshared vertex of trailing edge
+                cControl.numVerts ++;
+            } else if (cSub._numFacesTotal == 2) {
+                //  Interior, valence-2 -- special case:
+                if (++numVal2IntCorners == faceSize) {
+                    cControl.singleCommonFace = true;
+                    cControl.numFaces  = 1;
+                    numCornerFaceVerts = faceSize;
                 }
-                if (cSub._numFacesBefore) {
-                    int nextFace = cTop.GetFaceFirst(cSub);
-                    for (int i = 0; i < cSub._numFacesBefore; ++i) {
-                        int S = cTop.GetFaceSize(nextFace);
-                        nVerts += S - 2;
-                        nextFace = cTop.GetFaceNext(nextFace);
-                    }
-                    nVerts --;
+            } else if ((cSub._numFacesTotal == 3) &&
+                    (cTop.GetFaceSize(cTop.GetFaceAfter(2)) == 3)) {
+                //  Interior, valence-3, adjacent triangle -- special case:
+                if (++numVal3IntAdjTris == faceSize) {
+                    cControl.singleCommonVert = true;
+                    cControl.numVerts = 1;
                 }
+                cControl.numFaces  = 1;
+                numCornerFaceVerts = 3;
+            } else if (cSub._numFacesTotal > 2) {
+                //  Interior -- general case:
+                for (int i = 2; i < cSub._numFacesTotal; ++i) {
+                    nextFace = cTop.GetFaceNext(nextFace);
+                    int S = cTop.GetFaceSize(nextFace);
+
+                    cControl.numVerts  += S - 2;
+                    numCornerFaceVerts += S;
+                }
+                cControl.numFaces = cSub._numFacesTotal - 2;
+                //  Exclude vertex shared with/contributed by next corner
+                cControl.numVerts --;
             }
         }
-        if (nVal2Overlap) {
-            assert(nVerts >= nVal2Overlap);
-            nVerts -= nVal2Overlap;
+        if (cSub._numFacesBefore) {
+            assert(cSub.IsBoundary());
+            int nextFace = cTop.GetFaceFirst(cSub);
+
+            for (int i = 0; i < cSub._numFacesBefore; ++i) {
+                int S = cTop.GetFaceSize(nextFace);
+                nextFace = cTop.GetFaceNext(nextFace);
+
+                cControl.numVerts  += S - 2;
+                numCornerFaceVerts += S;
+            }
+            cControl.numFaces += cSub._numFacesBefore;
+            //  Exclude vertex shared with/contributed by next corner
+            cControl.numVerts --;
         }
 
-        _numControlVerts += nVerts;
-        _cornerCVertStart[corner+1] = _numControlVerts;
+        //  Account for the overlap with valence-2 interior vertices:
+        if (numVal2Overlap) {
+            assert(cControl.numVerts >= numVal2Overlap);
+            cControl.numVerts -= numVal2Overlap;
+        }
+
+        //  Assign the contributions for this corner:
+        cControl.nextPerimeterVert = _numControlVerts;
+        cControl.nextSrcFaceIndex  = numSrcFaceIndices;
+
+        _numControlVerts     += cControl.numVerts;
+        _numControlFaces     += cControl.numFaces;
+        _numControlFaceVerts += numCornerFaceVerts;
+
+        numSrcFaceIndices += cTop.GetNumFaceVertices();
     }
-}
-
-
-//
-//  The main build/assembly method to create a PatchTree:
-//
-IrregularPatchBuilder::IrregPatchType const *
-IrregularPatchBuilder::Build() {
-
-    //
-    //  Old notes from when this functionality was part of the Factory...
-    //
-    //  Gather all topology data the given topology container.  This will
-    //  be gathered on the stack as much as possible and referenced by a
-    //  Far::TopologyDescriptor -- an intermediate step towards creating
-    //  the irregular PatchTree.
-    //
-    //  WIP - the Far::TopologyDescriptor can be eliminated by defining
-    //  a factory to create a Far::TopologyDescriptor directly from an
-    //  instance of FaceTopology. Some of this intermediate buffering can
-    //  also be eliminated in that case.
-    //
-    int vertCount  = _numControlVerts;
-    int faceCount  = _numControlFaces;
-    int fVertCount = 0;
-
-    Vtr::internal::StackBuffer<int, 64,true> faceSizes(faceCount);
-    fVertCount = gatherControlFaceSizes(faceSizes);
-
-    Vtr::internal::StackBuffer<int,256,true> faceVerts(fVertCount);
-    gatherControlFaceVertices(faceVerts);
-
-    //  Gather sharpness for corner vertices:
-    int faceSize = _surface.GetFaceSize();
-    Vtr::internal::StackBuffer<float,8,true> cornerWeights(faceSize);
-    Vtr::internal::StackBuffer<Index,8,true> cornerIndices(faceSize);
-
-    int nSharpVerts = gatherControlVertexSharpness(cornerIndices,
-                                                   cornerWeights);
-
-    //  Gather sharpness for edges:
-    Vtr::internal::StackBuffer<float,8,true>  creaseWeights(vertCount);
-    Vtr::internal::StackBuffer<Index,16,true> creaseIndices(vertCount * 2);
-
-    int nSharpEdges = 0;
-    if (_surface.GetTag().HasSharpEdges()) {
-        nSharpEdges = gatherControlEdgeSharpness(creaseIndices, creaseWeights);
-    }
-
-    //
-    //  Declare a TopologyDescriptor to reference the data gathered above:
-    //
-    Far::TopologyDescriptor topDescriptor;
-
-    topDescriptor.numVertices = vertCount;
-    topDescriptor.numFaces    = faceCount;
-
-    topDescriptor.numVertsPerFace    = faceSizes;
-    topDescriptor.vertIndicesPerFace = faceVerts;
-
-    if (nSharpVerts) {
-        topDescriptor.numCorners          = nSharpVerts;
-        topDescriptor.cornerVertexIndices = cornerIndices;
-        topDescriptor.cornerWeights       = cornerWeights;
-    }
-
-    if (nSharpEdges) {
-        topDescriptor.numCreases             = nSharpEdges;
-        topDescriptor.creaseVertexIndexPairs = creaseIndices;
-        topDescriptor.creaseWeights          = creaseWeights;
-    }
-
-    //  Construct a TopologyRefiner in order to create a PatchTree:
-    typedef Far::TopologyDescriptor Descriptor;
-    typedef Far::TopologyRefinerFactory<Descriptor> RefinerFactory;
-
-    RefinerFactory::Options refinerOptions;
-    refinerOptions.schemeType    = _surface.GetSdcScheme();
-    refinerOptions.schemeOptions = _surface.GetSdcOptionsInEffect();
-    refinerOptions.validateFullTopology = true;  // WIP - remove when stable
-
-    Far::TopologyRefiner * refiner =
-            RefinerFactory::Create(topDescriptor, refinerOptions);
-
-    //  Create the PatchTree:
-    Far::PatchTreeFactory::Options patchTreeOptions;
-    patchTreeOptions.includeInteriorPatches = false;
-    patchTreeOptions.maxPatchDepthSharp  = _options.sharpLevel;
-    patchTreeOptions.maxPatchDepthSmooth = _options.smoothLevel;
-    patchTreeOptions.useDoublePrecision  = _options.doublePrecision;
-    patchTreeOptions.useStencilTables    = _options.stencilTables;
-
-    Far::PatchTree const * patchTree =
-            Far::PatchTreeFactory::Create(*refiner, patchTreeOptions);
-
-    assert(patchTree->GetNumControlPoints() == vertCount);
-
-    delete refiner;
-    return patchTree;
 }
 
 //
@@ -346,98 +245,87 @@ IrregularPatchBuilder::GatherControlVertexIndices(Index cvIndices[]) const {
     //
     int N = _surface.GetFaceSize();
 
+    Index const * faceIndices = _surface.GetIndices();
+
     CornerTopology const & cTop0 = _surface.GetCornerTopology(0);
     int baseOffset = cTop0.GetFaceIndexOffset(cTop0.GetFace());
 
-    Index const * baseIndices = &_surface.GetIndices()[baseOffset];
+    Index const * baseIndices = &faceIndices[baseOffset];
     std::memcpy(cvIndices, baseIndices, N * sizeof(Index));
 
     int numIndices = N;
 
     //
-    //  Assign CV indices "local to" each corner:
+    //  Assign vertex indices identified as contributed by each corner:
     //
-    Index const * faceVertIndices = _surface.GetIndices();
-
     for (int corner = 0; corner < N; ++corner) {
+        CornerControl const & cControl = _cornerControlInfo[corner];
+
+        if (cControl.numVerts == 0) continue;
+
         CornerTopology const & cTop = _surface.GetCornerTopology(corner);
         CornerSubset const   & cSub = _surface.GetCornerSubset(corner);
 
-        //  Skip this corner if no control vertices to contribute:
-        if (getNumControlVertices(corner) == 0) {
-            faceVertIndices += cTop.GetNumFaceVertices();
+        Index const * srcIndices = faceIndices + cControl.nextSrcFaceIndex;
+
+        //  Special case with all val-3 interior triangles:
+        if (cControl.singleCommonVert) {
+            assert(!cSub.IsBoundary() && (cSub._numFacesTotal == 3) &&
+                   (cTop.GetFaceSize(cTop.GetFaceAfter(2)) == 3));
+            int fvOffset = cTop.GetFaceIndexOffset(cTop.GetFaceAfter(2));
+
+            cvIndices[numIndices++] = srcIndices[fvOffset + 1];
             continue;
         }
 
+        //  Detect and consider valence-2 interior overlap:
         int nVal2Overlap = _hasVal2IntCorners ?
                            val2::getFaceOverlap(_surface, corner) : 0;
 
         //
-        //  Similar loops here to traverse the faces around each corner,
-        //  so potential for some consolidation here...
+        //  Deal with the faces after the base faces first, followed by
+        //  those that precede it:
         //
-        if (!cSub.IsBoundary()) {
-            int numFaces = cSub._numFacesTotal - 2;
-            int nextFace = cTop.GetFaceAfter(2);
-            if ((numFaces == 1) && (cTop.GetFaceSize(nextFace) == 3)) {
-                //  Special case for val-3 adjacent triangle:
+        if (cSub._numFacesAfter) {
+            //  Be careful not to skip the last face entirely if it is the
+            //  only one of a boundary as we need its trailing edge:
+            int numFaces = cSub._numFacesAfter - 1;
+            int nextFace = cTop.GetFaceAfter(1);
+            for (int j = 0; j < numFaces; ++j) {
+                nextFace = cTop.GetFaceNext(nextFace);
+
+                int S = cTop.GetFaceSize(nextFace);
                 int fvOffset = cTop.GetFaceIndexOffset(nextFace);
 
-                cvIndices[numIndices++] = faceVertIndices[fvOffset + 1];
-            } else {
-                for (int j = 0; j < numFaces; ++j) {
-                    int S = cTop.GetFaceSize(nextFace);
-                    int fvOffset = cTop.GetFaceIndexOffset(nextFace);
-
-                    int L = (j < (numFaces-1)) ? 0 : (1 + nVal2Overlap);
-                    int M = (S - 2) - L;
-                    for (int k = 1; k <= M; ++k) {
-                        cvIndices[numIndices++] = faceVertIndices[fvOffset + k];
-                    }
-                    nextFace = cTop.GetFaceNext(nextFace);
+                int L = ((j < (numFaces-1)) || cSub.IsBoundary()) ?
+                        0 : (1 + nVal2Overlap);
+                int M = (S - 2) - L;
+                for (int k = 1; k <= M; ++k) {
+                    cvIndices[numIndices++] = srcIndices[fvOffset + k];
                 }
             }
-        } else {
-            if (cSub._numFacesAfter) {
-                //
-                //  While the first face "after" is generally skipped, if it
-                //  is the only one, we need to include its trailing edge:
-                //
-                int numFaces = cSub._numFacesAfter - 1;
-                int nextFace = cTop.GetFaceAfter(1);
-                for (int j = 0; j < numFaces; ++j) {
-                    nextFace = cTop.GetFaceNext(nextFace);
-
-                    int S = cTop.GetFaceSize(nextFace);
-                    int fvOffset = cTop.GetFaceIndexOffset(nextFace);
-
-                    int M = (S - 2);
-                    for (int k = 1; k <= M; ++k) {
-                        cvIndices[numIndices++] = faceVertIndices[fvOffset + k];
-                    }
-                }
+            //  Include trailing edge for boundary before crossing the gap:
+            if (cSub.IsBoundary()) {
                 cvIndices[numIndices++] =
-                        cTop.GetFaceIndexTrailing(nextFace, faceVertIndices);
-            }
-            if (cSub._numFacesBefore) {
-                int numFaces = cSub._numFacesBefore;
-                int nextFace = cTop.GetFaceFirst(cSub);
-                for (int j = 0; j < numFaces; ++j) {
-                    int S = cTop.GetFaceSize(nextFace);
-                    int fvOffset = cTop.GetFaceIndexOffset(nextFace);
-
-                    int L = (j < (numFaces-1)) ? 0 : (1 + nVal2Overlap);
-                    int M = (S - 2) - L;
-                    for (int k = 1; k <= M; ++k) {
-                        cvIndices[numIndices++] = faceVertIndices[fvOffset + k];
-                    }
-                    nextFace = cTop.GetFaceNext(nextFace);
-                }
+                    cTop.GetFaceIndexTrailing(nextFace, srcIndices);
             }
         }
-        assert(numIndices == _cornerCVertStart[corner+1]);
+        if (cSub._numFacesBefore) {
+            int numFaces = cSub._numFacesBefore;
+            int nextFace = cTop.GetFaceFirst(cSub);
+            for (int j = 0; j < numFaces; ++j) {
+                int S = cTop.GetFaceSize(nextFace);
+                int fvOffset = cTop.GetFaceIndexOffset(nextFace);
 
-        faceVertIndices += cTop.GetNumFaceVertices();
+                int L = (j < (numFaces-1)) ? 0 : (1 + nVal2Overlap);
+
+                int M = (S - 2) - L;
+                for (int k = 1; k <= M; ++k) {
+                    cvIndices[numIndices++] = srcIndices[fvOffset + k];
+                }
+                nextFace = cTop.GetFaceNext(nextFace);
+            }
+        }
     }
     assert(numIndices == _numControlVerts);
     return numIndices;
@@ -453,7 +341,7 @@ IrregularPatchBuilder::gatherControlFaceSizes(int faceSizes[]) const {
 
     if (!_surface.GetTag().HasUnCommonFaceSizes()) {
         std::fill(faceSizes, faceSizes + _numControlFaces, baseFaceSize);
-        return _numControlFaces * baseFaceSize;
+        return _numControlFaces;
     }
 
     //
@@ -461,74 +349,60 @@ IrregularPatchBuilder::gatherControlFaceSizes(int faceSizes[]) const {
     //
     faceSizes[0] = baseFaceSize;
 
-    if (_numControlFaces == 1) return baseFaceSize;
+    if (_numControlFaces == 1) return 1;
 
     //
-    //  Otherwise, travers all corners and populate control face sizes:
+    //  Otherwise, traverse all corners and populate control face sizes:
     //
     int nFaces = 1;
-    int sumOfSizes = faceSizes[0];
 
     for (int corner = 0; corner < _surface.GetFaceSize(); ++corner) {
-        if (getNumControlFaces(corner) == 0) continue;
+        CornerControl const & cControl = _cornerControlInfo[corner];
+
+        if (cControl.numFaces == 0) continue;
 
         CornerTopology const & cTop = _surface.GetCornerTopology(corner);
         CornerSubset const   & cSub = _surface.GetCornerSubset(corner);
 
         //
-        //  If the subset has a common face size, populate and continue:
+        //  If the subset has a common face size, this is trivial:
         //
         if (!cSub._tag.HasUnCommonFaceSizes()) {
-            int N = getNumControlFaces(corner);
+            int N = cControl.numFaces;
             for (int i = 0; i < N; ++i) {
                 faceSizes[nFaces++] = baseFaceSize;
             }
-            sumOfSizes += N * baseFaceSize;
-            continue;
-        }
+        } else if (cControl.singleCommonFace) {
+            //
+            //  Special case of a single adjacent laminar face:
+            //
+            assert(cControl.numFaces == 1);
+            assert(cSub._numFacesTotal == 2);
 
-        //
-        //  Otherwise, we need to gather sizes of specific faces:
-        //
-        if (!cSub.IsBoundary()) {
-            if (cSub._numFacesTotal > 2) {
-                int nextFace = cTop.GetFaceAfter(2);
-                for (int i = 2; i < cSub._numFacesTotal; ++i) {
-                    int S = cTop.GetFaceSize(nextFace);
-                    faceSizes[nFaces++] = S;
-                    sumOfSizes += S;
-
-                    nextFace = cTop.GetFaceNext(nextFace);
-                }
-            } else {
-                assert(getNumControlFaces(corner) == 1);
-                faceSizes[nFaces++] = _surface.GetFaceSize();
-                sumOfSizes += _surface.GetFaceSize();
-            }
+            faceSizes[nFaces++] = _surface.GetFaceSize();
         } else {
+            //
+            //  The general case - identify face sizes after and before:
+            //
             if (cSub._numFacesAfter > 1) {
-                int nextFace = cTop.GetFaceAfter(2);
-                for (int j = 1; j < cSub._numFacesAfter; ++j) {
-                    int S = cTop.GetFaceSize(nextFace);
-                    faceSizes[nFaces++] = S;
-                    sumOfSizes += S;
+                int face = cTop.GetFaceAfter(2);
+                for (int i = 1; i < cSub._numFacesAfter; ++i) {
+                    faceSizes[nFaces++] = cTop.GetFaceSize(face);
 
-                    nextFace = cTop.GetFaceNext(nextFace);
+                    face = cTop.GetFaceNext(face);
                 }
             }
             if (cSub._numFacesBefore) {
-                int nextFace = cTop.GetFaceFirst(cSub);
-                for (int j = 0; j < cSub._numFacesBefore; ++j) {
-                    int S = cTop.GetFaceSize(nextFace);
-                    faceSizes[nFaces++] = S;
-                    sumOfSizes += S;
+                int face = cTop.GetFaceFirst(cSub);
+                for (int i = 0; i < cSub._numFacesBefore; ++i) {
+                    faceSizes[nFaces++] = cTop.GetFaceSize(face);
 
-                    nextFace = cTop.GetFaceNext(nextFace);
+                    face = cTop.GetFaceNext(face);
                 }
             }
         }
     }
-    return sumOfSizes;
+    return _numControlFaces;
 }
 
 int
@@ -553,21 +427,8 @@ IrregularPatchBuilder::gatherControlVertexSharpness(
 }
 
 int
-IrregularPatchBuilder::countSharpControlVertices() const {
-
-    int nSharpVerts = 0;
-    for (int i = 0; i < _surface.GetFaceSize(); ++i) {
-        nSharpVerts += _surface.GetSubsets()[i]._tag.IsInfSharp() ||
-                       _surface.GetSubsets()[i]._tag.IsSemiSharp();
-    }
-    return nSharpVerts;
-}
-
-int
 IrregularPatchBuilder::gatherControlEdgeSharpness(
         int edgeVertPairs[], float edgeSharpness[]) const {
-
-    bool assigning = (edgeVertPairs != 0) && (edgeSharpness != 0);
 
     //
     //  First test the forward edge of each corner of the face (avoid
@@ -586,11 +447,9 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
             int   cornerFace = cTop.GetFace();
             float sharpness  = cTop.GetFaceEdgeSharpness(cornerFace, 0);
             if (Sdc::Crease::IsSharp(sharpness)) {
-                if (assigning) {
-                    *edgeSharpness++ = sharpness;
-                    *edgeVertPairs++ =  corner;
-                    *edgeVertPairs++ = (corner + 1) % faceSize;
-                }
+                *edgeSharpness++ = sharpness;
+                *edgeVertPairs++ =  corner;
+                *edgeVertPairs++ = (corner + 1) % faceSize;
                 nSharpEdges++;
             }
         }
@@ -601,7 +460,9 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
     //  on the perimeter:
     //
     for (int corner = 0; corner < faceSize; ++corner) {
-        if (getNumControlFaces(corner) == 0) continue;
+        CornerControl const & cControl = _cornerControlInfo[corner];
+
+        if (cControl.numFaces == 0) continue;
 
         CornerTopology const & cTop = _surface.GetCornerTopology(corner);
         CornerSubset const   & cSub = _surface.GetCornerSubset(corner);
@@ -616,73 +477,47 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
         //
         //  Unfortunately we need the control vertex index at the end
         //  of the edge, and so we need to track the perimeter -- which
-        //  requires the face sizes and may wrap around with tris...
+        //  requires the face sizes and may wrap around with tris. The
+        //  need to increment the perimeter also requires dealing with
+        //  the after and before faces separately (vs iterating over
+        //  the entire subset):
         //
         int maxVert  = _numControlVerts;
-        int nextVert = getNextControlVertex(corner);
+        int nextVert = cControl.nextPerimeterVert;
 
-        //  WIP - these blocks are similar enough to warrant merging
-        if (!cSub.IsBoundary()) {
+        if (cSub._numFacesAfter) {
             int nextFace = cTop.GetFaceNext(cornerFace);
-            for (int i = 2; i < cSub._numFacesTotal; ++i) {
+            for (int i = 1; i < cSub._numFacesAfter; ++i) {
                 float sharpness = cTop.GetFaceEdgeSharpness(nextFace, 1);
                 if (Sdc::Crease::IsSharp(sharpness)) {
-                    if (assigning) {
-                        *edgeSharpness++ = sharpness;
-                        *edgeVertPairs++ = corner;
-                        *edgeVertPairs++ = (nextVert < maxVert)
-                                         ? nextVert : faceSize;
-                    }
+                    *edgeSharpness++ = sharpness;
+                    *edgeVertPairs++ = corner;
+                    *edgeVertPairs++ = (nextVert < maxVert)
+                                     ? nextVert : faceSize;
                     nSharpEdges++;
                 }
                 nextFace  = cTop.GetFaceNext(nextFace);
                 nextVert += cTop.GetFaceSize(nextFace) - 2;
             }
-        } else {
-            if (cSub._numFacesAfter) {
-                int nextFace = cTop.GetFaceNext(cornerFace);
-                for (int i = 1; i < cSub._numFacesAfter; ++i) {
-                    float sharpness = cTop.GetFaceEdgeSharpness(nextFace, 1);
-                    if (Sdc::Crease::IsSharp(sharpness)) {
-                        if (assigning) {
-                            *edgeSharpness++ = sharpness;
-                            *edgeVertPairs++ = corner;
-                            *edgeVertPairs++ = (nextVert < maxVert)
-                                             ? nextVert : faceSize;
-                        }
-                        nSharpEdges++;
-                    }
-                    nextFace  = cTop.GetFaceNext(nextFace);
-                    nextVert += cTop.GetFaceSize(nextFace) - 2;
+            nextVert += cSub.IsBoundary();
+        }
+        if (cSub._numFacesBefore) {
+            int nextFace = cTop.GetFaceFirst(cSub);
+            for (int i = 1; i < cSub._numFacesBefore; ++i) {
+                nextVert += cTop.GetFaceSize(nextFace) - 2;
+                float sharpness = cTop.GetFaceEdgeSharpness(nextFace, 1);
+                if (Sdc::Crease::IsSharp(sharpness)) {
+                    *edgeSharpness++ = sharpness;
+                    *edgeVertPairs++ = corner;
+                    *edgeVertPairs++ = (nextVert < maxVert)
+                                     ? nextVert : faceSize;
+                    nSharpEdges++;
                 }
-                nextVert ++;
-            }
-            if (cSub._numFacesBefore) {
-                int nextFace = cTop.GetFaceFirst(cSub);
-                for (int i = 1; i < cSub._numFacesBefore; ++i) {
-                    nextVert += cTop.GetFaceSize(nextFace) - 2;
-                    float sharpness = cTop.GetFaceEdgeSharpness(nextFace, 1);
-                    if (Sdc::Crease::IsSharp(sharpness)) {
-                        if (assigning) {
-                            *edgeSharpness++ = sharpness;
-                            *edgeVertPairs++ = corner;
-                            *edgeVertPairs++ = (nextVert < maxVert)
-                                             ? nextVert : faceSize;
-                        }
-                        nSharpEdges++;
-                    }
-                    nextFace  = cTop.GetFaceNext(nextFace);
-                }
+                nextFace  = cTop.GetFaceNext(nextFace);
             }
         }
     }
     return nSharpEdges;
-}
-
-int
-IrregularPatchBuilder::countSharpControlEdges() const {
-
-    return gatherControlEdgeSharpness(0, 0);
 }
 
 int
@@ -703,7 +538,9 @@ IrregularPatchBuilder::gatherControlFaceVertices(int faceVertices[]) const {
     //  Assign face-vertex indices for faces "local to" each corner:
     //
     for (int corner = 0; corner < faceSize; ++corner) {
-        if (getNumControlFaces(corner) == 0) continue;
+        CornerControl const & cControl = _cornerControlInfo[corner];
+
+        if (cControl.numFaces == 0) continue;
 
         CornerTopology const & cTop = _surface.GetCornerTopology(corner);
         CornerSubset const   & cSub = _surface.GetCornerSubset(corner);
@@ -712,12 +549,24 @@ IrregularPatchBuilder::gatherControlFaceVertices(int faceVertices[]) const {
                            val2::getFaceOverlap(_surface, corner) : 0;
 
         //
+        //  Special case for single adjacent laminar face:
+        //
+        if (cControl.singleCommonFace) {
+            assert(_hasVal2IntCorners && val2::subsetIsVal2Interior(cSub));
+            //  Must be the special case of the reversed/laminar base face:
+            for (int j = faceSize - 1; j >= 0; --j) {
+                *nextFaceVert ++ = j;
+            }
+            continue;
+        }
+
+        //
         //  WIP - the following blocks for faces before and after the base
         //        face can probably be merged into one iteration -- provided
         //        the transition across the boundary discontinuity is handled
         //        properly (reset next face, adjust next vertex, etc.)
         //
-        int nextVert = getNextControlVertex(corner);
+        int nextVert = cControl.nextPerimeterVert;
 
         if (cSub._numFacesAfter > 1) {
             int nextFace = cTop.GetFaceAfter(2);
@@ -737,13 +586,8 @@ IrregularPatchBuilder::gatherControlFaceVertices(int faceVertices[]) const {
                 nextVert      += S - 2;
                 nextFace       = cTop.GetFaceNext(nextFace);
             }
-        } else if (_hasVal2IntCorners && val2::subsetIsVal2Interior(cSub)) {
-            //  Must be the special case of the reversed/laminar base face:
-            for (int j = faceSize - 1; j >= 0; --j) {
-                *nextFaceVert ++ = j;
-            }
         }
-        if (cSub.IsBoundary() && cSub._numFacesAfter) {
+        if (cSub._numFacesAfter && cSub.IsBoundary()) {
             nextVert ++;
         }
         if (cSub._numFacesBefore) {
@@ -762,7 +606,8 @@ IrregularPatchBuilder::gatherControlFaceVertices(int faceVertices[]) const {
             }
         }
     }
-    return (nextFaceVert - faceVertices);
+    assert((nextFaceVert - faceVertices) == _numControlFaceVerts);
+    return _numControlFaceVerts;
 }
 
 
@@ -838,131 +683,105 @@ IrregularPatchBuilder::getControlFaceVertices(int fVerts[], int numFVerts,
     *fVerts++ = lastFace ? ((corner + 1) % N) : lastPerimOfFace;
 }
 
+
 //
-//  Methods for debugging...
+//  The main build/assembly method to create a PatchTree:
 //
-void
-IrregularPatchBuilder::print() const {
+IrregularPatchBuilder::IrregPatchType const *
+IrregularPatchBuilder::Build() {
 
-    int faceSize = _surface.GetFaceSize();
+    //
+    //  The purpose here is to build a Far::PatchTree -- whose factory
+    //  requires a Far::TopologyRefiner.
+    //
+    //  For now, the quickest way to a Far::TopologyRefiner is via a
+    //  Far::TopologyDescriptor, which simply refers to pre-allocated
+    //  topology arrays -- which will be allocated on the stack for
+    //  typical cases nor requiring much memory.
+    //
+    //  Use of the Far::TopologyDescriptor can be eliminated by defining
+    //  a factory to create a Far::TopologyDescriptor directly from an
+    //  instance of FaceTopology, but the benefits relative to the cost
+    //  of creating the PatchTree may not be worth it.
+    //
+    int numVerts     = _numControlVerts;
+    int numFaces     = _numControlFaces;
+    int numFaceVerts = _numControlFaceVerts;
+    int numCorners   = _surface.GetFaceSize();
+    int numCreases   = _numControlVerts;
 
-    CombinedTag tag = _surface.GetTag();
+    //  Allocate and partition stack buffers for the topology arrays:
+    int numInts   = numFaces + numFaceVerts + numCorners + numCreases*2;
+    int numFloats = numCorners + numCreases;
 
-    printf("IrregularPatchBuilder control hull:\n");
-    printf("    Combined surface tags:\n");
-    printf("        has inc irreg faces  = %d\n", tag.HasIrregularFaceSizes());
-    printf("        has inf-sharp verts  = %d\n", tag.HasInfSharpVertices());
-    printf("        has semi-sharp verts = %d\n", tag.HasSemiSharpVertices());
-    printf("        has any sharp edges  = %d\n", tag.HasSharpEdges());
-    printf("        has inf-sharp darts  = %d\n", tag.HasInfSharpDarts());
-    printf("        has val-2 int verts  = %d\n", _hasVal2IntCorners);
+    Vtr::internal::StackBuffer<int, 256,true> intBuffer(numInts);
+    Vtr::internal::StackBuffer<float,64,true> floatBuffer(numFloats);
 
-    int nVerts = _numControlVerts;
-    int nFaces = _numControlFaces;
+    int * faceSizes     = intBuffer;
+    int * faceVerts     = faceSizes     + numFaces;
+    int * cornerIndices = faceVerts     + numFaceVerts;
+    int * creaseIndices = cornerIndices + numCorners;
 
-    printf("    Topology:\n");
-    printf("        num control verts = %3d\n", nVerts);
-    printf("            exterior verts:");
-    for (int i = 0; i < faceSize; ++i) {
-        printf(" %3d", getNumControlVertices(i));
-    }
-    printf("\n");
-    printf("            perimeter base:");
-    for (int i = 0; i < faceSize; ++i) {
-        if (getNextControlVertex(i) < _numControlVerts) {
-            printf(" %3d", getNextControlVertex(i));
-        } else {
-            printf("   -");
-        }
-    }
-    printf("\n");
-    printf("        num control faces = %3d\n", nFaces);
-    printf("            exterior faces:");
-    for (int i = 0; i < faceSize; ++i) {
-        printf(" %3d", getNumControlFaces(i));
-    }
-    printf("\n");
+    float * cornerWeights = floatBuffer;
+    float * creaseWeights = cornerWeights + numCorners;
 
-    printf("    Indices:\n");
+    //  Gather face sizes, face vertices and optional vertex or edge sharpness:
+    gatherControlFaceSizes(faceSizes);
+    gatherControlFaceVertices(faceVerts);
 
-    int    S[nFaces];
-    Index  P[_surface.GetNumIndices()];
-    Index *p = 0;
+    numCorners = _surface.GetTag().HasSharpVertices() ?
+                 gatherControlVertexSharpness(cornerIndices, cornerWeights) : 0;
+    numCreases = _surface.GetTag().HasSharpEdges() ?
+                 gatherControlEdgeSharpness(creaseIndices, creaseWeights) : 0;
 
-    int n = GatherControlVertexIndices(P);
-    assert(n == nVerts);
-    printf("        control verts:");
-    p = P;
-    for (int i = 0; i < faceSize; ++i) {
-        printf(" %3d", *p++);
-    }
-    printf("\n");
-    if (nVerts > faceSize) {
-        printf("            perimeter:");
-        for (int i = faceSize; i < nVerts; ++i) {
-            printf(" %3d", *p++);
-        }
-        printf("\n");
+    //  Declare a TopologyDescriptor to reference the data gathered above:
+    Far::TopologyDescriptor topDescriptor;
+
+    topDescriptor.numVertices = numVerts;
+    topDescriptor.numFaces    = numFaces;
+
+    topDescriptor.numVertsPerFace    = faceSizes;
+    topDescriptor.vertIndicesPerFace = faceVerts;
+
+    if (numCorners) {
+        topDescriptor.numCorners          = numCorners;
+        topDescriptor.cornerVertexIndices = cornerIndices;
+        topDescriptor.cornerWeights       = cornerWeights;
     }
 
-    int n1 = gatherControlFaceSizes(S);
-    int n2 = gatherControlFaceVertices(P);
-    assert(n1 == n2);
-
-    printf("        control faces:");
-    p = P;
-    printf(" (%d)", S[0]);
-    for (int i = 0; i < faceSize; ++i) {
-        printf(" %3d", *p++);
-    }
-    printf("\n");
-    for (int i = 1; i < nFaces; ++i) {
-        printf("                      ");
-        printf(" (%d)", S[i]);
-        for (int j = 0; j < S[i]; ++j) {
-            printf(" %3d", *p++);
-        }
-        printf("\n");
+    if (numCreases) {
+        topDescriptor.numCreases             = numCreases;
+        topDescriptor.creaseVertexIndexPairs = creaseIndices;
+        topDescriptor.creaseWeights          = creaseWeights;
     }
 
-    //  Corner subsets may be sharpened, so don't just test topology:
-    printf("    Sharpness:\n");
-    {
-        int   cornerIndices[faceSize];
-        float vertSharpness[faceSize];
+    //  Construct a TopologyRefiner in order to create a PatchTree:
+    typedef Far::TopologyDescriptor Descriptor;
+    typedef Far::TopologyRefinerFactory<Descriptor> RefinerFactory;
 
-        int nSharp = gatherControlVertexSharpness(cornerIndices, vertSharpness);
-        printf("        num sharp verts = %3d\n", nSharp);
-        for (int i = 0; i < nSharp; ++i) {
-            printf("                       ");
-            printf("  %d:  ", cornerIndices[i]);
-            if (vertSharpness[i] < Sdc::Crease::SHARPNESS_INFINITE) {
-                printf("%6.3f\n", vertSharpness[i]);
-            } else {
-                printf("inf\n");
-            }
-        }
-    }
+    RefinerFactory::Options refinerOptions;
+    refinerOptions.schemeType    = _surface.GetSdcScheme();
+    refinerOptions.schemeOptions = _surface.GetSdcOptionsInEffect();
+    refinerOptions.validateFullTopology = true;  // WIP - remove when stable
 
-    if (tag.HasSharpEdges()) {
-        int   edgeVertPairs[nVerts * 2];
-        float edgeSharpness[nVerts];
+    Far::TopologyRefiner * refiner =
+            RefinerFactory::Create(topDescriptor, refinerOptions);
 
-        int nSharp = gatherControlEdgeSharpness(edgeVertPairs, edgeSharpness);
-        printf("        num sharp edges = %3d\n", nSharp);
-        for (int i = 0; i < nSharp; ++i) {
-            printf("                       ");
-            printf(" (%d,%2d):  ", edgeVertPairs[i*2+0],
-                                   edgeVertPairs[i*2+1]);
-            if (edgeSharpness[i] < Sdc::Crease::SHARPNESS_INFINITE) {
-                printf("%6.3f\n", edgeSharpness[i]);
-            } else {
-                printf("inf\n");
-            }
-        }
-    } else {
-        printf("        num sharp edges = %3d\n", 0);
-    }
+    //  Create the PatchTree:
+    Far::PatchTreeFactory::Options patchTreeOptions;
+    patchTreeOptions.includeInteriorPatches = false;
+    patchTreeOptions.maxPatchDepthSharp  = _options.sharpLevel;
+    patchTreeOptions.maxPatchDepthSmooth = _options.smoothLevel;
+    patchTreeOptions.useDoublePrecision  = _options.doublePrecision;
+    patchTreeOptions.useStencilTables    = _options.stencilTables;
+
+    Far::PatchTree const * patchTree =
+            Far::PatchTreeFactory::Create(*refiner, patchTreeOptions);
+
+    assert(patchTree->GetNumControlPoints() == _numControlVerts);
+
+    delete refiner;
+    return patchTree;
 }
 
 } // end namespace Bfr

@@ -86,35 +86,37 @@ public:
     IrregPatchType const * Build();
 
 private:
-    //  Private methods to assemble the topology of the control hull:
-    //  WIP - revisit the need for these separate methods (and repeated
-    //        iteration) now that we can put results in member buffers
+    //  Private methods to assemble the control hull:
+    //
+    //  A simple struct keeps track of the contribution of each corner to
+    //  the collective control hull. These are first initialized and then
+    //  used by methods to gather the various topological data that define
+    //  the hull. Given these gathering methods are now used only once
+    //  each -- as part of the construction method to build the underlying
+    //  representation -- combining them into a single iteration is worth
+    //  considering.
+    //  
+    struct CornerControl {
+        void Clear() { std::memset(this, 0, sizeof(*this)); }
+
+        int   numVerts;
+        short numFaces;
+        unsigned short singleCommonVert : 1;
+        unsigned short singleCommonFace : 1;
+        int nextPerimeterVert;
+        int nextSrcFaceIndex;
+    };
+
     void initializeControlHullInventory();
 
-    int getNumControlVertices() const { return _numControlVerts; }
-    int getNumControlVertices(int corner) const {
-        return _cornerCVertStart[corner+1] - _cornerCVertStart[corner];
-    }
-    int getNextControlVertex(int corner) const {
-        return _cornerCVertStart[corner];
-    }
-
-    int getNumControlFaces() const { return _numControlFaces; }
-    int getNumControlFaces(int corner) const {
-        return _cornerCFaceCount[corner];
-    }
-
-    int gatherControlFaceSizes(int faceSizes[]) const;
+    //  Methods to gather topology defining the control hull:
+    int gatherControlFaceSizes(   int faceSizes[]) const;
     int gatherControlFaceVertices(int faceVertices[]) const;
 
-    int countSharpControlVertices() const;
-    int gatherControlVertexSharpness(int   vertIndices[],
-                                     float vertSharpness[]) const;
+    int gatherControlVertexSharpness(int indices[], float sharpness[]) const;
+    int gatherControlEdgeSharpness(  int indices[], float sharpness[]) const;
 
-    int countSharpControlEdges() const;
-    int gatherControlEdgeSharpness(int   edgeVertPairs[],
-                                   float edgeSharpness[]) const;
-
+    //  Methods to identify face-verts for an individual control face:
     void getControlFaceVertices(int  faceVerts[], int numFaceVerts,
                                 int  corner,      int nextPerimeterVert) const;
     void getControlFaceVertices(int  faceVerts[], int numFaceVerts,
@@ -128,13 +130,14 @@ private:
 
     //  Members defining the control hull of the surface -- some storing
     //  contributions to the control hull for each corner:
-    int _numControlVerts;
-    int _numControlFaces;
+    typedef Vtr::internal::StackBuffer<CornerControl,8,true> CornerControlArray;
 
-    Vtr::internal::StackBuffer<int,9,true> _cornerCVertStart;
-    Vtr::internal::StackBuffer<int,8,true> _cornerCFaceCount;
-
+    int  _numControlVerts;
+    int  _numControlFaces;
+    int  _numControlFaceVerts;
     bool _hasVal2IntCorners;
+
+    CornerControlArray _cornerControlInfo;
 };
 
 } // end namespace Bfr
