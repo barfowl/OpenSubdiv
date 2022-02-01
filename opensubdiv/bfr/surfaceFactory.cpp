@@ -646,18 +646,16 @@ SurfaceFactory::assignLinearSurface(Surface * surfacePtr,
     surface._isLinear  = true;
     surface._useDouble = _limitOptions.IsSurfacePrecision<double>();
 
+    surface._regPatchMask = 0;
     surface._regPatchType = (_regFaceSize == 4)
                        ?  Far::PatchDescriptor::QUADS
                        :  Far::PatchDescriptor::TRIANGLES;
-    surface._regPatchParam.Clear();
 
     //
     //  Finally, gather patch control points from the appropriate indices:
     //
-    surface._numControlPoints = faceSize;
-    surface._numPatchPoints   = faceSize;
+    surface._controlPoints.SetSize(faceSize);
 
-    surface._controlPoints.SetSize(surface._numControlPoints);
     int count = 0;
     if (fvarIndex < 0) {
         count = getFaceVertexIndices(faceIndex, &surface._controlPoints[0]);
@@ -692,36 +690,32 @@ SurfaceFactory::assignRegularSurface(Surface * surfacePtr,
     //
     //  Assemble the regular patch:
     //
-    int boundaryMask =
-            RegularPatchBuilder::GetBoundaryMask(_regFaceSize, patchPoints);
-
     surface._regPatchType = RegularPatchBuilder::GetPatchType(_regFaceSize);
-    surface._regPatchParam.Set(0, 0, 0, 0, 0, boundaryMask, 0, true);
+    surface._regPatchMask = RegularPatchBuilder::GetBoundaryMask(_regFaceSize,
+                                                                 patchPoints);
 
     //
     //  Copy the patch control points from the given indices:
     //
     int patchSize = RegularPatchBuilder::GetPatchSize(_regFaceSize);
 
-    surface._numControlPoints = patchSize;
-    surface._numPatchPoints   = patchSize;
-
-    surface._controlPoints.SetSize(surface._numControlPoints);
+    surface._controlPoints.SetSize(patchSize);
 
     Index const * pSrc = patchPoints;
     Index       * pDst = &surface._controlPoints[0];
 
     //  Remember to replace negative indices in boundary patches:
-    if (boundaryMask) {
+    if (surface._regPatchMask == 0) {
+        std::memcpy(pDst, pSrc, patchSize * sizeof(Index));
+    } else {
         //  Consider delegating this task to the RegularPatchBuilder:
         Index pPhantom = pSrc[5];
         assert(pPhantom >= 0);
         for (int i = 0; i < patchSize; ++i) {
             pDst[i] = (pSrc[i] < 0) ? pPhantom : pSrc[i];
         }
-    } else {
-        std::memcpy(pDst, pSrc, patchSize * sizeof(Index));
     }
+
     surface._isValid = true;
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numExpRegularPatches ++;
@@ -748,18 +742,13 @@ SurfaceFactory::assignRegularSurface(Surface * surfacePtr,
     //
     RegularPatchBuilder builder(descriptor);
 
-    int boundaryMask = builder.GetPatchParamBoundaryMask();
-
     surface._regPatchType = builder.GetPatchType();
-    surface._regPatchParam.Set(0, 0, 0, 0, 0, boundaryMask, 0, true);
+    surface._regPatchMask = builder.GetPatchParamBoundaryMask();
 
     //
     //  Gather the patch control points from the given indices:
     //
-    surface._numControlPoints = builder.GetNumControlVertices();
-    surface._numPatchPoints   = surface._numControlPoints;
-
-    surface._controlPoints.SetSize(surface._numControlPoints);
+    surface._controlPoints.SetSize(builder.GetNumControlVertices());
     builder.GatherControlVertexIndices(&surface._controlPoints[0]);
 
     surface._isValid = true;
@@ -841,11 +830,8 @@ __numIrregularInCache += (patchAdded == patchCreated);
         surface._irregOwner = true;
     }
 
-    //  Gather the patch control points for the irregular patch:
-    surface._numControlPoints = surface._irregPatch->GetNumControlPoints();
-    surface._numPatchPoints   = surface._irregPatch->GetNumPointsTotal();
-
-    surface._controlPoints.SetSize(surface._numControlPoints);
+    //  Gather the patch control points from the given indices:
+    surface._controlPoints.SetSize(surface._irregPatch->GetNumControlPoints());
     builder.GatherControlVertexIndices(&surface._controlPoints[0]);
 
     surface._isValid = true;
@@ -875,20 +861,18 @@ SurfaceFactory::copyNonLinearSurface(
     surfaceDst._isRegular = surfaceSrc._isRegular;
     surfaceDst._useDouble = surfaceSrc._useDouble;
 
-    surfaceDst._numControlPoints = surfaceSrc._numControlPoints;
-    surfaceDst._numPatchPoints   = surfaceSrc._numPatchPoints;
-
-    surfaceDst._controlPoints.SetSize(surfaceSrc._numControlPoints);
+    surfaceDst._controlPoints.SetSize(surfaceSrc._controlPoints.GetSize());
 
     //
     //  Assign regular/irregular fields and gather control points:
     //
     if (surfaceDst._isRegular) {
-        surfaceDst._regPatchType  = surfaceSrc._regPatchType;
-        surfaceDst._regPatchParam = surfaceSrc._regPatchParam;
+        surfaceDst._regPatchType = surfaceSrc._regPatchType;
+        surfaceDst._regPatchMask = surfaceSrc._regPatchMask;
 
         RegularPatchBuilder builder(descriptor);
-        assert(builder.GetNumControlVertices() == surfaceDst._numControlPoints);
+        assert(builder.GetNumControlVertices() ==
+                surfaceDst.GetNumControlVertices());
 
         builder.GatherControlVertexIndices(&surfaceDst._controlPoints[0]);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
@@ -899,7 +883,8 @@ __numRegularPatches ++;
         surfaceDst._irregOwner = false;
 
         IrregularPatchBuilder builder(descriptor);
-        assert(builder.GetNumControlVertices() == surfaceDst._numControlPoints);
+        assert(builder.GetNumControlVertices() ==
+                surfaceDst.GetNumControlVertices());
 
         builder.GatherControlVertexIndices(&surfaceDst._controlPoints[0]);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS

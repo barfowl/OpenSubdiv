@@ -38,13 +38,13 @@ namespace Bfr {
 void
 Surface::initialize() {
 
-    _numControlPoints = 0;
-    _numPatchPoints   = 0;
-
     _isValid   = false;
     _isRegular = true;
     _isLinear  = false;
     _useDouble = false;
+
+    _regPatchMask = 0;
+    _regPatchType = 0;
 
     _irregOwner = false;
     _irregPatch = 0;
@@ -68,8 +68,11 @@ Surface::evalRegularPatchBasis(REAL u, REAL v,
         REAL wP[],   REAL wDu[],  REAL wDv[],
         REAL wDuu[], REAL wDuv[], REAL wDvv[]) const {
 
+    Far::PatchParam patchParam;
+    patchParam.Set(0, 0, 0, 0, 0, _regPatchMask, 0, true);
+
     Far::internal::EvaluatePatchBasisNormalized(
-        _regPatchType, _regPatchParam, u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
+        _regPatchType, patchParam, u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
 }
 
 template <typename REAL>
@@ -85,15 +88,24 @@ Surface::evalRegularPatchStencils(REAL u, REAL v,
     //  quad, its regular patch still has 16 control vertices.  So we can
     //  return the basis weights as stencil weights for all cases.
     //
-    Far::internal::EvaluatePatchBasisNormalized(
-        _regPatchType, _regPatchParam, u, v, sP, sDu, sDv, sDuu, sDuv, sDvv);
+    Far::PatchParam patchParam;
+    patchParam.Set(0, 0, 0, 0, 0, _regPatchMask, 0, true);
 
-    return _numControlPoints;
+    Far::internal::EvaluatePatchBasisNormalized(
+        _regPatchType, patchParam, u, v, sP, sDu, sDv, sDuu, sDuv, sDvv);
+
+    return GetNumControlVertices();
 }
 
 //
 //  Evaluation methods accessing the Far::PatchTree for irregular patches:
 //
+int
+Surface::getNumIrregPatchPoints() const {
+
+    return _irregPatch->GetNumPointsTotal();
+}
+
 template <typename REAL>
 ConstIndexArray
 Surface::evalIrregularPatchBasis(REAL u, REAL v,
@@ -199,18 +211,20 @@ Surface::evalMultiLinearPatchBasis(REAL u, REAL v,
     Far::internal::EvaluatePatchBasisNormalized(Far::PatchDescriptor::QUADS,
             Far::PatchParam(), u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
 
-    transformSubFaceWeightsToBase<REAL>(_numControlPoints, wP, 1.0f);
+    int numControlPoints = GetNumControlVertices();
+
+    transformSubFaceWeightsToBase<REAL>(numControlPoints, wP, 1.0f);
     if (wDu) {
-        transformSubFaceWeightsToBase<REAL>(_numControlPoints, wDu, 2.0f);
+        transformSubFaceWeightsToBase<REAL>(numControlPoints, wDu, 2.0f);
     }
     if (wDv) {
-        transformSubFaceWeightsToBase<REAL>(_numControlPoints, wDv, 2.0f);
+        transformSubFaceWeightsToBase<REAL>(numControlPoints, wDv, 2.0f);
     }
     if (wDuu) {
         //  Basis weights will be and should remain zero for this 2nd deriv
     }
     if (wDuv) {
-        transformSubFaceWeightsToBase<REAL>(_numControlPoints, wDuv, 4.0f);
+        transformSubFaceWeightsToBase<REAL>(numControlPoints, wDuv, 4.0f);
     }
     if (wDvv) {
         //  Basis weights will be and should remain zero for this 2nd deriv
@@ -246,10 +260,12 @@ Surface::evalMultiLinearPatchStencils(REAL u, REAL v,
                                                         wDuu, wDuv, wDvv);
     }
 
-    int iNext = (iOrigin + 1) % _numControlPoints;
-    int iPrev = (iOrigin + _numControlPoints - 1) % _numControlPoints;
+    int numControlPoints = GetNumControlVertices();
 
-    for (int i = 0; i < _numControlPoints; ++i) {
+    int iNext = (iOrigin + 1) % numControlPoints;
+    int iPrev = (iOrigin + numControlPoints - 1) % numControlPoints;
+
+    for (int i = 0; i < numControlPoints; ++i) {
         int wIndex = 2;
         if (i == iOrigin) {
             wIndex = 0;
@@ -270,7 +286,7 @@ Surface::evalMultiLinearPatchStencils(REAL u, REAL v,
             }
         }
     }
-    return _numControlPoints;
+    return numControlPoints;
 }
 
 //

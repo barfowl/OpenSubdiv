@@ -84,7 +84,7 @@ public:
     //  them that may be required to represent the limit surface as one
     //  or more parametric patches.
     //
-    int GetNumPatchPoints() const { return _numPatchPoints; }
+    int GetNumPatchPoints() const;
 
     template <class T, class U>
     void PreparePatchPointValues(T const & meshVertices,
@@ -114,7 +114,7 @@ public:
     //  bounding box, etc.) and stencils can be optionally applied to
     //  control vertices in this form.
     //
-    int GetNumControlVertices() const { return _numControlPoints; }
+    int GetNumControlVertices() const;
 
     ConstIndexArray GetControlVertexIndices() const;
 
@@ -182,6 +182,8 @@ private:
         REAL sDu[], REAL sDv[], REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
 
     //  Access stencils to compute patch point values of client type <T>:
+    int getNumIrregPatchPoints() const;
+
     template <typename REAL, class T>
     void applyIrregPatchStencils(T & patchPoints) const;
 
@@ -200,31 +202,35 @@ private:
     void reinitialize() { if (_isValid) clear(), initialize(); }
 
 private:
-    typedef Far::PatchTree const * IrregPatchPtr;
+    //  Member variables -- try to avoid redundancy and/or wasted space
+    //  here as some may choose to cache all Surfaces of a mesh:
+    typedef Far::PatchTree const *                    IrregPatchPtr;
+    typedef Vtr::internal::StackBuffer<Index,20,true> ControlPointArray;
+
+    ControlPointArray _controlPoints;
 
     Parameterization _param;
-
-    Vtr::internal::StackBuffer<Index,20,true> _controlPoints;
-
-    int _numControlPoints;
-    int _numPatchPoints;
 
     unsigned int _isValid   : 1;
     unsigned int _isRegular : 1;
     unsigned int _isLinear  : 1;
     unsigned int _useDouble : 1;
 
-    //  WIP - consider a union here for the reg/irreg members:
+    unsigned int _regPatchType : 8;
+    unsigned int _regPatchMask : 8;
+
     unsigned int _irregOwner : 1;
     IrregPatchPtr _irregPatch;
-
-    Far::PatchDescriptor::Type _regPatchType;
-    Far::PatchParam            _regPatchParam;
 };
 
 //
 //  Inline methods and templates for gathering control points:
 //
+inline int
+Surface::GetNumControlVertices() const {
+    return (int) _controlPoints.GetSize();
+}
+
 inline ConstIndexArray
 Surface::GetControlVertexIndices() const {
     return ConstIndexArray(&_controlPoints[0], (int)_controlPoints.GetSize());
@@ -234,7 +240,7 @@ template <class T, class U>
 void
 Surface::GatherControlVertexValues(T const & meshPoints,
                                    U       & controlPoints) const {
-    for (int i = 0; i < _numControlPoints; ++i) {
+    for (int i = 0; i < GetNumControlVertices(); ++i) {
         //  WIP - cannot guarantee that type T is copyable here, so must
         //        use Clear() and AddWithWeight():
         controlPoints[i].Clear();
@@ -242,18 +248,25 @@ Surface::GatherControlVertexValues(T const & meshPoints,
     }
 }
 
+inline int
+Surface::GetNumPatchPoints() const {
+    return _irregPatch ? getNumIrregPatchPoints() : GetNumControlVertices();
+}
+
 template <typename REAL, class T>
 void
 Surface::applyIrregPatchStencils(T & patchPoints) const {
 
-    REAL const * stencilWeights = getIrregPatchStencilMatrix<REAL>();
-    int          stencilStride  = _numControlPoints;
+    int numControlPoints = GetNumControlVertices();
+    int numPatchPoints   = getNumIrregPatchPoints();
 
-    for (int i = _numControlPoints; i < _numPatchPoints; ++i) {
+    REAL const * stencilWeights = getIrregPatchStencilMatrix<REAL>();
+    int          stencilStride  = numControlPoints;
+
+    for (int i = numControlPoints; i < numPatchPoints; ++i) {
         patchPoints[i].Clear();
-        for (int j = 0; j < _numControlPoints; ++j) {
-            patchPoints[i].AddWithWeight(patchPoints[j],
-                                         stencilWeights[j]);
+        for (int j = 0; j < numControlPoints; ++j) {
+            patchPoints[i].AddWithWeight(patchPoints[j], stencilWeights[j]);
         }
         stencilWeights += stencilStride;
     }
@@ -266,13 +279,16 @@ Surface::PreparePatchPointValues(T const & meshPoints,
 
     GatherControlVertexValues(meshPoints, patchPoints);
 
-    if (_numPatchPoints > _numControlPoints) {
+    int numControlPoints = GetNumControlVertices();
+    int numPatchPoints   = GetNumPatchPoints();
+
+    if (numPatchPoints > numControlPoints) {
         //  Apply the patch point stencils to compute remaining patch
         //  points from those gathered above from the control points:
         if (irregPatchNeedsStencilTable()) {
             //  WIP - use of the StencilTable will eventually be removed
             getIrregPatchStencilTable()->UpdateValues(
-                patchPoints, patchPoints, GetNumControlVertices());
+                patchPoints, patchPoints, numControlPoints);
         } else if (_useDouble) {
             applyIrregPatchStencils<double>(patchPoints);
         } else {
@@ -316,7 +332,7 @@ Surface::evalRegularPatch(REAL u, REAL v, T const & patchPoints,
         }
     }
 
-    for (int i = 0; i < _numControlPoints; ++i) {
+    for (int i = 0; i < GetNumControlVertices(); ++i) {
         P->AddWithWeight(patchPoints[i], wP[i]);
         if (eval1stDerivs) {
             Du->AddWithWeight(patchPoints[i], wDu[i]);
@@ -420,10 +436,12 @@ Surface::evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
         }
     }
 
-    int iNext = (iOrigin + 1) % _numControlPoints;
-    int iPrev = (iOrigin + _numControlPoints - 1) % _numControlPoints;
+    int numControlPoints = GetNumControlVertices();
 
-    for (int i = 0; i < _numControlPoints; ++i) {
+    int iNext = (iOrigin + 1) % numControlPoints;
+    int iPrev = (iOrigin + numControlPoints - 1) % numControlPoints;
+
+    for (int i = 0; i < numControlPoints; ++i) {
         int wIndex = 2;
         if (i == iOrigin) {
             wIndex = 0;
@@ -509,7 +527,7 @@ void
 Surface::ApplyStencil(REAL const sD[], T const & meshVertices, U * D) const {
 
     D->Clear();
-    for (int i = 0; i < _numControlPoints; ++i) {
+    for (int i = 0; i < GetNumControlVertices(); ++i) {
         D->AddWithWeight(meshVertices[_controlPoints[i]], sD[i]);
     }
 }
@@ -518,7 +536,7 @@ void
 Surface::ApplyStencilGathered(REAL const sD[], T const & cvs, U * D) const {
 
     D->Clear();
-    for (int i = 0; i < _numControlPoints; ++i) {
+    for (int i = 0; i < GetNumControlVertices(); ++i) {
         D->AddWithWeight(cvs[i], sD[i]);
     }
 }
