@@ -51,10 +51,10 @@ namespace Bfr {
 //
 namespace val2 {
     //
-    //  Simple query if a CornerSubset is val-2 interior:
+    //  Simple query if a FaceVertexSubset is val-2 interior:
     //
     bool
-    subsetIsVal2Interior(CornerSubset const & corner) {
+    subsetIsVal2Interior(FaceVertexSubset const & corner) {
         return (corner.GetNumFaces() == 2) && !corner.IsBoundary();
     }
 
@@ -65,7 +65,7 @@ namespace val2 {
     int
     getFaceOverlap(FaceSurface const & surface, int corner) {
 
-        CornerSubset const * corners = &surface.GetCornerSubset(0);
+        FaceVertexSubset const * corners = &surface.GetCornerSubset(0);
 
         int numOverlap = 0;
         if (!subsetIsVal2Interior(corners[corner])) {
@@ -114,7 +114,7 @@ IrregularPatchBuilder::initializeControlHullInventory() {
 
     _hasVal2IntCorners = false;
     for (int corner = 0; corner < faceSize; ++corner) {
-        CornerSubset const & cSub = _surface.GetCornerSubset(corner);
+        FaceVertexSubset const & cSub = _surface.GetCornerSubset(corner);
         _hasVal2IntCorners |= (cSub.GetNumFaces() == 2) && !cSub.IsBoundary();
     }
 
@@ -133,8 +133,8 @@ IrregularPatchBuilder::initializeControlHullInventory() {
     _numControlFaceVerts = faceSize;
 
     for (int corner = 0; corner < faceSize; ++corner) {
-        CornerTopology const & cTop = _surface.GetCornerTopology(corner);
-        CornerSubset   const & cSub = _surface.GetCornerSubset(corner);
+        FaceVertex       const & cTop = _surface.GetCornerTopology(corner);
+        FaceVertexSubset const & cSub = _surface.GetCornerSubset(corner);
 
         //
         //  Need to keep track of corners at and adjacent to valence-2
@@ -247,7 +247,7 @@ IrregularPatchBuilder::GatherControlVertexIndices(Index cvIndices[]) const {
 
     Index const * faceIndices = _surface.GetIndices();
 
-    CornerTopology const & cTop0 = _surface.GetCornerTopology(0);
+    FaceVertex const & cTop0 = _surface.GetCornerTopology(0);
     int baseOffset = cTop0.GetFaceIndexOffset(cTop0.GetFace());
 
     Index const * baseIndices = &faceIndices[baseOffset];
@@ -263,8 +263,8 @@ IrregularPatchBuilder::GatherControlVertexIndices(Index cvIndices[]) const {
 
         if (cControl.numVerts == 0) continue;
 
-        CornerTopology const & cTop = _surface.GetCornerTopology(corner);
-        CornerSubset const   & cSub = _surface.GetCornerSubset(corner);
+        FaceVertex       const & cTop = _surface.GetCornerTopology(corner);
+        FaceVertexSubset const & cSub = _surface.GetCornerSubset(corner);
 
         Index const * srcIndices = faceIndices + cControl.nextSrcFaceIndex;
 
@@ -361,8 +361,8 @@ IrregularPatchBuilder::gatherControlFaceSizes(int faceSizes[]) const {
 
         if (cControl.numFaces == 0) continue;
 
-        CornerTopology const & cTop = _surface.GetCornerTopology(corner);
-        CornerSubset const   & cSub = _surface.GetCornerSubset(corner);
+        FaceVertex       const & cTop = _surface.GetCornerTopology(corner);
+        FaceVertexSubset const & cSub = _surface.GetCornerSubset(corner);
 
         //
         //  If the subset has a common face size, this is trivial:
@@ -411,7 +411,7 @@ IrregularPatchBuilder::gatherControlVertexSharpness(
 
     int nSharpVerts = 0;
     for (int i = 0; i < _surface.GetFaceSize(); ++i) {
-        CornerSubset const & cSub = _surface.GetSubsets()[i];
+        FaceVertexSubset const & cSub = _surface.GetCornerSubset(i);
 
         if (cSub._tag.IsInfSharp()) {
             vertSharpness[nSharpVerts] = Sdc::Crease::SHARPNESS_INFINITE;
@@ -439,8 +439,8 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
     int faceSize = _surface.GetFaceSize();
 
     for (int corner = 0; corner < faceSize; ++corner) {
-        CornerTopology const & cTop = _surface.GetCornerTopology(corner);
-        CornerSubset const   & cSub = _surface.GetCornerSubset(corner);
+        FaceVertex       const & cTop = _surface.GetCornerTopology(corner);
+        FaceVertexSubset const & cSub = _surface.GetCornerSubset(corner);
 
         if (cSub._tag.HasSharpEdges() &&
                 (!cSub.IsBoundary() || cSub._numFacesBefore)) {
@@ -464,8 +464,8 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
 
         if (cControl.numFaces == 0) continue;
 
-        CornerTopology const & cTop = _surface.GetCornerTopology(corner);
-        CornerSubset const   & cSub = _surface.GetCornerSubset(corner);
+        FaceVertex       const & cTop = _surface.GetCornerTopology(corner);
+        FaceVertexSubset const & cSub = _surface.GetCornerSubset(corner);
 
         if (!cSub._tag.HasSharpEdges()) continue;
 
@@ -542,8 +542,8 @@ IrregularPatchBuilder::gatherControlFaceVertices(int faceVertices[]) const {
 
         if (cControl.numFaces == 0) continue;
 
-        CornerTopology const & cTop = _surface.GetCornerTopology(corner);
-        CornerSubset const   & cSub = _surface.GetCornerSubset(corner);
+        FaceVertex       const & cTop = _surface.GetCornerTopology(corner);
+        FaceVertexSubset const & cSub = _surface.GetCornerSubset(corner);
 
         int nVal2Overlap = _hasVal2IntCorners ?
                            val2::getFaceOverlap(_surface, corner) : 0;

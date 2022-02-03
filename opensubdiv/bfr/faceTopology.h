@@ -27,7 +27,7 @@
 
 #include "../version.h"
 
-#include "../bfr/cornerTopology.h"
+#include "../bfr/faceVertex.h"
 #include "../vtr/stackBuffer.h"
 #include "../sdc/types.h"
 #include "../sdc/options.h"
@@ -48,14 +48,14 @@ namespace Bfr {
 //  the members of the SurfaceFactory class (e.g. the subdivision scheme
 //  and options) to make them more available for its purposes.
 //
-//  The primary component of FaceTopology is an array of instances of the
-//  CornerTopology class (one for each vertex of the face), which is a
+//  The primary component of FaceTopology is an array of instances of
+//  the FaceVertex class (one for each vertex of the face), which is a
 //  lightweight wrapper around the public VertexTopology class that is
 //  populated by subclasses of SurfaceFactory.
 //
 //  FaceTopology is one of three key components in defining the limit
-//  surface around a face.  The others are a set of CornerSubsets (one for
-//  each CornerTopology) that specify the subset of the neighborhood of
+//  surface around a face.  The others are a set of FaceVertexSubsets (one
+//  for each FaceVertex) that specify the subset of the neighborhood of
 //  the corners of the face that actually do contribute to its surface,
 //  and the indices associated with vertices that FaceTopology describes
 //  (which become the control points of the limit surface).
@@ -76,10 +76,10 @@ public:
     int GetFaceSize()    const { return _faceSize; }
     int GetRegFaceSize() const { return _regFaceSize; }
 
-    CornerTopology       & GetTopology(int i)       { return _corner[i]; }
-    CornerTopology const & GetTopology(int i) const { return _corner[i]; }
+    FaceVertex       & GetTopology(int i)       { return _corner[i]; }
+    FaceVertex const & GetTopology(int i) const { return _corner[i]; }
 
-    CombinedTag const GetTag() const { return _combinedTag; }
+    MultiVertexTag const GetTag() const { return _combinedTag; }
 
     int GetNumFaceVertices() const { return _numFaceVertsTotal; }
     int GetNumFaceVertices(int i) const{return _corner[i].GetNumFaceVertices();}
@@ -99,12 +99,12 @@ public:
     int _regFaceSize;
     int _numFaceVertsTotal;
 
-    CombinedTag _combinedTag;
+    MultiVertexTag _combinedTag;
 
     unsigned short _isInitialized : 1;
     unsigned short _isFinalized   : 1;
 
-    Vtr::internal::StackBuffer<CornerTopology,4> _corner;
+    Vtr::internal::StackBuffer<FaceVertex,4> _corner;
 };
 
 } // end namespace Bfr

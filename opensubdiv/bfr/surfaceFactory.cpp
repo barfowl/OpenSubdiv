@@ -220,7 +220,7 @@ SurfaceFactory::faceHasLimitNeighborhood(FaceTopology const & topology) const {
 
     assert(_testNeighborhoodForLimit);
 
-    CombinedTag tag = topology.GetTag();
+    MultiVertexTag tag = topology.GetTag();
 
     if ((_rejectSmoothBoundariesForLimit && tag.HasNonSharpBoundary()) ||
         (_rejectIrregularFacesForLimit   && tag.HasIrregularFaceSizes())) {
@@ -243,7 +243,7 @@ SurfaceFactory::faceHasLimitNeighborhood(Index faceIndex) const {
 
     CornerIndexBuffer cFaceVertIndices;
 
-    CornerTopology   cTop;
+    FaceVertex       cTop;
     VertexTopology & vTop = cTop.GetVertexTopology();
 
     int faceSize = getFaceSize(faceIndex);
@@ -257,7 +257,7 @@ SurfaceFactory::faceHasLimitNeighborhood(Index faceIndex) const {
         cTop.Finalize(faceInRing);
 
         //  Inspect the tag to reject cases with no limit surface:
-        CornerTag cTag = cTop.GetTag();
+        VertexTag cTag = cTop.GetTag();
 
         if (_rejectSmoothBoundariesForLimit) {
             if (cTag.IsUnOrdered()) {
@@ -401,7 +401,7 @@ namespace {
         //
 
         //  Immediate rejection of bitfields:
-        CombinedTag combinedTag = surface.GetTag();
+        MultiVertexTag combinedTag = surface.GetTag();
         if (combinedTag.HasSharpEdges() ||
             combinedTag.HasSemiSharpVertices() ||
             combinedTag.HasIrregularFaceSizes()) {
@@ -409,7 +409,7 @@ namespace {
         }
 
         //  Conditional rejection of bitfields for high valence:
-        CornerSubset const * subsets = surface.GetSubsets();
+        FaceVertexSubset const * subsets = surface.GetSubsets();
 
         for (int i = 0; i < surface.GetFaceSize(); ++i) {
             int valence = subsets[i]._numFacesTotal;
@@ -426,7 +426,7 @@ namespace {
         }
 
         //
-        //  Pack the topology of each CornerSubset into bitfields:
+        //  Pack the topology of each FaceVertexSubset into bitfields:
         //
         KeyBits keyBits;
 
@@ -532,7 +532,7 @@ namespace {
 
         int faceSize = surface.GetFaceSize();
         for (int i = 0; i < faceSize; ++i) {
-            CornerSubset const & cSub = surface.GetCornerSubset(i);
+            FaceVertexSubset const & cSub = surface.GetCornerSubset(i);
 
             int N = cSub.GetNumFaces();
 
@@ -571,8 +571,8 @@ namespace {
         char * bufferPtr = hashBuffer + sizeof(sHeader);
 
         for (int i = 0; i < faceSize; ++i) {
-            CornerTopology const & cTop = surface.GetCornerTopology(i);
-            CornerSubset   const & cSub = surface.GetCornerSubset(i);
+            FaceVertex       const & cTop = surface.GetCornerTopology(i);
+            FaceVertexSubset const & cSub = surface.GetCornerSubset(i);
 
             //  Assign the corner header:
             CornerHeader cHeader;
@@ -940,7 +940,7 @@ SurfaceFactory::gatherFaceNeighborhoodTopology(Index faceIndex,
     faceTopology.Initialize(N);
 
     for (int i = 0; i < N; ++i) {
-        CornerTopology & cornerTop = faceTopology.GetTopology(i);
+        FaceVertex     & cornerTop = faceTopology.GetTopology(i);
         VertexTopology & vertexTop = cornerTop.GetVertexTopology();
 
         cornerTop.Initialize(N, _regFaceSize);

@@ -22,7 +22,7 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#include "../bfr/cornerTopology.h"
+#include "../bfr/faceVertex.h"
 #include "../sdc/crease.h"
 
 #include <cstring>
@@ -39,7 +39,7 @@ namespace Bfr {
 //  by clients to the VertexTopology member:
 //
 void
-CornerTopology::Initialize(int faceSize, int regFaceSize) {
+FaceVertex::Initialize(int faceSize, int regFaceSize) {
 
     _commonFaceSize = faceSize;
     _regFaceSize    = regFaceSize;
@@ -54,7 +54,7 @@ CornerTopology::Initialize(int faceSize, int regFaceSize) {
 }
 
 void
-CornerTopology::Finalize(int faceInVertex) {
+FaceVertex::Finalize(int faceInVertex) {
 
     assert(_vTop._isFinalized);
 
@@ -102,7 +102,7 @@ CornerTopology::Finalize(int faceInVertex) {
 }
 
 void
-CornerTopology::finalizeOrderedTags() {
+FaceVertex::finalizeOrderedTags() {
 
     //
     //  A vertex with a set of ordered faces is required to be manifold:
@@ -164,13 +164,13 @@ CornerTopology::finalizeOrderedTags() {
 }
 
 bool
-CornerTopology::HasImplicitVertexSharpness() const {
+FaceVertex::HasImplicitVertexSharpness() const {
 
     return _isImpInfSharp || _isImpSemiSharp;
 }
 
 float
-CornerTopology::GetImplicitVertexSharpness() const {
+FaceVertex::GetImplicitVertexSharpness() const {
 
     if (_isImpInfSharp) {
         return Sdc::Crease::SHARPNESS_INFINITE;
@@ -198,9 +198,9 @@ CornerTopology::GetImplicitVertexSharpness() const {
 //  Methods to initialize and/or find subsets of the corner's topology:
 //
 int
-CornerTopology::initCompleteSubset(CornerSubset * subsetPtr) const {
+FaceVertex::initCompleteSubset(Subset * subsetPtr) const {
 
-    CornerSubset & subset = *subsetPtr;
+    Subset & subset = *subsetPtr;
 
     //
     //  Initialize with tags and assign the extent:
@@ -226,9 +226,9 @@ CornerTopology::initCompleteSubset(CornerSubset * subsetPtr) const {
 }
 
 int
-CornerTopology::findConnectedSubsetExtent(CornerSubset * subsetPtr) const {
+FaceVertex::findConnectedSubsetExtent(Subset * subsetPtr) const {
 
-    CornerSubset & subset = *subsetPtr;
+    Subset & subset = *subsetPtr;
 
     //
     //  Initialize with tags and mark manifold:
@@ -258,7 +258,7 @@ CornerTopology::findConnectedSubsetExtent(CornerSubset * subsetPtr) const {
 }
 
 int
-CornerTopology::GetVertexSubset(CornerSubset * subsetPtr) const {
+FaceVertex::GetVertexSubset(Subset * subsetPtr) const {
 
     //
     //  The subset from a manifold vertex is trivially complete (ordered
@@ -281,11 +281,11 @@ CornerTopology::GetVertexSubset(CornerSubset * subsetPtr) const {
 }
 
 int
-CornerTopology::findFVarSubsetExtent(CornerSubset const & vtxSub,
-                                     CornerSubset       * fvarSubsetPtr,
-                                     Index const          fvarIndices[]) const {
+FaceVertex::findFVarSubsetExtent(Subset const & vtxSub,
+                                 Subset       * fvarSubsetPtr,
+                                 Index  const   fvarIndices[]) const {
 
-    CornerSubset & fvarSub = *fvarSubsetPtr;
+    Subset & fvarSub = *fvarSubsetPtr;
 
     //
     //  Initialize with tags and declare as a boundary to start:
@@ -355,11 +355,11 @@ CornerTopology::findFVarSubsetExtent(CornerSubset const & vtxSub,
 }
 
 int
-CornerTopology::FindFaceVaryingSubset(CornerSubset       * fvarSubsetPtr,
-                                      Index const          fvarIndices[],
-                                      CornerSubset const & vtxSub) const {
+FaceVertex::FindFaceVaryingSubset(Subset       * fvarSubsetPtr,
+                                  Index  const   fvarIndices[],
+                                  Subset const & vtxSub) const {
 
-    CornerSubset & fvarSub = *fvarSubsetPtr;
+    Subset & fvarSub = *fvarSubsetPtr;
 
     //
     //  Find the face-varying extent and update the tags if its topology
@@ -404,7 +404,7 @@ CornerTopology::FindFaceVaryingSubset(CornerSubset       * fvarSubsetPtr,
 //  longer include properties that trigger exceptional behavior:
 //
 void
-CornerTopology::SharpenSubset(CornerSubset * subset) const {
+FaceVertex::SharpenSubset(Subset * subset) const {
 
     //  Mark the subset sharp and ensure any related tags are also
     //  updated accordingly:
@@ -412,14 +412,14 @@ CornerTopology::SharpenSubset(CornerSubset * subset) const {
     subset->_tag._semiSharpVerts = false;
 }
 void
-CornerTopology::UnSharpenSubset(CornerSubset * subset) const {
+FaceVertex::UnSharpenSubset(Subset * subset) const {
 
     //  Restore subset sharpness based on actual sharpness assignment:
     subset->_tag._infSharpVerts  = _isExpInfSharp;
     subset->_tag._semiSharpVerts = _isExpSemiSharp;
 }
 void
-CornerTopology::SharpenSubset(CornerSubset * subset, float sharpness) const {
+FaceVertex::SharpenSubset(Subset * subset, float sharpness) const {
 
     //  Mark the subset according to sharpness value
     if (sharpness > subset->_localSharpness) {
@@ -431,7 +431,7 @@ CornerTopology::SharpenSubset(CornerSubset * subset, float sharpness) const {
 }
 
 bool
-CornerTopology::subsetHasIrregularFaces(CornerSubset const & subset) const {
+FaceVertex::subsetHasIrregularFaces(Subset const & subset) const {
 
     assert(_tag.HasIrregularFaceSizes());
 
@@ -445,7 +445,7 @@ CornerTopology::subsetHasIrregularFaces(CornerSubset const & subset) const {
 }
 
 bool
-CornerTopology::subsetHasInfSharpEdges(CornerSubset const & subset) const {
+FaceVertex::subsetHasInfSharpEdges(Subset const & subset) const {
 
     assert(_tag.HasInfSharpEdges());
 
@@ -461,7 +461,7 @@ CornerTopology::subsetHasInfSharpEdges(CornerSubset const & subset) const {
 }
 
 bool
-CornerTopology::subsetHasSemiSharpEdges(CornerSubset const & subset) const {
+FaceVertex::subsetHasSemiSharpEdges(Subset const & subset) const {
 
     assert(_tag.HasSemiSharpEdges());
 
@@ -477,10 +477,10 @@ CornerTopology::subsetHasSemiSharpEdges(CornerSubset const & subset) const {
 }
 
 void
-CornerTopology::adjustSubsetTags(CornerSubset       * subset,
-                                 CornerSubset const * superset) const {
+FaceVertex::adjustSubsetTags(Subset       * subset,
+                             Subset const * superset) const {
 
-    CornerTag & subsetTag = subset->_tag;
+    VertexTag & subsetTag = subset->_tag;
 
     //  Adjust any tags related to boundary or sharpness status:
     if (subsetTag.IsBoundary()) {
@@ -525,7 +525,7 @@ CornerTopology::adjustSubsetTags(CornerSubset       * subset,
 //  It is initialized as a boundary when first created and is then modified
 //  by adding additional incident faces.
 //
-struct CornerTopology::Edge {
+struct FaceVertex::Edge {
     //  Empty constructor intentional since we over-allocate what we need:
     Edge() { }
 
@@ -591,7 +591,7 @@ struct CornerTopology::Edge {
 };
 
 void
-CornerTopology::ConnectUnOrderedFaces(Index const fvIndices[]) {
+FaceVertex::ConnectUnOrderedFaces(Index const fvIndices[]) {
 
     //
     //  There are two transient sets of data needed here:  a set of Edges
@@ -636,9 +636,9 @@ CornerTopology::ConnectUnOrderedFaces(Index const fvIndices[]) {
 //  due to the presence or orientation of additional incident faces.
 //
 int
-CornerTopology::createUnOrderedEdges(Edge        edges[],
-                                     short       feEdges[],
-                                     Index const fvIndices[]) const {
+FaceVertex::createUnOrderedEdges(Edge        edges[],
+                                 short       feEdges[],
+                                 Index const fvIndices[]) const {
 
     //  Optional map to help construction for high valence:
     typedef std::map<int,int> EdgeMap;
@@ -712,9 +712,9 @@ CornerTopology::createUnOrderedEdges(Edge        edges[],
 }
 
 void
-CornerTopology::markDuplicateEdges(Edge        edges[],
-                                   short const feEdges[],
-                                   Index const fvIndices[]) const {
+FaceVertex::markDuplicateEdges(Edge        edges[],
+                               short const feEdges[],
+                               Index const fvIndices[]) const {
 
     //
     //  The edge assignment thus far does not correctly detect the presence
@@ -773,8 +773,8 @@ CornerTopology::markDuplicateEdges(Edge        edges[],
 }
 
 void
-CornerTopology::assignUnOrderedFaceNeighbors(Edge const  edges[],
-                                             short const feEdges[]) {
+FaceVertex::assignUnOrderedFaceNeighbors(Edge const  edges[],
+                                         short const feEdges[]) {
 
     int numFaceEdges = 2 * GetNumFaces();
 
@@ -792,7 +792,7 @@ CornerTopology::assignUnOrderedFaceNeighbors(Edge const  edges[],
 }
 
 void
-CornerTopology::finalizeUnOrderedTags(Edge const edges[], int numEdges) {
+FaceVertex::finalizeUnOrderedTags(Edge const edges[], int numEdges) {
 
     //
     //  Summarize properties of the corner given the number and nature of
@@ -855,7 +855,7 @@ CornerTopology::finalizeUnOrderedTags(Edge const edges[], int numEdges) {
 
         if (!isNonManifold) {
             //  If all faces are not connected, the set is non-manifold:
-            CornerSubset subset;
+            Subset subset;
             int numFacesInSubset = findConnectedSubsetExtent(&subset);
             if (numFacesInSubset < GetNumFaces()) {
                 isNonManifold = true;

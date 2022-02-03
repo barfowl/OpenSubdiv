@@ -28,7 +28,7 @@
 #include "../version.h"
 
 #include "../bfr/faceTopology.h"
-#include "../bfr/cornerTopology.h"
+#include "../bfr/faceVertex.h"
 #include "../vtr/stackBuffer.h"
 #include "../vtr/types.h"
 
@@ -44,7 +44,7 @@ namespace Bfr {
 //  It is a simple aggregate of four sets of data:
 //
 //      - an instance of FaceTopology with all topological information
-//      - a set of CornerSubsets for topological extent of each corner
+//      - a set of FaceVertexSubsets for topological extent of each corner
 //      - a set of indices associate with all vertices of FaceTopology
 //      - a subset of the Sdc::Options that actually affects the surface
 //
@@ -89,10 +89,10 @@ public:
 
 public:
     //  Public access to the main members:
-    FaceTopology const & GetTopology() const { return *_topology; }
-    CornerSubset const * GetSubsets()  const { return _corners; }
-    Index        const * GetIndices()  const { return _indices; }
-    CombinedTag          GetTag()      const { return _combinedTag; }
+    FaceTopology     const & GetTopology() const { return *_topology; }
+    FaceVertexSubset const * GetSubsets()  const { return _corners; }
+    Index            const * GetIndices()  const { return _indices; }
+    MultiVertexTag           GetTag()      const { return _combinedTag; }
 
 public:
     //  Additional public access to data used by builder classes:
@@ -103,8 +103,8 @@ public:
     Sdc::Options    GetSdcOptionsInEffect() const;
     Sdc::Options    GetSdcOptionsAsAssigned() const;
 
-    CornerTopology const & GetCornerTopology(int corner) const;
-    CornerSubset   const & GetCornerSubset(int corner) const;
+    FaceVertex       const & GetCornerTopology(int corner) const;
+    FaceVertexSubset const & GetCornerSubset(int corner) const;
 
     int GetNumIndices() const;
 
@@ -118,25 +118,25 @@ private:
 
     //  Methods to apply specified interpolation options to the corners:
     void sharpenBySdcVtxBoundaryInterpolation(
-                   CornerSubset         * vtxSubsetPtr,
-                   CornerTopology const & cornerTopology) const;
+                   FaceVertexSubset       * vtxSubsetPtr,
+                   FaceVertex       const & cornerTopology) const;
 
     void sharpenBySdcFVarLinearInterpolation(
-                   CornerSubset         * fvarSubsetPtr,
-                   Index const            fvarIndices[],
-                   CornerSubset const   & vtxSubset,
-                   CornerTopology const & cornerTopology) const;
+                   FaceVertexSubset       * fvarSubsetPtr,
+                   Index const              fvarIndices[],
+                   FaceVertexSubset const & vtxSubset,
+                   FaceVertex       const & cornerTopology) const;
 
 private:
-    typedef Vtr::internal::StackBuffer<CornerSubset,8,true> CornerArray;
+    typedef Vtr::internal::StackBuffer<FaceVertexSubset,8,true> CornerArray;
 
     FaceTopology const * _topology;
     Index        const * _indices;
     CornerArray          _corners;
 
     //  Members reflecting the effective subset of topology and options:
-    CombinedTag  _combinedTag;
-    Sdc::Options _optionsInEffect;
+    MultiVertexTag _combinedTag;
+    Sdc::Options   _optionsInEffect;
 
     unsigned int _isFaceVarying : 1;
     unsigned int _matchesVertex : 1;
@@ -188,12 +188,12 @@ FaceSurface::GetSdcOptionsAsAssigned() const {
     return _topology->_schemeOptions;
 }
 
-inline CornerTopology const &
+inline FaceVertex const &
 FaceSurface::GetCornerTopology(int corner) const {
     return _topology->GetTopology(corner);
 }
 
-inline CornerSubset const & 
+inline FaceVertexSubset const & 
 FaceSurface::GetCornerSubset(int corner) const {
     return _corners[corner];
 }

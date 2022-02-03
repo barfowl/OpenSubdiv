@@ -93,8 +93,8 @@ FaceSurface::Initialize(FaceTopology const & vtxTopology,
     //  all corners:
     //
     for (int corner = 0; corner < GetFaceSize(); ++corner) {
-        CornerTopology const & vtxTop = GetCornerTopology(corner);
-        CornerSubset         & vtxSub = _corners[corner];
+        FaceVertex       const & vtxTop = GetCornerTopology(corner);
+        FaceVertexSubset       & vtxSub = _corners[corner];
 
         vtxTop.GetVertexSubset(&vtxSub);
 
@@ -125,9 +125,9 @@ FaceSurface::Initialize(FaceSurface const  & vtxSurface,
     //  for all corners:
     //
     for (int corner = 0; corner < GetFaceSize(); ++corner) {
-        CornerTopology const & vtxTop  = GetCornerTopology(corner);
-        CornerSubset const   & vtxSub  = vtxSurface.GetCornerSubset(corner);
-        CornerSubset         & fvarSub = _corners[corner];
+        FaceVertex       const & vtxTop  = GetCornerTopology(corner);
+        FaceVertexSubset const & vtxSub  = vtxSurface.GetCornerSubset(corner);
+        FaceVertexSubset       & fvarSub = _corners[corner];
 
         vtxTop.FindFaceVaryingSubset(&fvarSub, fvarIndices, vtxSub);
 
@@ -187,7 +187,7 @@ FaceSurface::isRegular() const {
     int regBoundaryValence = (regInteriorValence / 2);
 
     for (int i = 0; i < GetFaceSize(); ++i) {
-        CornerSubset const & corner = _corners[i];
+        FaceVertexSubset const & corner = _corners[i];
 
         if (corner.IsSharp()) {
             if (corner.GetNumFaces() != 1) return false;
@@ -219,7 +219,7 @@ FaceSurface::reviseSdcOptionsInEffect() {
     //
     assert(!_isRegular);
 
-    CombinedTag const & tags = _combinedTag;
+    MultiVertexTag const & tags = _combinedTag;
 
     Sdc::Options & options = _optionsInEffect;
 
@@ -253,8 +253,8 @@ FaceSurface::reviseSdcOptionsInEffect() {
 //  vertex and face-varying topology:
 //
 void
-FaceSurface::sharpenBySdcVtxBoundaryInterpolation(CornerSubset * vtxSub,
-        CornerTopology const & vtxTop) const {
+FaceSurface::sharpenBySdcVtxBoundaryInterpolation(FaceVertexSubset * vtxSub,
+        FaceVertex const & vtxTop) const {
 
     assert(vtxSub->IsBoundary() && !vtxSub->IsSharp());
 
@@ -311,8 +311,8 @@ namespace fvar_plus {
     //  cases of only one or two subsets to be dealt with.
     //
     bool
-    hasMoreThanTwoFVarSubsets(CornerTopology const & top,
-                              Index          const   fvarIndices[]) {
+    hasMoreThanTwoFVarSubsets(FaceVertex const & top,
+                              Index      const   fvarIndices[]) {
 
         Index indexCorner = top.GetFaceIndexAtCorner(fvarIndices);
         Index indexOther = -1;
@@ -361,8 +361,8 @@ namespace fvar_plus {
     //  one of those semi-sharp edges becomes inf-sharp.
     //
     bool
-    hasDependentSharpness(CornerTopology const & topology,
-                          CornerSubset   const & subset) {
+    hasDependentSharpness(FaceVertex       const & topology,
+                          FaceVertexSubset const & subset) {
 
         return ((topology.GetNumFaces() - subset.GetNumFaces()) > 1) &&
                 topology.GetTag().HasSharpEdges() &&
@@ -376,8 +376,8 @@ namespace fvar_plus {
     //  on the seams between the two subsets.
     //
     float
-    getDependentSharpness(CornerTopology const & top,
-                          CornerSubset   const & subset) {
+    getDependentSharpness(FaceVertex       const & top,
+                          FaceVertexSubset const & subset) {
 
         //  Identify the first and last faces of the subset -- to be
         //  skipped when searching for the largest interior sharp edge:
@@ -412,10 +412,10 @@ namespace fvar_plus {
 //  only the LINEAR_CORNERS_PLUS* cases requiring much effort.
 //
 void
-FaceSurface::sharpenBySdcFVarLinearInterpolation(CornerSubset * fvarSub,
-        Index          const   fvarIndices[],
-        CornerSubset   const & vtxSub,
-        CornerTopology const & vtxTop) const {
+FaceSurface::sharpenBySdcFVarLinearInterpolation(FaceVertexSubset * fvarSub,
+        Index            const   fvarIndices[],
+        FaceVertexSubset const & vtxSub,
+        FaceVertex       const & vtxTop) const {
 
     assert(fvarSub->IsBoundary() && !fvarSub->IsSharp());
 
@@ -502,7 +502,7 @@ FaceSurface::sharpenBySdcFVarLinearInterpolation(CornerSubset * fvarSub,
 void
 FaceSurface::print(bool printVerts) const {
 
-    CombinedTag const & tag = _combinedTag;
+    MultiVertexTag const & tag = _combinedTag;
 
     printf("    FaceTopology:\n");
     printf("       face size       = %d\n", _topology->GetFaceSize());
@@ -523,8 +523,8 @@ FaceSurface::print(bool printVerts) const {
         Index const * indices = _indices;
 
         for (int i = 0; i < GetFaceSize(); ++i) {
-            CornerTopology const & top = GetCornerTopology(i);
-            CornerSubset   const & sub = GetCornerSubset(i);
+            FaceVertex       const & top = GetCornerTopology(i);
+            FaceVertexSubset const & sub = GetCornerSubset(i);
 
             printf("        corner %d:\n", i);
             printf("            topology:  num faces  = %d, boundary = %d\n",

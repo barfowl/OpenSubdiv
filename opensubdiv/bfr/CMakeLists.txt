@@ -27,9 +27,9 @@
 #-------------------------------------------------------------------------------
 # source & headers
 set(SOURCE_FILES
-     cornerTopology.cpp
-     faceTopology.cpp
      faceSurface.cpp
+     faceTopology.cpp
+     faceVertex.cpp
      hash.cpp
      irregularPatchBuilder.cpp
      parameterization.cpp
@@ -43,13 +43,14 @@ set(SOURCE_FILES
 )
 
 set(PRIVATE_HEADER_FILES
-     cornerTag.h
-     cornerTopology.h
-     faceTopology.h
      faceSurface.h
+     faceTopology.h
+     faceVertex.h
+     faceVertexSubset.h
      hash.h
      irregularPatchBuilder.h
      regularPatchBuilder.h
+     vertexTag.h
 )
 
 set(PUBLIC_HEADER_FILES

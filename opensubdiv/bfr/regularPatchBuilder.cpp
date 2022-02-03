@@ -105,7 +105,7 @@ RegularPatchBuilder::RegularPatchBuilder(FaceSurface const & surface) :
         _boundaryMask = 0;
     } else if (_isQuad) {
         //  Boundary mask for quad trivial -- bit for each boundary edge:
-        CornerSubset const * C = _surface.GetSubsets();
+        FaceVertexSubset const * C = _surface.GetSubsets();
         int eMask = ((C[0].IsBoundary() & (C[0]._numFacesBefore == 0)) << 0) |
                     ((C[1].IsBoundary() & (C[1]._numFacesBefore == 0)) << 1) |
                     ((C[2].IsBoundary() & (C[2]._numFacesBefore == 0)) << 2) |
@@ -114,7 +114,7 @@ RegularPatchBuilder::RegularPatchBuilder(FaceSurface const & surface) :
     } else {
         //  Boundary mask for tris not so trivial -- boundary verts can exist
         //  on tris without boundary edges, so bits for both are combined:
-        CornerSubset const * C = _surface.GetSubsets();
+        FaceVertexSubset const * C = _surface.GetSubsets();
         int eMask = ((C[0].IsBoundary() & (C[0]._numFacesBefore == 0)) << 0) |
                     ((C[1].IsBoundary() & (C[1]._numFacesBefore == 0)) << 1) |
                     ((C[2].IsBoundary() & (C[2]._numFacesBefore == 0)) << 2);
@@ -138,7 +138,7 @@ RegularPatchBuilder::gatherInteriorPatchPoints4(Index P[]) const {
     //  For each of the 4 corners, identify the opposite face in the ring
     //  and assign its 4 indices to the corresponding quadrant of the patch:
     //
-    CornerTopology const & cTop0 = _surface.GetCornerTopology(0);
+    FaceVertex const & cTop0 = _surface.GetCornerTopology(0);
     fvOpposite = fvIndices + cTop0.GetFaceIndexOffset(cTop0.GetFaceAfter(2));
     P[ 5] = fvOpposite[0];
     P[ 4] = fvOpposite[1];
@@ -146,7 +146,7 @@ RegularPatchBuilder::gatherInteriorPatchPoints4(Index P[]) const {
     P[ 1] = fvOpposite[3];
     fvIndices += cTop0.GetNumFaceVertices();
 
-    CornerTopology const & cTop1 = _surface.GetCornerTopology(1);
+    FaceVertex const & cTop1 = _surface.GetCornerTopology(1);
     fvOpposite = fvIndices + cTop1.GetFaceIndexOffset(cTop1.GetFaceAfter(2));
     P[ 6] = fvOpposite[0];
     P[ 2] = fvOpposite[1];
@@ -154,7 +154,7 @@ RegularPatchBuilder::gatherInteriorPatchPoints4(Index P[]) const {
     P[ 7] = fvOpposite[3];
     fvIndices += cTop1.GetNumFaceVertices();
 
-    CornerTopology const & cTop2 = _surface.GetCornerTopology(2);
+    FaceVertex const & cTop2 = _surface.GetCornerTopology(2);
     fvOpposite = fvIndices + cTop2.GetFaceIndexOffset(cTop2.GetFaceAfter(2));
     P[10] = fvOpposite[0];
     P[11] = fvOpposite[1];
@@ -162,7 +162,7 @@ RegularPatchBuilder::gatherInteriorPatchPoints4(Index P[]) const {
     P[14] = fvOpposite[3];
     fvIndices += cTop2.GetNumFaceVertices();
 
-    CornerTopology const & cTop3 = _surface.GetCornerTopology(3);
+    FaceVertex const & cTop3 = _surface.GetCornerTopology(3);
     fvOpposite = fvIndices + cTop3.GetFaceIndexOffset(cTop3.GetFaceAfter(2));
     P[ 9] = fvOpposite[0];
     P[13] = fvOpposite[1];
@@ -182,8 +182,8 @@ RegularPatchBuilder::gatherBoundaryPatchPoints4(Index P[]) const {
     //  assign the indices accordingly:
     //
     for (int i = 0; i < 4; ++i) {
-        CornerTopology const & cTop = _surface.GetCornerTopology(i);
-        CornerSubset   const & cSub = _surface.GetCornerSubset(i);
+        FaceVertex       const & cTop = _surface.GetCornerTopology(i);
+        FaceVertexSubset const & cSub = _surface.GetCornerSubset(i);
 
         int faceCorner = cTop.GetFace();
 
@@ -266,7 +266,7 @@ RegularPatchBuilder::gatherInteriorPatchPoints3(Index P[]) const {
     Index const * fvNext2 = 0;
     Index const * fvNext3 = 0;
 
-    CornerTopology const & cTop0 = _surface.GetCornerTopology(0);
+    FaceVertex const & cTop0 = _surface.GetCornerTopology(0);
     fvNext2 = fvIndices + cTop0.GetFaceIndexOffset(cTop0.GetFaceAfter(2));
     fvNext3 = fvIndices + cTop0.GetFaceIndexOffset(cTop0.GetFaceAfter(3));
     P[ 4] = fvNext2[0];
@@ -275,7 +275,7 @@ RegularPatchBuilder::gatherInteriorPatchPoints3(Index P[]) const {
     P[ 0] = fvNext3[2];
     fvIndices += cTop0.GetNumFaceVertices();
 
-    CornerTopology const & cTop1 = _surface.GetCornerTopology(1);
+    FaceVertex const & cTop1 = _surface.GetCornerTopology(1);
     fvNext2 = fvIndices + cTop1.GetFaceIndexOffset(cTop1.GetFaceAfter(2));
     fvNext3 = fvIndices + cTop1.GetFaceIndexOffset(cTop1.GetFaceAfter(3));
     P[ 5] = fvNext2[0];
@@ -284,7 +284,7 @@ RegularPatchBuilder::gatherInteriorPatchPoints3(Index P[]) const {
     P[ 6] = fvNext3[2];
     fvIndices += cTop1.GetNumFaceVertices();
 
-    CornerTopology const & cTop2 = _surface.GetCornerTopology(2);
+    FaceVertex const & cTop2 = _surface.GetCornerTopology(2);
     fvNext2 = fvIndices + cTop2.GetFaceIndexOffset(cTop2.GetFaceAfter(2));
     fvNext3 = fvIndices + cTop2.GetFaceIndexOffset(cTop2.GetFaceAfter(3));
     P[ 8] = fvNext2[0];
@@ -304,8 +304,8 @@ RegularPatchBuilder::gatherBoundaryPatchPoints3(Index P[]) const {
     //  interior vertices require two:
     //
     for (int i = 0; i < 3; ++i) {
-        CornerTopology const & cTop = _surface.GetCornerTopology(i);
-        CornerSubset   const & cSub = _surface.GetCornerSubset(i);
+        FaceVertex       const & cTop = _surface.GetCornerTopology(i);
+        FaceVertexSubset const & cSub = _surface.GetCornerSubset(i);
 
         int faceCorner = cTop.GetFace();
 

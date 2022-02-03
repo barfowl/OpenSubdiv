@@ -22,13 +22,14 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#ifndef OPENSUBDIV3_BFR_CORNER_TOPOLOGY_H
-#define OPENSUBDIV3_BFR_CORNER_TOPOLOGY_H
+#ifndef OPENSUBDIV3_BFR_FACE_VERTEX_H
+#define OPENSUBDIV3_BFR_FACE_VERTEX_H
 
 #include "../version.h"
 
-#include "../bfr/cornerTag.h"
+#include "../bfr/vertexTag.h"
 #include "../bfr/vertexTopology.h"
+#include "../bfr/faceVertexSubset.h"
 #include "../sdc/crease.h"
 
 namespace OpenSubdiv {
@@ -37,80 +38,29 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 
 //
-//  CornerSubset is a simple struct and a companion of CornerTopology that
-//  identifies a subset of the topology around a corner.  Such subsets are
-//  what ultimately define the limit surface around a face and so are used
-//  by higher level classes in conjunction with CornerTopology.
-//
-struct CornerSubset {
-    CornerSubset() { }
-
-    void Initialize(CornerTag tag) {
-        _tag = tag;
-        _numFacesBefore = 0;
-        _numFacesAfter  = 0;
-        _numFacesTotal  = 1;
-        _localSharpness = 0.0f;
-    }
-
-    //  Queries consistent with other classes:
-    CornerTag GetTag() const { return _tag; }
-
-    int GetNumFaces() const { return _numFacesTotal; }
-
-    //  Simple get/set methods to avoid the tedious syntax of the tag:
-    bool IsBoundary() const { return _tag._boundaryVerts; }
-    bool IsSharp()    const { return _tag._infSharpVerts; }
-
-    void SetBoundary(bool on) { _tag._boundaryVerts = on; }
-    void SetSharp(bool on)    { _tag._infSharpVerts = on; }
-
-    //  Methods comparing to a superset (not any arbitrary subset):
-    bool MatchesExtentOfSuperset(CornerSubset const & sup) const {
-        return (GetNumFaces() == sup.GetNumFaces()) &&
-               (IsBoundary()  == sup.IsBoundary());
-    }
-    bool MatchesShapeOfSuperset(CornerSubset const & sup) const {
-        return MatchesExtentOfSuperset(sup) &&
-               (IsSharp() == sup.IsSharp());
-    }
-
-    //  Member tags containing boundary and sharp bits:
-    CornerTag _tag;
-
-    //  Members defining the extent of the subset:
-    short _numFacesBefore;
-    short _numFacesAfter;
-    short _numFacesTotal;
-
-    //  Member to override vertex sharpness (rarely used):
-    float _localSharpness;
-};
-
-//
-//  The CornerTopology class is the primary internal class for gathering
-//  all topological information around the corner of a face.  As such, it
+//  The FaceVertex class is the primary internal class for gathering all
+//  topological information around the corner of a face.  As such, it
 //  wraps an instance of the public VertexTopology class populated by the
 //  Factory subclasses.  It extends an instance of VertexTopology with
 //  additional topological information and methods to make it more widely
 //  available and useful to internal classes.
 //
-//  One fundamental extension of CornerTopology is that it includes the
+//  One fundamental extension of FaceVertex is that it includes the
 //  location of the face in the ring of incident faces around the vertex.
 //  VertexTopology alone simple specifies the neighborhood of the vertex,
-//  but the CornerTopology provides context relative to the face for
+//  but the FaceVertex provides context relative to the face for
 //  which all of this information is being gathered.
 //
-//  Several instances of CornerTopology (one for each corner of a face)
+//  Several instances of FaceVertex (one for each corner of a face)
 //  are necessary to fully define the limit surface for a face, but in
-//  many cases, only a subset of the CornerTopology's incident faces will
+//  many cases, only a subset of the FaceVertex's incident faces will
 //  actually contribute to the surface. A companion class for defining
 //  that subset is defined elsewhere.
 //  
-class CornerTopology {
+class FaceVertex {
 public:
-    CornerTopology() { }
-    ~CornerTopology() { }
+    FaceVertex() { }
+    ~FaceVertex() { }
 
     //  Methods supporting construction/initialization (subclass required
     //  to populate VertexTopology between Initialize and Finalize):
@@ -123,22 +73,24 @@ public:
 
 public:
     //  Methods to initialize and find subsets:
-    int GetVertexSubset(CornerSubset * subset) const;
+    typedef FaceVertexSubset Subset;
 
-    int FindFaceVaryingSubset(CornerSubset       * fvarSubset,
-                              Index const          fvarIndices[],
-                              CornerSubset const & vtxSubset) const;
+    int GetVertexSubset(Subset * subset) const;
+
+    int FindFaceVaryingSubset(Subset       * fvarSubset,
+                              Index  const   fvarIndices[],
+                              Subset const & vtxSubset) const;
 
     //  Methods to control sharpness of the corner in a subset:
-    void SharpenSubset(CornerSubset * subset) const;
-    void SharpenSubset(CornerSubset * subset, float sharpness) const;
-    void UnSharpenSubset(CornerSubset * subset) const;
+    void SharpenSubset(Subset * subset) const;
+    void SharpenSubset(Subset * subset, float sharpness) const;
+    void UnSharpenSubset(Subset * subset) const;
 
 public:
     //
     //  Public methods to query simple properties:
     //
-    CornerTag GetTag() const { return _tag; }
+    VertexTag GetTag() const { return _tag; }
 
     int GetFace() const { return _faceInRing; }
 
@@ -163,8 +115,8 @@ public:
     int GetFaceBefore(int stepBackwardFromCornerFace) const;
 
     //  Get first and last faces of a subset:
-    int GetFaceFirst(CornerSubset const & subset) const;
-    int GetFaceLast( CornerSubset const & subset) const;
+    int GetFaceFirst(Subset const & subset) const;
+    int GetFaceLast( Subset const & subset) const;
 
 public:
     //
@@ -211,20 +163,20 @@ private:
 
 private:
     //  Internal methods for assembling and managing subsets:
-    int initCompleteSubset(CornerSubset * subset) const;
+    int initCompleteSubset(Subset * subset) const;
 
-    int findConnectedSubsetExtent(CornerSubset * subset) const;
+    int findConnectedSubsetExtent(Subset * subset) const;
 
-    int findFVarSubsetExtent(CornerSubset const & vtxSubset,
-                             CornerSubset       * fvarSubset,
-                             Index const          fvarIndices[]) const;
+    int findFVarSubsetExtent(Subset const & vtxSubset,
+                             Subset       * fvarSubset,
+                             Index  const   fvarIndices[]) const;
 
-    void adjustSubsetTags(CornerSubset       * subset,
-                          CornerSubset const * superset = 0) const;
+    void adjustSubsetTags(Subset       * subset,
+                          Subset const * superset = 0) const;
 
-    bool subsetHasInfSharpEdges( CornerSubset const & subset) const;
-    bool subsetHasSemiSharpEdges(CornerSubset const & subset) const;
-    bool subsetHasIrregularFaces(CornerSubset const & subset) const;
+    bool subsetHasInfSharpEdges( Subset const & subset) const;
+    bool subsetHasSemiSharpEdges(Subset const & subset) const;
+    bool subsetHasIrregularFaces(Subset const & subset) const;
 
 private:
     //  Internal methods to connect a set of unordered faces (given their
@@ -252,7 +204,7 @@ private:
 
     //  Private members:
     VertexTopology _vTop;
-    CornerTag      _tag;
+    VertexTag      _tag;
 
     short _faceInRing;
     short _commonFaceSize;
@@ -273,22 +225,22 @@ private:
 //  Inline methods for inspecting/traversing incident faces of the vertex:
 //
 inline int
-CornerTopology::GetFaceSize(int face) const {
+FaceVertex::GetFaceSize(int face) const {
     return _commonFaceSize ? _commonFaceSize :
             (_vTop._faceSizeOffsets[face+1] - _vTop._faceSizeOffsets[face]);
 }
 
 inline int
-CornerTopology::getConnectedFaceNext(int face) const {
+FaceVertex::getConnectedFaceNext(int face) const {
     return _faceEdgeNeighbors[2*face + 1];
 }
 inline int
-CornerTopology::getConnectedFacePrev(int face) const {
+FaceVertex::getConnectedFacePrev(int face) const {
     return _faceEdgeNeighbors[2*face];
 }
 
 inline int
-CornerTopology::GetFaceNext(int face) const {
+FaceVertex::GetFaceNext(int face) const {
     if (isUnOrdered()) {
         return getConnectedFaceNext(face);
     } else if (face < (_vTop._numFaces - 1)) {
@@ -298,7 +250,7 @@ CornerTopology::GetFaceNext(int face) const {
     }
 }
 inline int
-CornerTopology::GetFacePrevious(int face) const {
+FaceVertex::GetFacePrevious(int face) const {
     if (isUnOrdered()) {
         return getConnectedFacePrev(face);
     } else if (face) {
@@ -309,7 +261,7 @@ CornerTopology::GetFacePrevious(int face) const {
 }
 
 inline int
-CornerTopology::GetFaceAfter(int step) const {
+FaceVertex::GetFaceAfter(int step) const {
     assert(step >= 0);
     if (isOrdered()) {
         return (_faceInRing + step) % _vTop._numFaces;
@@ -326,7 +278,7 @@ CornerTopology::GetFaceAfter(int step) const {
     }
 }
 inline int
-CornerTopology::GetFaceBefore(int step) const {
+FaceVertex::GetFaceBefore(int step) const {
     assert(step >= 0);
     if (isOrdered()) {
         return (_faceInRing - step + _vTop._numFaces) % _vTop._numFaces;
@@ -344,11 +296,11 @@ CornerTopology::GetFaceBefore(int step) const {
 }
 
 inline int
-CornerTopology::GetFaceFirst(CornerSubset const & subset) const {
+FaceVertex::GetFaceFirst(Subset const & subset) const {
     return GetFaceBefore(subset._numFacesBefore);
 }
 inline int
-CornerTopology::GetFaceLast( CornerSubset const & subset) const {
+FaceVertex::GetFaceLast(Subset const & subset) const {
     return GetFaceAfter(subset._numFacesAfter);
 }
 
@@ -356,43 +308,43 @@ CornerTopology::GetFaceLast( CornerSubset const & subset) const {
 //  Inline methods for accessing indices associated with indicent faces:
 //
 inline int
-CornerTopology::GetFaceIndexOffset(int face) const {
+FaceVertex::GetFaceIndexOffset(int face) const {
     return _commonFaceSize ? (face * _commonFaceSize) :
                              _vTop._faceSizeOffsets[face];
 }
 
 inline Index
-CornerTopology::GetFaceIndexAtCorner(Index const indices[]) const {
+FaceVertex::GetFaceIndexAtCorner(Index const indices[]) const {
     return indices[GetFaceIndexOffset(_faceInRing)];
 }
 inline Index
-CornerTopology::GetFaceIndexAtCorner(int face, Index const indices[]) const {
+FaceVertex::GetFaceIndexAtCorner(int face, Index const indices[]) const {
     return indices[GetFaceIndexOffset(face)];
 }
 inline Index
-CornerTopology::GetFaceIndexLeading(int face, Index const indices[]) const {
+FaceVertex::GetFaceIndexLeading(int face, Index const indices[]) const {
     return indices[GetFaceIndexOffset(face) + 1];
 }
 inline Index
-CornerTopology::GetFaceIndexTrailing(int face, Index const indices[]) const {
+FaceVertex::GetFaceIndexTrailing(int face, Index const indices[]) const {
     // It is safe to use "face+1" here for the last face:
     return indices[GetFaceIndexOffset(face+1) - 1];
 }
 
 inline bool
-CornerTopology::FaceIndicesMatchAtCorner(int facePrev, int faceNext,
+FaceVertex::FaceIndicesMatchAtCorner(int facePrev, int faceNext,
                                          Index const indices[]) const {
     return GetFaceIndexAtCorner(facePrev, indices) ==
            GetFaceIndexAtCorner(faceNext, indices);
 }
 inline bool
-CornerTopology::FaceIndicesMatchAtEdgeEnd(int facePrev, int faceNext,
+FaceVertex::FaceIndicesMatchAtEdgeEnd(int facePrev, int faceNext,
                                          Index const indices[]) const {
     return GetFaceIndexTrailing(facePrev, indices) ==
            GetFaceIndexLeading(faceNext, indices);
 }
 inline bool
-CornerTopology::FaceIndicesMatchAcrossEdge(int facePrev, int faceNext,
+FaceVertex::FaceIndicesMatchAcrossEdge(int facePrev, int faceNext,
                                          Index const indices[]) const {
     return FaceIndicesMatchAtCorner (facePrev, faceNext, indices) &&
            FaceIndicesMatchAtEdgeEnd(facePrev, faceNext, indices);
@@ -402,29 +354,29 @@ CornerTopology::FaceIndicesMatchAcrossEdge(int facePrev, int faceNext,
 //  Inline methods for accessing vertex and edge sharpness:
 //
 inline float
-CornerTopology::GetVertexSharpness() const {
+FaceVertex::GetVertexSharpness() const {
     return _vTop._vertSharpness;
 }
 
 inline float
-CornerTopology::GetFaceEdgeSharpness(int faceEdge) const {
+FaceVertex::GetFaceEdgeSharpness(int faceEdge) const {
     return _vTop._faceEdgeSharpness[faceEdge];
 }
 inline float
-CornerTopology::GetFaceEdgeSharpness(int face, bool trailing) const {
+FaceVertex::GetFaceEdgeSharpness(int face, bool trailing) const {
     return _vTop._faceEdgeSharpness[face*2 + trailing];
 }
 
 inline bool
-CornerTopology::IsFaceEdgeSharp(int face, bool trailing) const {
+FaceVertex::IsFaceEdgeSharp(int face, bool trailing) const {
     return Sdc::Crease::IsSharp(_vTop._faceEdgeSharpness[face*2+trailing]);
 }
 inline bool
-CornerTopology::IsFaceEdgeInfSharp(int face, bool trailing) const {
+FaceVertex::IsFaceEdgeInfSharp(int face, bool trailing) const {
     return Sdc::Crease::IsInfinite(_vTop._faceEdgeSharpness[face*2+trailing]);
 }
 inline bool
-CornerTopology::IsFaceEdgeSemiSharp(int face, bool trailing) const {
+FaceVertex::IsFaceEdgeSemiSharp(int face, bool trailing) const {
     return Sdc::Crease::IsSemiSharp(_vTop._faceEdgeSharpness[face*2+trailing]);
 }
 
@@ -434,4 +386,4 @@ CornerTopology::IsFaceEdgeSemiSharp(int face, bool trailing) const {
 using namespace OPENSUBDIV_VERSION;
 } // end namespace OpenSubdiv
 
-#endif /* OPENSUBDIV3_BFR_CORNER_TOPOLOGY_H */
+#endif /* OPENSUBDIV3_BFR_FACE_VERTEX_H */

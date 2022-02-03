@@ -22,8 +22,8 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#ifndef OPENSUBDIV3_BFR_CORNER_TAG_H
-#define OPENSUBDIV3_BFR_CORNER_TAG_H
+#ifndef OPENSUBDIV3_BFR_VERTEX_TAG_H
+#define OPENSUBDIV3_BFR_VERTEX_TAG_H
 
 #include "../version.h"
 
@@ -35,7 +35,7 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 
 //
-//  CornerTag is a simple set of bits that identify exceptional properties
+//  VertexTag is a simple set of bits that identify exceptional properties
 //  at the corner vertices of a face that warrant closer inspection (and
 //  potential additional processing).  As with some bitfields in Far, this
 //  supports bitwise-OR so that tags for the corners of a face can quickly
@@ -69,8 +69,8 @@ public:
     }
 
 protected:
-    friend class CornerTopology;
-    friend class CornerSubset;
+    friend class FaceVertex;
+    friend class FaceVertexSubset;
 
     IntType _boundaryVerts      : 1;
     IntType _infSharpVerts      : 1;
@@ -86,7 +86,7 @@ protected:
 };
 
 //
-//  CornerTag wraps the FeatureBits for use with a single corner/vertex:
+//  VertexTag wraps the FeatureBits for use with a single corner/vertex:
 //
 //  Note that a bit is not defined to detect extra-ordinary or regular
 //  valence.  Since subsets of the topology are ultimately used in the
@@ -96,10 +96,10 @@ protected:
 //  corner in Bfr, so the collective presence is determined when the
 //  surface definition is finalized in the regular/irregular test.
 //
-class CornerTag : public FeatureBits {
+class VertexTag : public FeatureBits {
 public:
-    CornerTag() { }
-    ~CornerTag() { }
+    VertexTag() { }
+    ~VertexTag() { }
 
     //  Queries for single corner/vertex (some reversing sense of the bit):
     bool IsBoundary()            const { return  _boundaryVerts; }
@@ -121,18 +121,18 @@ public:
 };
 
 //
-//  CombinedTag wraps the FeatureBits for use with bits combined from 
+//  MultiVertexTag wraps the FeatureBits for use with bits combined from 
 //  several corners/vertices. It includes the Combine() method to apply
-//  the bitwise-OR with a given CornerTag, in addition to using different
+//  the bitwise-OR with a given VertexTag, in addition to using different
 //  names for the access methods to reflect their collective nature (e.g.
 //  the use of "has" versus "is").
 //
-class CombinedTag : public FeatureBits {
+class MultiVertexTag : public FeatureBits {
 public:
-    CombinedTag() { }
-    ~CombinedTag() { }
+    MultiVertexTag() { }
+    ~MultiVertexTag() { }
 
-    //  Queries for multiple CornerTags combined into one:
+    //  Queries for multiple VertexTags combined into one:
     bool HasBoundaryVertices()     const { return _boundaryVerts; }
     bool HasInfSharpVertices()     const { return _infSharpVerts; }
     bool HasInfSharpEdges()        const { return _infSharpEdges; }
@@ -149,7 +149,7 @@ public:
     bool HasSharpEdges()           const { return  HasInfSharpEdges() ||
                                                    HasSemiSharpEdges(); }
 
-    void Combine(CornerTag const & tag) {
+    void Combine(VertexTag const & tag) {
         SetBits(GetBits() | tag.GetBits());
     }
 };
@@ -160,4 +160,4 @@ public:
 using namespace OPENSUBDIV_VERSION;
 } // end namespace OpenSubdiv
 
-#endif /* OPENSUBDIV3_BFR_CORNER_TAG_H */
+#endif /* OPENSUBDIV3_BFR_VERTEX_TAG_H */

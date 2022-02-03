@@ -89,7 +89,7 @@ namespace Bfr {
 //
 //  In both cases, the location of the base face in this sequence -- the
 //  face whose corner vertex is being described here -- must be specified
-//  in the return value to populateFaceCornerTopology() (e.g. when a
+//  in the return value to populateFaceVertexTopology() (e.g. when a
 //  boundary vertex has 3 incident faces, a return value of 0, 1 or 2
 //  will indicate which is the base face).
 //
@@ -182,7 +182,7 @@ public:
     bool HasEdgeSharpness() const;
 
 protected:
-    friend class CornerTopology;
+    friend class FaceVertex;
 
     typedef Vtr::internal::StackBuffer<int,8,true>    IntBuffer;
     typedef Vtr::internal::StackBuffer<float,16,true> FloatBuffer;

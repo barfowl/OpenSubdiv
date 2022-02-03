@@ -85,7 +85,7 @@ FaceTopology::Finalize() {
     assert(_isInitialized);
 
     for (int i = 0; i < _faceSize; ++i) {
-        CornerTopology & cTop  = GetTopology(i);
+        FaceVertex & cTop  = GetTopology(i);
 
         _combinedTag.Combine(cTop.GetTag());
 
@@ -111,7 +111,7 @@ FaceTopology::ResolveUnOrderedCorners(Index const fvIndices[]) {
     _combinedTag.Clear();
  
     for (int i = 0; i < _faceSize; ++i) {
-        CornerTopology & cTop = GetTopology(i);
+        FaceVertex & cTop = GetTopology(i);
 
         if (cTop.GetTag().IsUnOrdered()) {
             cTop.ConnectUnOrderedFaces(fvIndices);
@@ -126,7 +126,7 @@ FaceTopology::ResolveUnOrderedCorners(Index const fvIndices[]) {
 void
 FaceTopology::print(Index const faceVertIndices[]) const {
 
-    CombinedTag const & tag = _combinedTag;
+    MultiVertexTag const & tag = _combinedTag;
 
     printf("FaceTopology:\n");
     printf("    face size      = %d\n", _faceSize);
@@ -147,7 +147,7 @@ FaceTopology::print(Index const faceVertIndices[]) const {
         for (int i = 0; i < _faceSize; ++i) {
             printf("    corner %d:\n", i);
 
-            CornerTopology const & cTop = GetTopology(i);
+            FaceVertex const & cTop = GetTopology(i);
             printf("        topology:  num faces  = %d, boundary = %d\n",
                     cTop.GetNumFaces(), cTop.GetTag().IsBoundary());
 
