@@ -95,11 +95,13 @@ protected:
     //
     //  Optional overrides for accelerating regular patches:
     //
-    bool isFaceTopologyRegular(Index faceIndex,
-                               Index vertexIndices[]) const;
+    bool getFaceNeighborhoodVertexIndicesIfRegular(
+                            Index faceIndex,
+                            Index vertexIndices[]) const;
 
-    bool isFaceTopologyRegular(Index faceIndex, int fvarID,
-                               Index fvarValueIndices[]) const;
+    bool getFaceNeighborhoodFVarValueIndicesIfRegular(
+                            Index faceIndex,
+                            int fvarID, Index fvarValueIndices[]) const;
 
 private:
     //

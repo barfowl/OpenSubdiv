@@ -260,8 +260,8 @@ RefinerSurfaceFactoryBase::getFaceVertexIncidentFaceFVarValueIndices(
 //  topology, and retrieving its control point indices if so:
 //
 bool
-RefinerSurfaceFactoryBase::isFaceTopologyRegular(Index baseFace,
-        Index vtxIndices[]) const {
+RefinerSurfaceFactoryBase::getFaceNeighborhoodVertexIndicesIfRegular(
+        Index baseFace, Index vtxIndices[]) const {
 
     //
     //  Get the composite tag for the corners of the face and reject some
@@ -323,8 +323,8 @@ RefinerSurfaceFactoryBase::isFaceTopologyRegular(Index baseFace,
 }
 
 bool
-RefinerSurfaceFactoryBase::isFaceTopologyRegular(Index baseFace,
-        int fvarID, Index fvarIndices[]) const {
+RefinerSurfaceFactoryBase::getFaceNeighborhoodFVarValueIndicesIfRegular(
+        Index baseFace, int fvarID, Index fvarIndices[]) const {
 
     //
     //  This method will only be invoked when the vertex topology is
