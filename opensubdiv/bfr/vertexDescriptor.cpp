@@ -22,7 +22,7 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#include "../bfr/vertexTopology.h"
+#include "../bfr/vertexDescriptor.h"
 #include "../sdc/crease.h"
 
 #include <cstring>
@@ -38,7 +38,7 @@ namespace Bfr {
 //  assignment (most work is now handled by the containing class):
 //
 void
-VertexTopology::Initialize(int numFaces) {
+VertexDescriptor::Initialize(LocalIndex numFaces) {
 
     assert(numFaces > 0);
     _numFaces = numFaces;
@@ -57,7 +57,7 @@ VertexTopology::Initialize(int numFaces) {
 }
 
 void
-VertexTopology::Finalize() {
+VertexDescriptor::Finalize() {
 
     assert(_isInitialized);
 

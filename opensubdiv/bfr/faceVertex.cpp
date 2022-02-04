@@ -36,7 +36,7 @@ namespace Bfr {
 
 //
 //  Main initialize and finalize methods used to bracket the assignment
-//  by clients to the VertexTopology member:
+//  by clients to the VertexDescriptor member:
 //
 void
 FaceVertex::Initialize(int faceSize, int regFaceSize) {
@@ -61,7 +61,7 @@ FaceVertex::Finalize(int faceInVertex) {
     _faceInRing = faceInVertex;
 
     //
-    //  Initialize members from the VertexTopology:
+    //  Initialize members from the VertexDescriptor:
     //
     if (_vTop.HasCommonFaceSize()) {
         //  Common face size was previously initialized to the face size
@@ -77,7 +77,7 @@ FaceVertex::Finalize(int faceInVertex) {
     _isExpSemiSharp = Sdc::Crease::IsSemiSharp(_vTop._vertSharpness);
 
     //
-    //  Initialize tags from VertexTopology and other members
+    //  Initialize tags from VertexDescriptor and other members
     //
     //  Note that not all tags can be assigned at this point if the vertex
     //  is defined by a set of unordered faces. In such cases, the tags
@@ -369,7 +369,7 @@ FaceVertex::FindFaceVaryingSubset(Subset       * fvarSubsetPtr,
     //
     findFVarSubsetExtent(vtxSub, &fvarSub, fvarIndices);
 
-    bool fvarTopologyMatchesVertex = fvarSub.MatchesExtentOfSuperset(vtxSub);
+    bool fvarTopologyMatchesVertex = fvarSub.ExtentMatchesSuperset(vtxSub);
     if (!fvarTopologyMatchesVertex) {
         if (fvarSub.IsSharp()) {
             UnSharpenSubset(&fvarSub);

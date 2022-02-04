@@ -137,7 +137,7 @@ FaceSurface::Initialize(FaceSurface const  & vtxSurface,
         }
         _combinedTag.Combine(fvarSub.GetTag());
 
-        _matchesVertex &= fvarSub.MatchesShapeOfSuperset(vtxSub);
+        _matchesVertex &= fvarSub.ShapeMatchesSuperset(vtxSub);
 
         fvarIndices += vtxTop.GetNumFaceVertices();
     }

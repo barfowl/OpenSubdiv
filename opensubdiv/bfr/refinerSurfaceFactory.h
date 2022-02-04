@@ -82,8 +82,8 @@ protected:
     int getFaceFVarValueIndices(Index faceIndex, int fvarID,
                                 Index fvarValueIndices[]) const;
 
-    int populateFaceVertexTopology(Index faceIndex, int faceVertex,
-                                   VertexTopology * vertexTopology) const;
+    int populateFaceVertexDescriptor(Index faceIndex, int faceVertex,
+                                     VertexDescriptor * vertexDescriptor) const;
 
     int getFaceVertexIncidentFaceVertexIndices(
                             Index faceIndex, int faceVertex,

@@ -82,7 +82,7 @@ public:
     //   Main public methods to distinquish surface and topology:
     bool IsRegular() const { return _isRegular; }
 
-    bool MatchesVertexTopology() const { return _matchesVertex; }
+    bool TopologyMatchesVertex() const { return _matchesVertex; }
 
     //  Debugging:
     void print(bool printVerts = false) const;

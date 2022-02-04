@@ -68,12 +68,12 @@ struct FaceVertexSubset {
     void SetSharp(bool on)    { _tag._infSharpVerts = on; }
 
     //  Methods comparing to a superset (not any arbitrary subset):
-    bool MatchesExtentOfSuperset(FaceVertexSubset const & sup) const {
+    bool ExtentMatchesSuperset(FaceVertexSubset const & sup) const {
         return (GetNumFaces() == sup.GetNumFaces()) &&
                (IsBoundary()  == sup.IsBoundary());
     }
-    bool MatchesShapeOfSuperset(FaceVertexSubset const & sup) const {
-        return MatchesExtentOfSuperset(sup) &&
+    bool ShapeMatchesSuperset(FaceVertexSubset const & sup) const {
+        return ExtentMatchesSuperset(sup) &&
                (IsSharp() == sup.IsSharp());
     }
 

@@ -24,14 +24,17 @@
 
 #include "subclassOfSurfaceFactory.h"
 
-#include <opensubdiv/bfr/vertexTopology.h>
+#include <opensubdiv/bfr/vertexDescriptor.h>
 #include <opensubdiv/far/topologyLevel.h>
+
+#include <limits>
 
 
 using OpenSubdiv::Far::TopologyRefiner;
 using OpenSubdiv::Far::TopologyLevel;
 
 using OpenSubdiv::Bfr::Index;
+using OpenSubdiv::Bfr::LocalIndex;
 using OpenSubdiv::Bfr::ConstIndexArray;
 using OpenSubdiv::Bfr::ConstLocalIndexArray;
 
@@ -100,11 +103,11 @@ SubclassOfSurfaceFactory::getFaceFVarValueIndices(Index baseFace,
 //  Specifying the topology around a face-vertex:
 //
 int
-SubclassOfSurfaceFactory::populateFaceVertexTopology(
+SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
         Index baseFace, int cornerVertex,
-        OpenSubdiv::Bfr::VertexTopology * vertexTopology) const {
+        OpenSubdiv::Bfr::VertexDescriptor * vertexDescriptor) const {
 
-    OpenSubdiv::Bfr::VertexTopology & vt = *vertexTopology;
+    OpenSubdiv::Bfr::VertexDescriptor & vd = *vertexDescriptor;
 
     TopologyLevel const & baseLevel = _mesh.GetLevel(0);
 
@@ -122,21 +125,30 @@ SubclassOfSurfaceFactory::populateFaceVertexTopology(
     //
     //  Initialize, assign and finalize the vertex topology:
     //
-    vt.Initialize(numFaces);
+    //  Note the Far::TopologyRefiner cannot contain vertices or faces whose
+    //  valence or size exceeds the max of LocalIndex, so the assert()s here
+    //  are a reminder for those mesh representations that may need to check
+    //  and take action in such cases.
+    //
+    assert(numFaces <= std::numeric_limits<LocalIndex>::max());
+
+    vd.Initialize((LocalIndex) numFaces);
     {
         //  Assign ordering and boundary status:
-        vt.SetManifold(isManifold);
-        vt.SetBoundary(baseLevel.IsVertexBoundary(vIndex));
+        vd.SetManifold(isManifold);
+        vd.SetBoundary(baseLevel.IsVertexBoundary(vIndex));
 
         //  Assign sizes of incident faces:
-        vt.SetCommonFaceSize(false);
+        vd.SetCommonFaceSize(false);
         for (int i = 0; i < numFaces; ++i) {
-            vt.SetIncidentFaceSize(i,
-                        baseLevel.GetFaceVertices(vFaces[i]).size());
+            int incFaceSize = baseLevel.GetFaceVertices(vFaces[i]).size();
+            assert(incFaceSize <= std::numeric_limits<LocalIndex>::max());
+
+            vd.SetIncidentFaceSize(i, (LocalIndex) incFaceSize);
         }
 
         //  Assign vertex sharpness:
-        vt.SetVertexSharpness(baseLevel.GetVertexSharpness(vIndex));
+        vd.SetVertexSharpness(baseLevel.GetVertexSharpness(vIndex));
 
         //  Assign edge sharpness:
         if (isManifold) {
@@ -144,7 +156,7 @@ SubclassOfSurfaceFactory::populateFaceVertexTopology(
             ConstIndexArray vEdges = baseLevel.GetVertexEdges(vIndex);
 
             for (int i = 0; i < vEdges.size(); ++i) {
-                vt.SetManifoldEdgeSharpness(i,
+                vd.SetManifoldEdgeSharpness(i,
                         baseLevel.GetEdgeSharpness(vEdges[i]));
             }
         } else {
@@ -158,13 +170,13 @@ SubclassOfSurfaceFactory::populateFaceVertexTopology(
                 int eLeading  = vInFace[i];
                 int eTrailing = (eLeading ? eLeading : fEdges.size()) - 1;
 
-                vt.SetIncidentFaceEdgeSharpness(i,
+                vd.SetIncidentFaceEdgeSharpness(i,
                         baseLevel.GetEdgeSharpness(fEdges[eLeading]),
                         baseLevel.GetEdgeSharpness(fEdges[eTrailing]));
             }
         }
     }
-    vt.Finalize();
+    vd.Finalize();
 
     //
     //  Return the index of the base face in the set of incident faces
@@ -232,10 +244,15 @@ SubclassOfSurfaceFactory::getFaceVertexPointIndices(
                 baseLevel.GetFaceVertices(vFaces[i]) :
                 baseLevel.GetFaceFVarValues(vFaces[i], vtxOrFVarChannel);
 
+        //  The location of this vertex in each incident face is known,
+        //  rotate the order as we copy face-vertices to make it first:
         int srcStart = vInFace[i];
         int srcCount = srcIndices.size();
-        for (int j = 0; j < srcCount; ++j) {
-            indices[nIndices++] = srcIndices[(srcStart + j) % srcCount];
+        for (int j = srcStart; j < srcCount; ++j) {
+            indices[nIndices++] = srcIndices[j];
+        }
+        for (int j = 0; j < srcStart; ++j) {
+            indices[nIndices++] = srcIndices[j];
         }
     }
     return nIndices;

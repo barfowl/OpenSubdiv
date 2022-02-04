@@ -82,8 +82,8 @@ protected:
     int getFaceFVarValueIndices(Index faceIndex, int fvarID,
                                 Index fvarValueIndices[]) const;
 
-    int populateFaceVertexTopology(Index faceIndex, int faceVertex,
-                                   OpenSubdiv::Bfr::VertexTopology * vt) const;
+    int populateFaceVertexDescriptor(Index faceIndex, int faceVertex,
+                            OpenSubdiv::Bfr::VertexDescriptor * vd) const;
 
     int getFaceVertexIncidentFaceVertexIndices(
                             Index faceIndex, int faceVertex,

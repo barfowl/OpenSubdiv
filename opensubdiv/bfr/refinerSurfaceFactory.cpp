@@ -23,7 +23,7 @@
 //
 
 #include "../bfr/refinerSurfaceFactory.h"
-#include "../bfr/vertexTopology.h"
+#include "../bfr/vertexDescriptor.h"
 #include "../far/topologyRefiner.h"
 
 #include <map>
@@ -99,11 +99,11 @@ RefinerSurfaceFactoryBase::getFaceFVarValueIndices(Index baseFace,
 //  Specifying the topology around a face-vertex:
 //
 int
-RefinerSurfaceFactoryBase::populateFaceVertexTopology(
+RefinerSurfaceFactoryBase::populateFaceVertexDescriptor(
         Index baseFace, int cornerVertex,
-        VertexTopology * vertexTopology) const {
+        VertexDescriptor * vertexDescriptor) const {
 
-    VertexTopology & vt = *vertexTopology;
+    VertexDescriptor & vd = *vertexDescriptor;
 
     //
     //  Identify the vertex index for the specified corner of the face
@@ -122,27 +122,31 @@ RefinerSurfaceFactoryBase::populateFaceVertexTopology(
     //
     //  Initialize, assign and finalize the vertex topology:
     //
-    vt.Initialize(nFaces);
+    //  Note there is no need to check valence or faces sizes with the
+    //  max of LocalIndex here and below -- the construction of the
+    //  TopologyRefiner excludes such cases, so simply casting is safe.
+    //
+    vd.Initialize((LocalIndex) nFaces);
     {
         //  Assign ordering and boundary status:
-        vt.SetManifold(isManifold);
-        vt.SetBoundary(vTag._boundary);
+        vd.SetManifold(isManifold);
+        vd.SetBoundary(vTag._boundary);
 
         //  Assign face sizes -- variable/explicit or constant/implicit:
         if (vTag._incidIrregFace) {
-            vt.SetCommonFaceSize(false);
+            vd.SetCommonFaceSize(false);
 
             for (int i = 0; i < nFaces; ++i) {
-                vt.SetIncidentFaceSize(i,
-                        baseLevel.getFaceVertices(vFaces[i]).size());
+                int incFaceSize = baseLevel.getFaceVertices(vFaces[i]).size();
+                vd.SetIncidentFaceSize(i, (LocalIndex) incFaceSize);
             }
         } else {
-            vt.SetCommonFaceSize(true);
+            vd.SetCommonFaceSize(true);
         }
 
         //  Assign vertex sharpness:
         if (vTag._semiSharp || vTag._infSharp) {
-            vt.SetVertexSharpness(
+            vd.SetVertexSharpness(
                     baseLevel.getVertexSharpness(vIndex));
         }
 
@@ -153,7 +157,7 @@ RefinerSurfaceFactoryBase::populateFaceVertexTopology(
                 ConstIndexArray vEdges = baseLevel.getVertexEdges(vIndex);
 
                 for (int i = 0; i < vEdges.size(); ++i) {
-                    vt.SetManifoldEdgeSharpness(i,
+                    vd.SetManifoldEdgeSharpness(i,
                             baseLevel.getEdgeSharpness(vEdges[i]));
                 }
             } else {
@@ -167,14 +171,14 @@ RefinerSurfaceFactoryBase::populateFaceVertexTopology(
                     int eLeading  = vInFace[i];
                     int eTrailing = (eLeading ? eLeading : fEdges.size()) - 1;
 
-                    vt.SetIncidentFaceEdgeSharpness(i,
+                    vd.SetIncidentFaceEdgeSharpness(i,
                             baseLevel.getEdgeSharpness(fEdges[eLeading]),
                             baseLevel.getEdgeSharpness(fEdges[eTrailing]));
                 }
             }
         }
     }
-    vt.Finalize();
+    vd.Finalize();
 
     //
     //  Return the index of the base face around the vertex:
@@ -223,8 +227,11 @@ RefinerSurfaceFactoryBase::getFaceVertexPointIndices(
 
         int srcStart = vInFace[i];
         int srcCount = srcIndices.size();
-        for (int j = 0; j < srcCount; ++j) {
-            indices[nIndices++] = srcIndices[(srcStart + j) % srcCount];
+        for (int j = srcStart; j < srcCount; ++j) {
+            indices[nIndices++] = srcIndices[j];
+        }
+        for (int j = 0; j < srcStart; ++j) {
+            indices[nIndices++] = srcIndices[j];
         }
     }
     return nIndices;

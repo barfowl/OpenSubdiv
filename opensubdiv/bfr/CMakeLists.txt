@@ -39,7 +39,7 @@ set(SOURCE_FILES
      surfaceFactory.cpp
      surfaceFactoryCache.cpp
      tessellation.cpp
-     vertexTopology.cpp
+     vertexDescriptor.cpp
 )
 
 set(PRIVATE_HEADER_FILES
@@ -61,7 +61,7 @@ set(PUBLIC_HEADER_FILES
      surfaceFactoryCache.h
      tessellation.h
      types.h
-     vertexTopology.h
+     vertexDescriptor.h
 )
 
 set(DOXY_HEADER_FILES ${PUBLIC_HEADER_FILES})

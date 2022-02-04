@@ -161,7 +161,7 @@ printf("    __numLinearPatches     = %6d\n", __numLinearPatches);
 printf("    __numExpRegularPatches = %6d\n", __numExpRegularPatches);
 printf("    __numRegularPatches    = %6d\n", __numRegularPatches);
 printf("    __numIrregularPatches  = %6d\n", __numIrregularPatches);
-if (!_limitOptions.DisableTopologyCaching()) {
+if (!_limitOptions.DisableTopologyCache()) {
 printf("\n");
 printf("    __numIrregularUncached = %6d\n", __numIrregularUncached);
 printf("    __numIrregularInCache  = %6d\n", __numIrregularInCache);
@@ -243,36 +243,36 @@ SurfaceFactory::faceHasLimitNeighborhood(Index faceIndex) const {
 
     CornerIndexBuffer cFaceVertIndices;
 
-    FaceVertex       cTop;
-    VertexTopology & vTop = cTop.GetVertexTopology();
+    FaceVertex         faceVtx;
+    VertexDescriptor & vtxDesc = faceVtx.GetVertexDescriptor();
 
     int faceSize = getFaceSize(faceIndex);
     for (int i = 0; i < faceSize; ++i) {
-        //  Have the subclass load VertexTopology and finalize:
-        cTop.Initialize(faceSize, _regFaceSize);
+        //  Have the subclass load VertexDescriptor and finalize:
+        faceVtx.Initialize(faceSize, _regFaceSize);
 
-        int faceInRing = populateFaceVertexTopology(faceIndex, i, &vTop);
+        int faceInRing = populateFaceVertexDescriptor(faceIndex, i, &vtxDesc);
         if (faceInRing < 0) return false;
 
-        cTop.Finalize(faceInRing);
+        faceVtx.Finalize(faceInRing);
 
         //  Inspect the tag to reject cases with no limit surface:
-        VertexTag cTag = cTop.GetTag();
+        VertexTag faceVtxTag = faceVtx.GetTag();
 
         if (_rejectSmoothBoundariesForLimit) {
-            if (cTag.IsUnOrdered()) {
+            if (faceVtxTag.IsUnOrdered()) {
                 //  Need to load face-vertices, connect faces and inspect...
-                cFaceVertIndices.SetSize(cTop.GetNumFaceVertices());
+                cFaceVertIndices.SetSize(faceVtx.GetNumFaceVertices());
 
                 if (getFaceVertexIncidentFaceVertexIndices(
                         faceIndex, i, cFaceVertIndices) < 0) return false;
 
-                cTop.ConnectUnOrderedFaces(cFaceVertIndices);
+                faceVtx.ConnectUnOrderedFaces(cFaceVertIndices);
             }
-            if (cTag.HasNonSharpBoundary()) return false;
+            if (faceVtxTag.HasNonSharpBoundary()) return false;
         }
         if (_rejectIrregularFacesForLimit) {
-            if (cTag.HasIrregularFaceSizes()) return false;
+            if (faceVtxTag.HasIrregularFaceSizes()) return false;
         }
     }
     return true;
@@ -285,7 +285,7 @@ SurfaceFactory::FaceHasLimitSurface(Index faceIndex) const {
         return false;
     }
     if (_testNeighborhoodForLimit) {
-        if (!isFaceTopologyRegular(faceIndex, 0)) {
+        if (!isFaceNeighborhoodRegular(faceIndex, -1, 0)) {
             return faceHasLimitNeighborhood(faceIndex);
         }
     }
@@ -633,7 +633,7 @@ namespace {
 //
 void
 SurfaceFactory::assignLinearSurface(Surface * surfacePtr,
-        Index faceIndex, int fvarIndex) const {
+        Index faceIndex, int vtxOrFVarID) const {
 
     Surface & surface = *surfacePtr;
 
@@ -657,10 +657,10 @@ SurfaceFactory::assignLinearSurface(Surface * surfacePtr,
     surface._controlPoints.SetSize(faceSize);
 
     int count = 0;
-    if (fvarIndex < 0) {
+    if (vtxOrFVarID < 0) {
         count = getFaceVertexIndices(faceIndex, &surface._controlPoints[0]);
     } else {
-        count = getFaceFVarValueIndices(faceIndex, fvarIndex,
+        count = getFaceFVarValueIndices(faceIndex, vtxOrFVarID,
                                         &surface._controlPoints[0]);
     }
     //  If subclass fails to get indices, Surface will remain invalid
@@ -940,17 +940,17 @@ SurfaceFactory::gatherFaceNeighborhoodTopology(Index faceIndex,
     faceTopology.Initialize(N);
 
     for (int i = 0; i < N; ++i) {
-        FaceVertex     & cornerTop = faceTopology.GetTopology(i);
-        VertexTopology & vertexTop = cornerTop.GetVertexTopology();
+        FaceVertex       & faceVtx = faceTopology.GetTopology(i);
+        VertexDescriptor & vtxDesc = faceVtx.GetVertexDescriptor();
 
-        cornerTop.Initialize(N, _regFaceSize);
+        faceVtx.Initialize(N, _regFaceSize);
 
         //  Subclass returning negative here indicates unsupported features
         //  or some other kind of failure:
-        int faceInRing = populateFaceVertexTopology(faceIndex, i, &vertexTop);
+        int faceInRing = populateFaceVertexDescriptor(faceIndex, i, &vtxDesc);
         if (faceInRing < 0) return false;
 
-        cornerTop.Finalize(faceInRing);
+        faceVtx.Finalize(faceInRing);
     }
 
     faceTopology.Finalize();
@@ -984,6 +984,16 @@ SurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
         nIndices += numFaceVerts;
     }
     return nIndices;
+}
+
+bool
+SurfaceFactory::isFaceNeighborhoodRegular(Index faceIndex,
+                                          int   vtxOrFVarID,
+                                          Index indices[]) const {
+    return (vtxOrFVarID < 0) ?
+        getFaceNeighborhoodVertexIndicesIfRegular(faceIndex, indices) :
+        getFaceNeighborhoodFVarValueIndicesIfRegular(faceIndex, vtxOrFVarID,
+                                                     indices);
 }
 
 //
@@ -1101,7 +1111,8 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
     IndexBuffer  vtxIndices(16);
     FaceSurface  vtxSurfDesc;
 
-    bool vtxIsExplicitlyRegular = isFaceTopologyRegular(faceIndex, vtxIndices);
+    bool vtxIsExplicitlyRegular =
+                isFaceNeighborhoodRegular(faceIndex, -1, vtxIndices);
     if (vtxIsExplicitlyRegular) {
         if (_testNeighborhoodForLimit && !anyNonLinear) {
             return true;
@@ -1184,7 +1195,7 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
 
             //  First check if trivially regular, quickly assign and continue:
             bool fvarIsExplicitlyRegular = vtxIsExplicitlyRegular &&
-                    isFaceTopologyRegular(faceIndex, fvarID, fvIndices);
+                    isFaceNeighborhoodRegular(faceIndex, fvarID, fvIndices);
 
             if (fvarIsExplicitlyRegular) {
                 assignRegularSurface(&fvarSurf, fvIndices);
@@ -1210,7 +1221,7 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
             FaceSurface fvarSurfDesc(vtxSurfDesc, fvIndices);
 
             //  Detect matching or other topology and dispatch accordingly:
-            if (fvarSurfDesc.MatchesVertexTopology() && vtxSurfIsValid) {
+            if (fvarSurfDesc.TopologyMatchesVertex() && vtxSurfIsValid) {
                 copyNonLinearSurface(&fvarSurf, *surfaces.GetVertexSurface(),
                                      fvarSurfDesc);
             } else if (fvarSurfDesc.IsRegular()) {
@@ -1334,14 +1345,14 @@ SurfaceFactory::CreateFaceVaryingSurface(Index faceIndex, int fvID) const {
 //  Optional virtual topology queries:
 //
 bool
-SurfaceFactory::isFaceTopologyRegular(Index, Index[]) const {
-
+SurfaceFactory::getFaceNeighborhoodVertexIndicesIfRegular(
+                        Index, Index[]) const {
     return false;
 }
 
 bool
-SurfaceFactory::isFaceTopologyRegular(Index, int, Index[]) const {
-
+SurfaceFactory::getFaceNeighborhoodFVarValueIndicesIfRegular(
+                        Index, int, Index[]) const {
     return false;
 }
 

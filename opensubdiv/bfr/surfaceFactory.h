@@ -40,10 +40,10 @@ namespace Bfr {
 //
 //  Forward declarations of public and internal classes used by factories:
 //
-class SurfaceFactoryCache;
-class VertexTopology;
+class VertexDescriptor;
 class FaceTopology;
 class FaceSurface;
+class SurfaceFactoryCache;
 
 //
 //  SurfaceFactory is an abstract class that provides both the interface
@@ -277,10 +277,10 @@ protected:
     //  require information for a particular corner vertex of the face.
     //
     //  The topology around the face-vertex is described by populating a
-    //  given instance of a simple VertexTopology class -- which fully
+    //  given instance of a simple VertexDescriptor class -- which fully
     //  describes the face-vertex, it incident faces and any sharpness
     //  assigned at or around the face.vertex.  (See the comments with
-    //  the VertexTopology definition for more details.)
+    //  the VertexDescriptor definition for more details.)
     //
     //  Two associated methods are required to identify indices for the
     //  incident faces around a face-vertex (getFaceVertexIncidentFace...).
@@ -289,7 +289,7 @@ protected:
     //  other gathers indices for a particular set of face-varying values
     //  assigned to them (their FVarValueIndices).  Both methods expect
     //  the incident faces to be ordered consistent with the specification
-    //  in VertexTopology, and all indices for all incident faces are
+    //  in VertexDescriptor, and all indices for all incident faces are
     //  required.
     //
     //  The order of indices assigned to each face for these methods must
@@ -302,9 +302,9 @@ protected:
     //  differs from the vertex topology, and both the face-varying and
     //  vertex indices are ordered this way for consistency.
     //
-    virtual int populateFaceVertexTopology(
+    virtual int populateFaceVertexDescriptor(
                     Index faceIndex, int faceVertex,
-                    VertexTopology * vertexTopology) const = 0;
+                    VertexDescriptor * vertexDescriptor) const = 0;
 
     virtual int getFaceVertexIncidentFaceVertexIndices(
                     Index faceIndex, int faceVertex,
@@ -318,12 +318,30 @@ protected:
     //
     //  Optional virtual topology methods for advanced use:
     //
-    virtual bool isFaceTopologyRegular(Index faceIndex,
-                                       Index vertexIndices[]) const;
+    //  For cases when a mesh can quickly determine if the neighborhood
+    //  around a faces is purely regular, these methods can be used to
+    //  quickly identify the control point indices for the corresponding
+    //  regular patch. In doing so, the more tedious topological assembly
+    //  requiring information about each face-vertex can be avoided.
+    //
+    //  The indices returned must be ordered according to the regular
+    //  patch type corresponding to the subdivision scheme of the mesh.
+    //  Boundary vertices are allowed and indicated by an Index of -1.
+    //
+    //  The face-varying version will only be called if the vertex version
+    //  is purely regular, in which case, the face-varying topology is
+    //  expected to be similar.
+    //
+    //  Note that these methods may pass 0 for the index array[] in some
+    //  cases -- in which case only the return value should be provided.
+    //
+    virtual bool getFaceNeighborhoodVertexIndicesIfRegular(
+                    Index faceIndex,
+                    Index vertexIndices[]) const;
 
-    virtual bool isFaceTopologyRegular(Index faceIndex,
-                                       int   fvarID,
-                                       Index fvarValueIndices[]) const;
+    virtual bool getFaceNeighborhoodFVarValueIndicesIfRegular(
+                    Index faceIndex,
+                    int fvarID, Index fvarValueIndices[]) const;
 
 protected:
     //
@@ -367,6 +385,10 @@ private:
     bool populateNonLinearSurfaces(Index faceIndex, SurfaceSet * sSetPtr) const;
 
     //  Methods to assemble topology and corresponding indices for entire face:
+    bool isFaceNeighborhoodRegular(Index faceIndex,
+                                   int   vtxOrFVarID,
+                                   Index indices[]) const;
+
     bool initFaceNeighborhoodTopology(Index          faceIndex,
                                       FaceTopology * topology) const;
 
@@ -375,13 +397,13 @@ private:
 
     int gatherFaceNeighborhoodIndices(Index                faceIndex,
                                       FaceTopology const & topology,
-                                      int                  fvarID,
+                                      int                  vtxOrFVarID,
                                       Index                indices[]) const;
 
     //  Methods to assemble Surfaces for the different categories of patch:
     void assignLinearSurface(Surface * surfacePtr,
                              Index     faceIndex,
-                             int       fvarID) const;
+                             int       vtxOrFVarID) const;
 
     void assignRegularSurface(Surface     * surfacePtr,
                               Index const   surfacePatchPoints[]) const;

@@ -50,7 +50,7 @@ namespace Bfr {
 //
 //  The primary component of FaceTopology is an array of instances of
 //  the FaceVertex class (one for each vertex of the face), which is a
-//  lightweight wrapper around the public VertexTopology class that is
+//  lightweight wrapper around the public VertexDescriptor class that is
 //  populated by subclasses of SurfaceFactory.
 //
 //  FaceTopology is one of three key components in defining the limit

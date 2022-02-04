@@ -28,7 +28,7 @@
 #include "../version.h"
 
 #include "../bfr/vertexTag.h"
-#include "../bfr/vertexTopology.h"
+#include "../bfr/vertexDescriptor.h"
 #include "../bfr/faceVertexSubset.h"
 #include "../sdc/crease.h"
 
@@ -40,15 +40,15 @@ namespace Bfr {
 //
 //  The FaceVertex class is the primary internal class for gathering all
 //  topological information around the corner of a face.  As such, it
-//  wraps an instance of the public VertexTopology class populated by the
-//  Factory subclasses.  It extends an instance of VertexTopology with
+//  wraps an instance of the public VertexDescriptor class populated by the
+//  Factory subclasses.  It extends an instance of VertexDescriptor with
 //  additional topological information and methods to make it more widely
 //  available and useful to internal classes.
 //
 //  One fundamental extension of FaceVertex is that it includes the
 //  location of the face in the ring of incident faces around the vertex.
-//  VertexTopology alone simple specifies the neighborhood of the vertex,
-//  but the FaceVertex provides context relative to the face for
+//  VertexDescriptor alone simple specifies the neighborhood of the
+//  vertex, but the FaceVertex provides context relative to the face for
 //  which all of this information is being gathered.
 //
 //  Several instances of FaceVertex (one for each corner of a face)
@@ -63,11 +63,11 @@ public:
     ~FaceVertex() { }
 
     //  Methods supporting construction/initialization (subclass required
-    //  to populate VertexTopology between Initialize and Finalize):
+    //  to populate VertexDescriptor between Initialize and Finalize):
     void Initialize(int faceSize, int regFaceSize);
     void Finalize(int faceInVertex);
 
-    VertexTopology & GetVertexTopology() { return _vTop; }
+    VertexDescriptor & GetVertexDescriptor() { return _vTop; }
 
     void ConnectUnOrderedFaces(Index const faceVertexIndices[]);
 
@@ -203,8 +203,8 @@ private:
     typedef Vtr::internal::StackBuffer<short,16,true> ShortBuffer;
 
     //  Private members:
-    VertexTopology _vTop;
-    VertexTag      _tag;
+    VertexDescriptor _vTop;
+    VertexTag        _tag;
 
     short _faceInRing;
     short _commonFaceSize;
