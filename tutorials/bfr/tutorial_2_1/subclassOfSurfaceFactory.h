@@ -79,7 +79,7 @@ protected:
 
     int getFaceVertexIndices(   Index faceIndex,
                                 Index vertexIndices[]) const;
-    int getFaceFVarValueIndices(Index faceIndex, int fvarID,
+    int getFaceFVarValueIndices(Index faceIndex, FVarID fvarID,
                                 Index fvarValueIndices[]) const;
 
     int populateFaceVertexDescriptor(Index faceIndex, int faceVertex,
@@ -89,7 +89,7 @@ protected:
                             Index faceIndex, int faceVertex,
                             Index vertexIndices[]) const;
     int getFaceVertexIncidentFaceFVarValueIndices(
-                            Index faceIndex, int faceVertex, int fvarID,
+                            Index faceIndex, int faceVertex, FVarID fvarID,
                             Index fvarValueIndices[]) const;
 
 protected:
@@ -109,6 +109,8 @@ private:
     //  Internal supporting method to gather indices -- either vertex or
     //  face-varying -- since both are accessed similarly:
     //
+    int getFaceVaryingChannel(FVarID fvarID) const;
+
     int getFaceVertexPointIndices(Index faceIndex, int faceVertex,
                                   Index indices[], int vtxOrFVarChannel) const;
 

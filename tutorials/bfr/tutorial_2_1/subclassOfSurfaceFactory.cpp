@@ -56,6 +56,18 @@ SubclassOfSurfaceFactory::~SubclassOfSurfaceFactory() {
 
 }
 
+
+//
+//  Inline support method to provide a valid face-varying channel from
+//  a given face-varying ID/handle used in the factory interface:
+//
+inline int
+SubclassOfSurfaceFactory::getFaceVaryingChannel(FVarID fvarID) const {
+
+    return ((0 <= fvarID) && (fvarID < GetNumFVarChannels())) ? fvarID : -1;
+}
+
+
 //
 //  Virtual methods supporting Surface creation and population:
 //
@@ -88,12 +100,13 @@ SubclassOfSurfaceFactory::getFaceVertexIndices(Index baseFace,
 
 int
 SubclassOfSurfaceFactory::getFaceFVarValueIndices(Index baseFace,
-        int fvarID, Index indices[]) const {
+        FVarID fvarID, Index indices[]) const {
 
-    if (fvarID >= GetNumFVarChannels()) return 0;
+    int fvarChannel = getFaceVaryingChannel(fvarID);
+    if (fvarChannel < 0) return 0;
 
     ConstIndexArray fvarValues =
-            _mesh.GetLevel(0).GetFaceFVarValues(baseFace, fvarID);
+            _mesh.GetLevel(0).GetFaceFVarValues(baseFace, fvarChannel);
 
     std::memcpy(indices, &fvarValues[0], fvarValues.size() * sizeof(Index));
     return fvarValues.size();
@@ -218,12 +231,13 @@ SubclassOfSurfaceFactory::getFaceVertexIncidentFaceVertexIndices(
 
 int
 SubclassOfSurfaceFactory::getFaceVertexIncidentFaceFVarValueIndices(
-        Index baseFace, int cornerVertex,
-        int fvarID, Index indices[]) const {
+        Index baseFace, int corner,
+        FVarID fvarID, Index indices[]) const {
 
-    if (fvarID >= GetNumFVarChannels()) return 0;
+    int fvarChannel = getFaceVaryingChannel(fvarID);
+    if (fvarChannel < 0) return 0;
 
-    return getFaceVertexPointIndices(baseFace, cornerVertex, indices, fvarID);
+    return getFaceVertexPointIndices(baseFace, corner, indices, fvarChannel);
 }
 
 int

@@ -76,7 +76,8 @@ public:
     Surface  * varSurf;
     Surface  * fvarSurfs;
     Surface ** fvarSurfPtrs;
-    int const  * fvarIDs;
+
+    FVarID const * fvarIDs;
 
     void InitializeSurfaces() const {
         if (vtxSurf) vtxSurf->reinitialize();
@@ -97,9 +98,15 @@ public:
     bool      HasVaryingSurface() const { return (varSurf != 0); }
     Surface * GetVaryingSurface() const { return varSurf; }
 
-    bool      HasFVarSurfaces()       const { return numFVarSurfs > 0; }
-    int       GetNumFVarSurfaces()    const { return numFVarSurfs; }
-    int       GetFVarSurfaceID(int i) const { return fvarIDs ? fvarIDs[i] : i; }
+    bool      HasFVarSurfaces()    const { return numFVarSurfs > 0; }
+    int       GetNumFVarSurfaces() const { return numFVarSurfs; }
+
+    FVarID GetFVarSurfaceID(int i) const {
+        //  Be sure to return explicit default if only one unspecified:
+        return fvarIDs ? fvarIDs[i] :
+                        ((numFVarSurfs > 1) ? FVarID(i) : FVarID());
+    }
+
     Surface * GetFVarSurface(int i)   const {
         //  Note that FVar Surfaces may be specified either as an
         //  array of Surfaces or an array of Surface pointers:
@@ -285,7 +292,7 @@ SurfaceFactory::FaceHasLimitSurface(Index faceIndex) const {
         return false;
     }
     if (_testNeighborhoodForLimit) {
-        if (!isFaceNeighborhoodRegular(faceIndex, -1, 0)) {
+        if (!isFaceNeighborhoodRegular(faceIndex, 0, 0)) {
             return faceHasLimitNeighborhood(faceIndex);
         }
     }
@@ -633,7 +640,7 @@ namespace {
 //
 void
 SurfaceFactory::assignLinearSurface(Surface * surfacePtr,
-        Index faceIndex, int vtxOrFVarID) const {
+        Index faceIndex, FVarID const * fvarPtrOrVtx) const {
 
     Surface & surface = *surfacePtr;
 
@@ -657,10 +664,10 @@ SurfaceFactory::assignLinearSurface(Surface * surfacePtr,
     surface._controlPoints.SetSize(faceSize);
 
     int count = 0;
-    if (vtxOrFVarID < 0) {
+    if (fvarPtrOrVtx == 0) {
         count = getFaceVertexIndices(faceIndex, &surface._controlPoints[0]);
     } else {
-        count = getFaceFVarValueIndices(faceIndex, vtxOrFVarID,
+        count = getFaceFVarValueIndices(faceIndex, *fvarPtrOrVtx,
                                         &surface._controlPoints[0]);
     }
     //  If subclass fails to get indices, Surface will remain invalid
@@ -922,7 +929,7 @@ SurfaceFactory::initFaceNeighborhoodTopology(Index faceIndex,
     typedef Vtr::internal::StackBuffer<Index,72,true> IndexBuffer;
 
     IndexBuffer indices(topology._numFaceVertsTotal);
-    if (gatherFaceNeighborhoodIndices(faceIndex, topology, -1, indices) < 0) {
+    if (gatherFaceNeighborhoodIndices(faceIndex, topology, 0, indices) < 0) {
         return false;
     }
     topology.ResolveUnOrderedCorners(indices);
@@ -961,7 +968,7 @@ SurfaceFactory::gatherFaceNeighborhoodTopology(Index faceIndex,
 int
 SurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
         FaceTopology const & faceTopology,
-        int                  vtxOrFVarID,
+        FVarID       const * fvarPtrOrVtx,
         Index                controlIndices[]) const {
 
     int faceSize = faceTopology.GetFaceSize();
@@ -970,11 +977,11 @@ SurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
     int     nIndices = 0;
 
     for (int i = 0; i < faceSize; ++i) {
-        int numFaceVerts = (vtxOrFVarID < 0) ?
+        int numFaceVerts = (fvarPtrOrVtx == 0) ?
                 getFaceVertexIncidentFaceVertexIndices(faceIndex, i,
                         indices) :
                 getFaceVertexIncidentFaceFVarValueIndices(faceIndex, i,
-                        vtxOrFVarID, indices);
+                        *fvarPtrOrVtx, indices);
 
         if (numFaceVerts != faceTopology.GetNumFaceVertices(i)) {
             return -1;
@@ -987,12 +994,12 @@ SurfaceFactory::gatherFaceNeighborhoodIndices(Index faceIndex,
 }
 
 bool
-SurfaceFactory::isFaceNeighborhoodRegular(Index faceIndex,
-                                          int   vtxOrFVarID,
-                                          Index indices[]) const {
-    return (vtxOrFVarID < 0) ?
+SurfaceFactory::isFaceNeighborhoodRegular(Index          faceIndex,
+                                          FVarID const * fvarPtrOrVtx,
+                                          Index          indices[]) const {
+    return (fvarPtrOrVtx == 0) ?
         getFaceNeighborhoodVertexIndicesIfRegular(faceIndex, indices) :
-        getFaceNeighborhoodFVarValueIndicesIfRegular(faceIndex, vtxOrFVarID,
+        getFaceNeighborhoodFVarValueIndicesIfRegular(faceIndex, *fvarPtrOrVtx,
                                                      indices);
 }
 
@@ -1058,18 +1065,18 @@ SurfaceFactory::populateLinearSurfaces(Index faceIndex,
     SurfaceSet & surfaces = *surfaceSetPtr;
 
     if (surfaces.HasVaryingSurface()) {
-        assignLinearSurface(surfaces.GetVaryingSurface(), faceIndex, -1);
+        assignLinearSurface(surfaces.GetVaryingSurface(), faceIndex, 0);
     }
 
     if (_linearScheme && surfaces.HasVertexSurface()) {
-        assignLinearSurface(surfaces.GetVertexSurface(), faceIndex, -1);
+        assignLinearSurface(surfaces.GetVertexSurface(), faceIndex, 0);
     }
 
     if (_linearFVarInterp) {
         int numFVarSurfaces = surfaces.GetNumFVarSurfaces();
         for (int i = 0; i < numFVarSurfaces; ++i) {
-            assignLinearSurface(surfaces.GetFVarSurface(i), faceIndex,
-                                surfaces.GetFVarSurfaceID(i));
+            FVarID fvarID = surfaces.GetFVarSurfaceID(i);
+            assignLinearSurface(surfaces.GetFVarSurface(i), faceIndex, &fvarID);
         }
     }
     return true;
@@ -1112,7 +1119,7 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
     FaceSurface  vtxSurfDesc;
 
     bool vtxIsExplicitlyRegular =
-                isFaceNeighborhoodRegular(faceIndex, -1, vtxIndices);
+                isFaceNeighborhoodRegular(faceIndex, 0, vtxIndices);
     if (vtxIsExplicitlyRegular) {
         if (_testNeighborhoodForLimit && !anyNonLinear) {
             return true;
@@ -1131,7 +1138,7 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
         }
         if (vtxIsNonLinear || faceTopology.HasUnOrderedCorners()) {
             vtxIndices.SetSize(faceTopology._numFaceVertsTotal);
-            if (gatherFaceNeighborhoodIndices(faceIndex, faceTopology, -1,
+            if (gatherFaceNeighborhoodIndices(faceIndex, faceTopology, 0,
                         vtxIndices) < 0) {
                 return false;
             }
@@ -1191,11 +1198,11 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
         int numFVarSurfaces = surfaces.GetNumFVarSurfaces();
         for (int i = 0; i < numFVarSurfaces; ++i) {
             Surface & fvarSurf = *surfaces.GetFVarSurface(i);
-            int       fvarID   =  surfaces.GetFVarSurfaceID(i);
+            FVarID    fvarID   =  surfaces.GetFVarSurfaceID(i);
 
             //  First check if trivially regular, quickly assign and continue:
             bool fvarIsExplicitlyRegular = vtxIsExplicitlyRegular &&
-                    isFaceNeighborhoodRegular(faceIndex, fvarID, fvIndices);
+                    isFaceNeighborhoodRegular(faceIndex, &fvarID, fvIndices);
 
             if (fvarIsExplicitlyRegular) {
                 assignRegularSurface(&fvarSurf, fvIndices);
@@ -1214,7 +1221,7 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
 
             //  Gather FVar indices and initialize FVar surface descriptor:
             if (gatherFaceNeighborhoodIndices(faceIndex, faceTopology,
-                    fvarID, fvIndices) < 0) {
+                    &fvarID, fvIndices) < 0) {
                 return false;
             }
 
@@ -1271,7 +1278,7 @@ SurfaceFactory::InitVaryingSurface(Index faceIndex,
 
 bool
 SurfaceFactory::InitFaceVaryingSurface(Index faceIndex,
-        Surface * fvarSurface, int fvarID) const {
+        Surface * fvarSurface, FVarID fvarID) const {
 
     assert(fvarSurface);
     //
@@ -1289,11 +1296,11 @@ SurfaceFactory::InitFaceVaryingSurface(Index faceIndex,
 
 bool
 SurfaceFactory::InitSurfaces(Index faceIndex,
-        Surface * vtxSurface,
-        Surface * varSurface,
-        Surface * fvarSurfaces,
-        int       fvarCount,
-        int const fvarIDs[]) const {
+        Surface    * vtxSurface,
+        Surface    * varSurface,
+        Surface    * fvarSurfaces,
+        int          fvarCount,
+        FVarID const fvarIDs[]) const {
 
     SurfaceSet surfaces;
 
@@ -1331,11 +1338,11 @@ SurfaceFactory::CreateVaryingSurface(Index faceIndex) const {
 }
 
 Surface *
-SurfaceFactory::CreateFaceVaryingSurface(Index faceIndex, int fvID) const {
+SurfaceFactory::CreateFaceVaryingSurface(Index faceIndex, FVarID fvarID) const {
 
     Surface * s = new Surface();
 
-    if (InitFaceVaryingSurface(faceIndex, s, fvID)) return s;
+    if (InitFaceVaryingSurface(faceIndex, s, fvarID)) return s;
 
     delete s;
     return 0;
@@ -1352,7 +1359,7 @@ SurfaceFactory::getFaceNeighborhoodVertexIndicesIfRegular(
 
 bool
 SurfaceFactory::getFaceNeighborhoodFVarValueIndicesIfRegular(
-                        Index, int, Index[]) const {
+                        Index, FVarID, Index[]) const {
     return false;
 }
 

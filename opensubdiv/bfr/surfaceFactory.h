@@ -207,14 +207,17 @@ public:
     //  First, methods to create or initialize instances of a Surface for
     //  eac of the three different data interpolation types:
     //
+    typedef int FVarID;
+
     Surface * CreateVertexSurface(     Index faceIndex) const;
     Surface * CreateVaryingSurface(    Index faceIndex) const;
-    Surface * CreateFaceVaryingSurface(Index faceIndex, int fvarID = 0) const;
+    Surface * CreateFaceVaryingSurface(Index faceIndex,
+                                       FVarID fvarID = FVarID()) const;
 
     bool InitVertexSurface(     Index faceIndex, Surface * vtxSurface) const;
     bool InitVaryingSurface(    Index faceIndex, Surface * varSurface) const;
     bool InitFaceVaryingSurface(Index faceIndex, Surface * fvarSurface,
-                                                 int       fvarID = 0) const;
+                                FVarID fvarID = FVarID()) const;
 
     //
     //  Second, a single general method to initialize several Surfaces at
@@ -227,11 +230,11 @@ public:
     //
     //  WIP - overloads and alternative interfaces are under consideration
     //
-    bool InitSurfaces(Index faceIndex, Surface * vtxSurface,
-                                       Surface * varSurface,
-                                       Surface * fvarSurfaces,
-                                       int       fvarCount,
-                                       int const fvarIDs[] = 0) const;
+    bool InitSurfaces(Index faceIndex, Surface    * vtxSurface,
+                                       Surface    * varSurface,
+                                       Surface    * fvarSurfaces,
+                                       int          fvarCount,
+                                       FVarID const fvarIDs[] = 0) const;
 
 protected:
     //
@@ -267,7 +270,7 @@ protected:
                     Index vertexIndices[]) const = 0;
 
     virtual int getFaceFVarValueIndices(Index faceIndex,
-                    int fvarID, Index fvarValueIndices[]) const = 0;
+                    FVarID fvarID, Index fvarValueIndices[]) const = 0;
 
     //  Identifying topology and associated indices for the complete set
     //  of incident faces surrounding a face-vertex (corner) of a face --
@@ -312,7 +315,7 @@ protected:
 
     virtual int getFaceVertexIncidentFaceFVarValueIndices(
                     Index faceIndex, int faceVertex,
-                    int fvarID, Index fvarValueIndices[]) const = 0;
+                    FVarID fvarID, Index fvarValueIndices[]) const = 0;
 
 protected:
     //
@@ -341,7 +344,7 @@ protected:
 
     virtual bool getFaceNeighborhoodFVarValueIndicesIfRegular(
                     Index faceIndex,
-                    int fvarID, Index fvarValueIndices[]) const;
+                    FVarID fvarID, Index fvarValueIndices[]) const;
 
 protected:
     //
@@ -385,9 +388,9 @@ private:
     bool populateNonLinearSurfaces(Index faceIndex, SurfaceSet * sSetPtr) const;
 
     //  Methods to assemble topology and corresponding indices for entire face:
-    bool isFaceNeighborhoodRegular(Index faceIndex,
-                                   int   vtxOrFVarID,
-                                   Index indices[]) const;
+    bool isFaceNeighborhoodRegular(Index          faceIndex,
+                                   FVarID const * fvarPtrOrVtx,
+                                   Index          indices[]) const;
 
     bool initFaceNeighborhoodTopology(Index          faceIndex,
                                       FaceTopology * topology) const;
@@ -397,13 +400,13 @@ private:
 
     int gatherFaceNeighborhoodIndices(Index                faceIndex,
                                       FaceTopology const & topology,
-                                      int                  vtxOrFVarID,
+                                      FVarID       const * fvarPtrOrVtx,
                                       Index                indices[]) const;
 
     //  Methods to assemble Surfaces for the different categories of patch:
-    void assignLinearSurface(Surface * surfacePtr,
-                             Index     faceIndex,
-                             int       vtxOrFVarID) const;
+    void assignLinearSurface(Surface *      surfacePtr,
+                             Index          faceIndex,
+                             FVarID const * fvarPtrOrVtx) const;
 
     void assignRegularSurface(Surface     * surfacePtr,
                               Index const   surfacePatchPoints[]) const;
