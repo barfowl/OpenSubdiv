@@ -83,7 +83,7 @@ public:
                  Options options = Options());
     Tessellation(Parameterization p, int numRates, int const rates[],
                  Options options = Options());
-    ~Tessellation();
+    ~Tessellation() { }
 
     //
     //  General queries:
@@ -142,15 +142,26 @@ public:
                                                int const interiorIndices[]);
 
 private:
-    //  Private methods:
-    void initialize(Parameterization p, int nRates, int const rates[],
-                    Options options);
+    //  Private initialization methods:
+    void initialize(Parameterization, int nRates, int const rates[], Options);
+    int  initializeRates(int nRates, int const rates[]);
+
+    void triInitializeInventory(int sumOfEdgeRates);
+    void quadInitializeInventory(int sumOfEdgeRates);
+    void qpolyInitializeInventory(int sumOfEdgeRates);
 
 private:
     //  Private members:
     Parameterization _param;
 
-    unsigned int _isUniform : 1;
+    unsigned int _triangulate : 1;
+    unsigned int _isUniform   : 1;
+
+    //  WIP - these bits likely to be replaced with an enum
+    unsigned int _singleFace    : 1;
+    unsigned int _segmentedFace : 1;
+    unsigned int _triangleFan   : 1;
+    unsigned int _splitQuad     : 1;
 
     int* _outerRates;
     int  _innerRates[2];
@@ -169,12 +180,6 @@ Tessellation::GetCornerCoord(int corner, Coord coords[]) const {
     _param.GetCornerCoord(corner, &coords[0][0], &coords[0][1]);
     return 1;
 }
-
-inline int
-Tessellation::GetCornerCoords(Coord coords[]) const {
-    return _param.GetCornerCoords(coords);
-}
-
 
 } // end namespace Bfr
 
