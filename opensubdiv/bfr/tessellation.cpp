@@ -33,78 +33,157 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 
 //
-//  Tessellation patterns are composed of concentric rings of Coords and
-//  Facets -- beginning with the boundary and moving inward.  Each ring
-//  of Coords or Facets can be further divided into subsets corresponding
-//  to each edge of the face.
+//  Tessellation patterns are composed of concentric rings of points (or
+//  "coords" for coordinates) and facets -- beginning with the boundary
+//  and moving inward.  Each ring of can be further divided into subsets
+//  corresponding elements associated with each edge.
 //
-//  Common and trivial utilities for assembling Coords and Facets:
+//  While the nature of these rings is similar for the different types of
+//  parameterizations, each is different enough to have warranted its own
+//  implementation at a high level.  Lower level utilities for assembling
+//  the rings from strips of coords and facets are common to all.
+//
+//  WIP - consider moving some of these implementation details to separate
+//        internal header and source files
 //
 namespace {
     //
-    //  Trivial functions for assembling sequences of Coords:
+    //  Simple classes to provide array-like interfaces to the primitive
+    //  data buffers passed by clients.  Both parametric coordinate pairs
+    //  and the integer tuples (size 3 or 4) representing a single tile
+    //  or facet of a tessellation are represented here.
+    //
+    //  These array interfaces are "minimal" in the sense that they provide
+    //  only what is needed here -- rather than trying to support a wider
+    //  range of use where full generality is needed (e.g. the arithmetic
+    //  operators are limited to those used here for advancing through and
+    //  assigning elements of the array, so the full range required for
+    //  arbitrary address arithmetic are not included).
+    //
+
+    //  Floating point pair and its array for points of a tessellation:
+    template <typename REAL>
+    class Coord2 {
+    public:
+        Coord2(REAL * data) : _uv(data) { }
+        Coord2() : _uv(0) { }
+        ~Coord2() { }
+
+        void Set(REAL a, REAL b) { _uv[0] = a, _uv[1] = b; }
+
+        REAL const & operator[](int index) const { return _uv[index]; }
+        REAL       & operator[](int index)       { return _uv[index]; }
+
+    private:
+        REAL * _uv;
+    };
+
+    template <typename REAL>
+    class Coord2Array {
+    public:
+        Coord2Array(REAL * data) : _data(data) { }
+        Coord2Array() : _data(0) { }
+        ~Coord2Array() { }
+
+        Coord2Array operator+(int offset) {
+            return Coord2Array(_data + offset*2);
+        }
+
+        Coord2<REAL> operator[](int i) { return Coord2<REAL>(_data + i*2); }
+
+    private:
+        REAL * _data;
+    };
+
+    //  Integer tuple and its array for facets of a tessellation:
+    class IntTuple {
+    public:
+        IntTuple(int * indices, int n) : _T(indices), _size(n) { }
+        IntTuple() : _T(0), _size(4) { }
+        ~IntTuple() { }
+
+        void Set(int a, int b, int c) {
+            //  Assign size-1 to ensure last index of 4-tuple is set
+            _T[_size - 1] = -1;
+            _T[0] = a, _T[1] = b, _T[2] = c;
+        }
+        void Set(int a, int b, int c, int d) {
+            _T[0] = a, _T[1] = b, _T[2] = c, _T[3] = d;
+        }
+
+        int const & operator[](int index) const { return _T[index]; }
+        int       & operator[](int index)       { return _T[index]; }
+
+    private:
+        int * _T;
+        int   _size;
+    };
+
+    class IntTupleArray {
+    public:
+        IntTupleArray(int * data, int width) : _data(data), _width(width) { }
+        ~IntTupleArray() { }
+
+        IntTupleArray operator+(int offset) {
+            return IntTupleArray(_data + offset*_width, _width);
+        }
+
+        IntTuple operator[](int i) {return IntTuple(_data + i*_width, _width);}
+
+    private:
+        IntTupleArray() : _data(0), _width(4) { }
+
+        int * _data;
+        int   _width;
+    };
+    typedef IntTupleArray FacetArray;
+
+    //
+    //  Functions for assembling simple, common sets of coordinate pairs:
+    //
+    template <typename REAL>
+    inline int
+    appendUIsoLine(Coord2Array<REAL> P, int n, REAL u, REAL v, REAL dv) {
+
+        for (int i = 0; i < n; ++i, v += dv) {
+            P[i].Set(u,v);
+        }
+        return n;
+    }
+
+    template <typename REAL>
+    inline int
+    appendVIsoLine(Coord2Array<REAL> P, int n, REAL u, REAL v, REAL du) {
+
+        for (int i = 0; i < n; ++i, u += du) {
+            P[i].Set(u,v);
+        }
+        return n;
+    }
+
+    template <typename REAL>
+    inline int
+    appendUVLine(Coord2Array<REAL> P, int n, REAL u, REAL v, REAL du, REAL dv) {
+
+        for (int i = 0; i < n; ++i, u += du, v += dv) {
+            P[i].Set(u,v);
+        }
+        return n;
+    }
+
+    //
+    //  Functions for assembling simple, common sets of facets:
     //
     inline int
-    getUIsoLineCoords(int nCoords, float u, float v, float dv, Coord coords[]) {
-
-        for (int i = 0; i < nCoords; ++i, v += dv) {
-            coords[i] = Coord(u,v);
-        }
-        return nCoords;
-    }
-    inline int
-    getVIsoLineCoords(int nCoords, float u, float v, float du, Coord coords[]) {
-
-        for (int i = 0; i < nCoords; ++i, u += du) {
-            coords[i] = Coord(u,v);
-        }
-        return nCoords;
-    }
-    inline int
-    getUVLineCoords(int nCoords,
-                    float u, float v, float du, float dv, Coord coords[]) {
-
-        for (int i = 0; i < nCoords; ++i, u += du, v += dv) {
-            coords[i] = Coord(u,v);
-        }
-        return nCoords;
-    }
-
-    //
-    //  Trivial functions for assembling simple Facets:
-    //
-    inline int
-    setSimpleFacet(Facet facets[], int size, int startIndex = 0) {
-
-        if (size == 3) {
-            facets[0].Set(startIndex, startIndex+1, startIndex+2);
-        } else {
-            facets[0].Set(startIndex, startIndex+1, startIndex+2, startIndex+3);
-        }
-        return 1;
-    }
-
-    inline int
-    setTriFanFacets(Facet facets[], int size, int startIndex = 0) {
-
-        for (int i = 1; i <= size; ++i) {
-            facets[i-1].Set(startIndex + (i - 1),
-                            startIndex + ((i < size) ? i : 0),
-                            startIndex + size);
-        }
-        return size;
-    }
-
-    inline int
-    setTriFacet(Facet facets[], int t0, int t1, int t2) {
+    appendTri(FacetArray facets, int t0, int t1, int t2) {
 
         facets[0].Set(t0, t1, t2);
         return 1;
     }
 
     inline int
-    setQuadFacets(Facet facets[], int q0, int q1, int q2, int q3,
-                  int triangulationSign = 0) {
+    appendQuad(FacetArray facets, int q0, int q1, int q2, int q3,
+                  int triangulationSign) {
 
         if (triangulationSign == 0) {
             // no triangulation
@@ -121,6 +200,17 @@ namespace {
             facets[1].Set(q0, q1, q3);
             return 2;
         }
+    }
+
+    inline int
+    appendTriFan(FacetArray facets, int size, int startIndex) {
+
+        for (int i = 1; i <= size; ++i) {
+            facets[i-1].Set(startIndex + (i - 1),
+                            startIndex + ((i < size) ? i : 0),
+                            startIndex + size);
+        }
+        return size;
     }
 
     //
@@ -153,9 +243,9 @@ namespace {
     public:
         FacetStrip() { std::memset(this, 0, sizeof(*this)); }
 
-        int connectUniformQuads(  Facet facets[]) const;
-        int connectUniformTris(   Facet facets[]) const;
-        int connectNonUniformTris(Facet facets[]) const;
+        int connectUniformQuads(    FacetArray facets) const;
+        int connectUniformTris(     FacetArray facets) const;
+        int connectNonUniformFacets(FacetArray facets) const;
 
     public:
         //  Members defining how the strip should be used:
@@ -163,10 +253,10 @@ namespace {
         unsigned int quadTriangulate : 1;
         unsigned int innerReversed   : 1;
 
-        unsigned int excludeFirst  : 1;
-        unsigned int connectFirst  : 1;
-        unsigned int connectLast   : 1;
-        unsigned int includeLast   : 1;
+        unsigned int excludeFirstFace : 1;
+        unsigned int splitFirstFace   : 1;
+        unsigned int splitLastFace    : 1;
+        unsigned int includeLastFace  : 1;
 
         //  Members defining the dimensions of the strip -- the number
         //  of "inner edges" potentially excludes the two edges that
@@ -183,7 +273,7 @@ namespace {
     };
 
     int
-    FacetStrip::connectUniformQuads(Facet facets[]) const {
+    FacetStrip::connectUniformQuads(FacetArray facets) const {
 
         assert(quadTopology);
         assert(innerEdges == (outerEdges - 2));
@@ -209,10 +299,10 @@ namespace {
         int out0 = outerFirst;
         int in0  = innerFirst;
 
-        if (connectFirst) {
-            nFacets += setTriFacet(facets + nFacets, out0, out0 + 1, in0);
-        } else if (!excludeFirst) {
-            nFacets += setQuadFacets(facets + nFacets,
+        if (splitFirstFace) {
+            nFacets += appendTri(facets + nFacets, out0, out0 + 1, in0);
+        } else if (!excludeFirstFace) {
+            nFacets += appendQuad(facets + nFacets,
                              out0, out0 + 1, in0, outerPrev, quadTriangulate);
         }
 
@@ -230,7 +320,7 @@ namespace {
                 int outJ = outI + 1;
                 int inJ  = (i < innerEdges) ? (inI + inDelta) : innerLast;
 
-                nFacets += setQuadFacets(facets + nFacets,
+                nFacets += appendQuad(facets + nFacets,
                                  outI, outJ, inJ, inI, triSign);
             }
         }
@@ -239,21 +329,21 @@ namespace {
         int outN = outerLast;
         int inN  = innerLast;
 
-        if (connectLast) {
-            nFacets += setTriFacet(facets + nFacets, outI, outN, inN);
-        } else if (includeLast) {
-            nFacets += setQuadFacets(facets + nFacets,
+        if (splitLastFace) {
+            nFacets += appendTri(facets + nFacets, outI, outN, inN);
+        } else if (includeLastFace) {
+            nFacets += appendQuad(facets + nFacets,
                              outI, outN, outN+1, inN, -quadTriangulate);
         }
         return nFacets;
     }
 
     int
-    FacetStrip::connectUniformTris(Facet facets[]) const {
+    FacetStrip::connectUniformTris(FacetArray facets) const {
 
         assert(!quadTopology);
-        assert(!excludeFirst);
-        assert(!includeLast);
+        assert(!excludeFirstFace);
+        assert(!includeLastFace);
         assert(!innerReversed);
         //
         //  Assign the set of tris for the "sawtooth" strip with N outer
@@ -283,15 +373,15 @@ namespace {
         int out0 = outerFirst;
         int in0  = innerFirst;
 
-        if (connectFirst) {
-            nFacets += setTriFacet(facets + nFacets, out0, out0+1, in0);
+        if (splitFirstFace) {
+            nFacets += appendTri(facets + nFacets, out0, out0+1, in0);
         } else {
-            nFacets += setTriFacet(facets + nFacets, out0, out0+1, outerPrev);
-            nFacets += setTriFacet(facets + nFacets, in0, outerPrev, out0+1);
+            nFacets += appendTri(facets + nFacets, out0, out0+1,outerPrev);
+            nFacets += appendTri(facets + nFacets, in0, outerPrev, out0+1);
         }
 
         //  Assign the next tri -- preceding the pairs for the inner edges:
-        nFacets += setTriFacet(facets + nFacets, out0 + 1, out0 + 2, in0);
+        nFacets += appendTri(facets + nFacets, out0 + 1, out0 + 2, in0);
 
         //  Assign pair of tris below each inner edge (last is special):
         int outI = outerFirst + 2;
@@ -302,8 +392,8 @@ namespace {
                 int outJ = outI + 1;
                 int inJ  = (i < innerEdges) ? (inI  + 1) : innerLast;
 
-                nFacets += setTriFacet(facets + nFacets, inJ, inI, outI);
-                nFacets += setTriFacet(facets + nFacets, outI, outJ, inJ);
+                nFacets += appendTri(facets + nFacets, inJ, inI, outI);
+                nFacets += appendTri(facets + nFacets, outI, outJ, inJ);
             }
         }
 
@@ -311,14 +401,14 @@ namespace {
         int outN = outerLast;
         int inN  = innerLast;
 
-        if (connectLast) {
-            nFacets += setTriFacet(facets + nFacets, outI, outN, inN);
+        if (splitLastFace) {
+            nFacets += appendTri(facets + nFacets, outI, outN, inN);
         }
         return nFacets;
     }
 
     int
-    FacetStrip::connectNonUniformTris(Facet facets[]) const {
+    FacetStrip::connectNonUniformFacets(FacetArray facets) const {
 
         //
         //  General case:
@@ -332,11 +422,28 @@ namespace {
         //  over the integer range [0 .. M*N] where M and N are the resolution
         //  (number of edges) of the inner and outer rings respectively.
         //
+        //  Note that the current implementation expects the faces at the
+        //  ends to be "split", i.e. a diagonal edge created between the
+        //  first/last points of the inner and outer rings at both ends.
+        //  It is possible that this will later be relaxed (allowing an
+        //  unsplit quad at the corner to be generated), as is currently
+        //  the case with uniform strips.  In the meantime, the caller is
+        //  expected to explicitly request split corners to make it clear
+        //  where they need to adapt later.
+        //
+        assert(splitFirstFace && splitLastFace);
+
         int M = innerEdges + (quadTopology ? 2 : 3);
         int N = outerEdges;
 
         int dtOuter = M;
         int dtInner = N;
+
+        int dtMin = std::min(dtInner, dtOuter);
+        int dtMax = std::max(dtInner, dtOuter);
+
+        //  Use larger slope when M ~= N to accomodate tri insertion:
+        int dtSlopeMax = ((dtMax / 2) < dtMin) ? (dtMin - 1) : (dtMax / 2);
 
         int tOuterLast   = dtOuter *  N;
         int tOuterMiddle = tOuterLast / 2;
@@ -344,6 +451,7 @@ namespace {
         int tInnerOffset = 0;
         int tInnerLast   = dtInner * (M - 1);
 
+        //  If tris, adjust parametric range for the inner edges:
         if (!quadTopology) {
             tInnerOffset = dtInner / 2;
             tInnerLast  += tInnerOffset - dtInner;
@@ -381,69 +489,134 @@ namespace {
         //  Walk forward through the strip, identifying each successive quad
         //  and choosing the most "vertical" edge to use to triangulate it:
         //
-        //  WIP - eventually want to preserve quads here when reasonable
+        bool keepQuads = quadTopology && !quadTriangulate;
+
+        int nFacetsExpected = 0;
+        if (keepQuads) {
+            nFacetsExpected = std::max(innerEdges, outerEdges);
+            //  Include a symmetric center triangle if any side is odd:
+            if ((nFacetsExpected & 1) == 0) {
+                nFacetsExpected += (innerEdges & 1) || (outerEdges & 1);
+            }
+        } else {
+            nFacetsExpected = innerEdges + outerEdges;
+        }
+
+        //  These help maintain symmetry where possible:
+        int  nFacetsLeading = nFacetsExpected / 2;
+        int  nFacetsMiddle  = nFacetsExpected & 1;
+
+        int  middleFacet = nFacetsMiddle ? nFacetsLeading : -1;
+        bool middleQuad  = keepQuads && (outerEdges & 1) && (innerEdges & 1);
+
         //
-        int nFacetsExpected = innerEdges + outerEdges;
-        int nFacets = 0;
+        //  Assign all expected facets sequentially -- advancing references
+        //  to the inner and outer edges according to what is used for each:
+        //
+        for (int facetIndex = 0; facetIndex < nFacetsExpected; ++facetIndex) {
+            bool generateTriOuter = false;
+            bool generateTriInner = false;
+            bool generateQuad     = false;
 
-        while (nFacets < nFacetsExpected) {
-            bool generateTriFromOuterEdge = false;
-            bool generateTriFromInnerEdge = false;
-
-            if (tInner1 == tInner0) {
-                generateTriFromOuterEdge = true;
-            } else if (tOuter1 == tOuter0) {
-                generateTriFromInnerEdge = true;
-            } else {
-                //  Choose the edge spanning the shortest parametric interval
-                //  (when equal, choose relative to midpoint for symmetry):
-                int dtInner0ToOuter1 = tOuter1 - tInner0;
-                int dtOuter0ToInner1 = tInner1 - tOuter0;
-
-                bool useInner0ToOuter1 = (dtInner0ToOuter1 == dtOuter0ToInner1)
-                                       ? (tOuter1 > tOuterMiddle)
-                                       : (dtInner0ToOuter1 < dtOuter0ToInner1);
-                if (useInner0ToOuter1) {
-                    generateTriFromOuterEdge = true;
+            //
+            //  Detect simple cases first:  the symmetric center face or 
+            //  triangles in the absence of an inner or outer edge:
+            //
+            if (facetIndex == middleFacet) {
+                if (middleQuad) {
+                    generateQuad = true;
+                } else if (outerEdges & 1) {
+                    generateTriOuter = true;
                 } else {
-                    generateTriFromInnerEdge = true;
+                    generateTriInner = true;
+                }
+            } else if (tInner1 == tInner0) {
+                generateTriOuter = true;
+            } else if (tOuter1 == tOuter0) {
+                generateTriInner = true;
+            } else {
+                //
+                //  For the general case, assign a quad if specified and
+                //  possible.  Otherwise continue with a triangle.  Both
+                //  situations avoid poor aspect and preserve symmetry:
+                //
+                if (keepQuads) {
+                    //  If face is after the midpoint, use the same kind of
+                    //  face as its mirrored counterpart. Otherwise, reject a
+                    //  quad trying to cross the midpoint.  Finally, test the
+                    //  slope of the "vertical" edge of the potential quad:
+                    if (facetIndex >= nFacetsLeading) {
+                        int mirroredFacetIndex = nFacetsLeading - 1 -
+                                (facetIndex - nFacetsLeading - nFacetsMiddle);
+
+                        generateQuad = (facets[mirroredFacetIndex][3] >= 0);
+                    } else if ((tInner1 > tOuterMiddle) ||
+                               (tOuter1 > tOuterMiddle)) {
+                        generateQuad = false;
+                    } else {
+                        int dtSlope1 = std::abs(tOuter1 - tInner1);
+
+                        generateQuad = (dtSlope1 <= dtSlopeMax);
+                    }
+                }
+
+                if (!generateQuad) {
+                    //  Can't detect symmetric triangles as inner or outer as
+                    //  easily as quads, but the test is relatively simple --
+                    //  choose the diagonal spanning the shortest interval
+                    //  (when equal, choose relative to midpoint for symmetry):
+                    int dtDiagToOuter1 = tOuter1 - tInner0;
+                    int dtDiagToInner1 = tInner1 - tOuter0;
+
+                    bool useOuterEdge = (dtDiagToOuter1 == dtDiagToInner1)
+                                      ? (tOuter1 > tOuterMiddle)
+                                      : (dtDiagToOuter1 < dtDiagToInner1);
+                    if (useOuterEdge) {
+                        generateTriOuter = true;
+                    } else {
+                        generateTriInner = true;
+                    }
                 }
             }
 
-            if (generateTriFromOuterEdge) {
-                nFacets += setTriFacet(facets + nFacets,
-                                       cOuter0, cOuter1, cInner0);
+            //  Assign the face as determined above:
+            if (generateTriOuter) {
+                facets[facetIndex].Set(cOuter0, cOuter1, cInner0);
+            } else if (generateTriInner) {
+                facets[facetIndex].Set(cInner1, cInner0, cOuter0);
+            } else {
+                facets[facetIndex].Set(cOuter0, cOuter1, cInner1, cInner0);
+            }
 
-                //  Advance to the next point of the next outer edge:
+            //  Advance to the next point of the next outer edge:
+            bool advanceOuter = generateTriOuter || generateQuad;
+            if (advanceOuter) {
                 tOuter0 = tOuter1;
                 cOuter0 = cOuter1;
 
                 tOuter1 += dtOuter;
-                if (tOuter1 < tOuterLast) {
-                    cOuter1 = cOuter1 + 1;
-                } else {
+                cOuter1  = cOuter1 + 1;
+                if (tOuter1 >= tOuterLast) {
                     tOuter1 = tOuterLast;
                     cOuter1 = outerLast;
                 }
             }
-            if (generateTriFromInnerEdge) {
-                nFacets += setTriFacet(facets + nFacets,
-                                       cInner1, cInner0, cOuter0);
 
-                //  Advance to the next point of the next inner edge:
+            //  Advance to the next point of the next inner edge:
+            bool advanceInner = generateTriInner || generateQuad;
+            if (advanceInner) {
                 tInner0 = tInner1;
                 cInner0 = cInner1;
 
                 tInner1 += dtInner;
-                if (tInner1 < tInnerLast) {
-                    cInner1  = cInner1 + dInner;
-                } else {
+                cInner1  = cInner1 + dInner;
+                if (tInner1 >= tInnerLast) {
                     tInner1  = tInnerLast;
                     cInner1  = innerLast;
                 }
             }
         }
-        return nFacets;
+        return nFacetsExpected;
     }
 }
 
@@ -470,38 +643,47 @@ public:
     static int CountInteriorCoords(int edgeRes);
     static int CountInteriorCoords(int const uvRes[]);
 
-    //  Public methods for identifying and assigning coords:
-    static int GetCornerCoords(Coord coords[]);
-    static int GetBoundaryEdgeCoords(int edge, int edgeRes,
-                                     bool v0, bool v1, Coord coords[]);
-    static int GetBoundaryCoords(int const edgeRates[], Coord coords[]);
-    static int GetInteriorCoords(int const uvRes[2], Coord coords[]);
+    //  Public methods for identifying and assigning coordinate pairs:
+    template <typename REAL>
+    static int GetEdgeCoords(int edge, int edgeRes,
+                             Coord2Array<REAL> coords);
+    template <typename REAL>
+    static int GetBoundaryCoords(int const edgeRates[],
+                                 Coord2Array<REAL> coords);
+    template <typename REAL>
+    static int GetInteriorCoords(int const uvRes[2],
+                                 Coord2Array<REAL> coords);
 
     //  Public methods for identifying and assigning facets:
-    static int GetUniformFacets(int uniformRes,
-                                Facet facets[], bool triangulate);
-    static int GetSegmentedFacets(int const uvRes[],
-                                  Facet facets[], bool triangulate);
+    static int GetUniformFacets(int edgeRes, bool triangulate,
+                                FacetArray facets);
+    static int GetSegmentedFacets(int const uvRes[], bool triangulate,
+                                  FacetArray facets);
     static int GetNonUniformFacets(int const outerRes[], int const innerRes[],
-                                   int nBoundaryEdges,
-                                   Facet facets[], bool triangulate);
+                                   int nBoundaryEdges, bool triangulate,
+                                   FacetArray facets);
 private:
     //  Private methods used by those above:
     static int countUniformCoords(int edgeRes);
+    static int countNonUniformEdgeFacets(int outerRes, int innerRes);
 
-    static int getCenterCoord(Coord coords[]);
-    static int getInteriorRingCoords(int   uRes,   int   vRes,
-                                     float uStart, float vStart,
-                                     float uDelta, float vDelta,
-                                     Coord coords[]);
+    template <typename REAL>
+    static int getCenterCoord(Coord2Array<REAL> coords);
+    template <typename REAL>
+    static int getInteriorRingCoords(int  uRes,   int  vRes,
+                                     REAL uStart, REAL vStart,
+                                     REAL uDelta, REAL vDelta,
+                                     Coord2Array<REAL> coords);
 
-    static int getInteriorRingFacets(int uRes, int vRes, int indexOfFirstCoord,
-                                     Facet facets[], bool triangulate);
-    static int getBoundaryRingFacets(int const outerRes[],
-                                     int uRes, int vRes, int nBoundaryEdges,
-                                     Facet facets[], bool triangulate);
-    static int getSingleStripFacets(int uRes, int vRes, int indexOfFirstCoord,
-                                    Facet facets[], bool triangulate);
+    static int getInteriorRingFacets(int uRes, int vRes,
+                                     int indexOfFirstCoord, bool triangulate,
+                                     FacetArray facets);
+    static int getBoundaryRingFacets(int const outerRes[], int uRes, int vRes,
+                                     int nBoundaryEdges, bool triangulate,
+                                     FacetArray facets);
+    static int getSingleStripFacets(int uRes, int vRes,
+                                    int indexOfFirstCoord, bool triangulate,
+                                    FacetArray facets);
 };
 
 class tri {
@@ -512,32 +694,39 @@ public:
 
     static int CountInteriorCoords(int edgeRes);
 
-    //  Public methods for identifying and assigning coords:
-    static int GetCornerCoords(Coord coords[]);
-    static int GetBoundaryEdgeCoords(int edge, int edgeRes,
-                                     bool v0, bool v1, Coord coords[]);
-    static int GetBoundaryCoords(int const edgeRates[], Coord coords[]);
-    static int GetInteriorCoords(int edgeRes, Coord coords[]);
+    //  Public methods for identifying and assigning coordinate pairs:
+    template <typename REAL>
+    static int GetEdgeCoords(int edge, int edgeRes,
+                             Coord2Array<REAL> coords);
+    template <typename REAL>
+    static int GetBoundaryCoords(int const edgeRates[],
+                                 Coord2Array<REAL> coords);
+    template <typename REAL>
+    static int GetInteriorCoords(int edgeRes,
+                                 Coord2Array<REAL> coords);
 
     //  Public methods for identifying and assigning facets:
-    static int GetUniformFacets(int uniformRes, Facet facets[]);
+    static int GetUniformFacets(int edgeRes,
+                                FacetArray facets);
     static int GetNonUniformFacets(int const outerRes[], int innerRes,
-                                   int nBoundaryEdges, Facet facets[]);
+                                   int nBoundaryEdges,
+                                   FacetArray facets);
 private:
     //  Private methods used by those above:
     static int countUniformCoords(int edgeRes);
 
-    static int getCenterCoord(Coord coords[]);
-    static int getInteriorRingCoords(int   edgeRes,
-                                     float uStart, float vStart,
-                                     float tDelta,
-                                     Coord coords[]);
+    template <typename REAL>
+    static int getCenterCoord(Coord2Array<REAL> coords);
+    template <typename REAL>
+    static int getInteriorRingCoords(int  edgeRes,
+                                     REAL uStart, REAL vStart, REAL tDelta,
+                                     Coord2Array<REAL> coords);
 
     static int getInteriorRingFacets(int edgeRes, int indexOfFirstCoord,
-                                     Facet facets[]);
+                                     FacetArray facets);
     static int getBoundaryRingFacets(int const outerRes[], int innerRes,
                                      int nBoundaryEdges,
-                                     Facet facets[]);
+                                     FacetArray facets);
 };
 
 class qpoly {
@@ -549,44 +738,51 @@ public:
 
     static int CountInteriorCoords(int N, int edgeRes);
 
-    //  Public methods for identifying and assigning coords (note these
-    //  require a full Parameterization while others only need size N)
-    static int GetCornerCoords(Parameterization P, Coord coords[]);
-    static int GetBoundaryEdgeCoords(Parameterization P, int edge,
-                                     int edgeRes, bool incFirst, bool incLast,
-                                     Coord coords[]);
+    //  Public methods for identifying and assigning coordinate pairs (note
+    //  these require a Parameterization while others only need face size N)
+    template <typename REAL>
+    static int GetEdgeCoords(Parameterization P, int edge, int edgeRes,
+                             Coord2Array<REAL> coords);
+    template <typename REAL>
     static int GetBoundaryCoords(Parameterization P, int const edgeRates[],
-                                 Coord coords[]);
+                                 Coord2Array<REAL> coords);
+    template <typename REAL>
     static int GetInteriorCoords(Parameterization P, int edgeRes,
-                                 Coord coords[]);
+                                 Coord2Array<REAL> coords);
 
     //  Public methods for identifying and assigning facets:
-    static int GetUniformFacets(int N, int uniformRes,
-                                Facet facets[], bool triangulate);
+    static int GetUniformFacets(int N, int edgeRes, bool triangulate,
+                                FacetArray facets);
     static int GetNonUniformFacets(int N, int const outerRes[], int innerRes,
-                                   int nBoundaryEdges,
-                                   Facet facets[], bool triangulate);
+                                   int nBoundaryEdges, bool triangulate,
+                                   FacetArray facets);
 private:
     //  Private methods used by those above:
     static int countUniformCoords(int N, int edgeRes);
 
-    static int getCenterCoord(Coord coords[]);
-    static int getCenterRingCoords(Parameterization P, float tStart,
-                                   Coord coords[]);
+    template <typename REAL>
+    static int getCenterCoord(Coord2Array<REAL> coords);
+    template <typename REAL>
+    static int getCenterRingCoords(Parameterization P, REAL tStart,
+                                   Coord2Array<REAL> coords);
+    template <typename REAL>
     static int getRingEdgeCoords(Parameterization P, int edge, int edgeRes,
                                  bool incFirst, bool incLast,
-                                 float tStart, float tDelta,
-                                 Coord coords[]);
+                                 REAL tStart, REAL tDelta,
+                                 Coord2Array<REAL> coords);
+    template <typename REAL>
     static int getInteriorRingCoords(Parameterization P, int edgeRes,
-                                     float tStart, float tDelta,
-                                     Coord coords[]);
+                                     REAL tStart, REAL tDelta,
+                                     Coord2Array<REAL> coords);
 
-    static int getCenterFacets(int N, int indexOfFirstCoord, Facet facets[]);
-    static int getInteriorRingFacets(int N, int edgeRes, int indexOfFirstCoord,
-                                     Facet facets[], bool triangulate);
+    static int getCenterFacets(int N, int indexOfFirstCoord,
+                               FacetArray facets);
+    static int getInteriorRingFacets(int N, int edgeRes,
+                                     int indexOfFirstCoord, bool triangulate,
+                                     FacetArray facets);
     static int getBoundaryRingFacets(int N, int const outerRes[], int innerRes,
-                                     int nBoundaryEdges,
-                                     Facet facets[], bool triangulate);
+                                     int nBoundaryEdges, bool triangulate,
+                                     FacetArray facets);
 };
 
 //
@@ -599,12 +795,25 @@ quad::CountUniformFacets(int edgeRes, bool triangulate) {
 
 inline int
 quad::CountSegmentedFacets(int const uvRes[], bool triangulate) {
-    //  WIP - may extend this later to account for outer rates...
+
+    //  WIP - may extend later to handle different opposing outer rates
     assert((uvRes[0] == 1) || (uvRes[1] == 1));
     return (uvRes[0] * uvRes[1]) << triangulate;
 }
 
-inline int
+int
+quad::countNonUniformEdgeFacets(int outerRes, int innerRes) {
+
+    int nFacets = std::max(outerRes, (innerRes - 2));
+
+    //  If the lesser is odd, a triangle will be added in the middle:
+    if ((nFacets & 1) == 0) {
+        nFacets += (outerRes & 1) || (innerRes & 1);
+    }
+    return nFacets;
+}
+
+int
 quad::CountNonUniformFacets(int const outerRes[], int const innerRes[],
                             bool triangulate) {
 
@@ -616,23 +825,33 @@ quad::CountNonUniformFacets(int const outerRes[], int const innerRes[],
     int innerUEdges = uRes - 2;
     int innerVEdges = vRes - 2;
 
-    int nInterior = (innerUEdges * innerVEdges) << triangulate;
+    int nInterior = innerUEdges * innerVEdges;
+
+    //  If triangulating, things are much simpler:
+    if (triangulate) {
+        int nFacets = nInterior * 2;
+
+        nFacets += innerUEdges + outerRes[0];
+        nFacets += innerVEdges + outerRes[1];
+        nFacets += innerUEdges + outerRes[2];
+        nFacets += innerVEdges + outerRes[3];
+        return nFacets;
+    }
 
     //
     //  Accumulate boundary facets for each edge based on uniformity...
     //
     //  A uniform edge contributes a quad for each inner edge, plus one
     //  facet for the leading corner (quad if uniform, tri if not) and a
-    //  tri for the trailing corner if it is not uniform.
-    //
-    //  A non-uniform edge contributes a tri for each of the inner edges
-    //  and one for each of the outer edges.
+    //  tri for the trailing corner if it is not uniform.  A non-uniform
+    //  edge contributes quads and tris based on the larger of the inner
+    //  and outer resolutions.
     //
     bool uniformEdges[4];
-    uniformEdges[0] = (outerRes[0] == uRes) && !triangulate;
-    uniformEdges[1] = (outerRes[1] == vRes) && !triangulate;
-    uniformEdges[2] = (outerRes[2] == uRes) && !triangulate;
-    uniformEdges[3] = (outerRes[3] == vRes) && !triangulate;
+    uniformEdges[0] = (outerRes[0] == uRes);
+    uniformEdges[1] = (outerRes[1] == vRes);
+    uniformEdges[2] = (outerRes[2] == uRes);
+    uniformEdges[3] = (outerRes[3] == vRes);
 
     bool uniformCorners[4];
     uniformCorners[0] = (uniformEdges[0] && uniformEdges[3]);
@@ -642,13 +861,13 @@ quad::CountNonUniformFacets(int const outerRes[], int const innerRes[],
 
     int nBoundary = 0;
     nBoundary += uniformEdges[0] ? (innerUEdges + 1 + !uniformCorners[1]) :
-                                   (innerUEdges + outerRes[0]);
+                 countNonUniformEdgeFacets(outerRes[0], uRes);
     nBoundary += uniformEdges[1] ? (innerVEdges + 1 + !uniformCorners[2]) :
-                                   (innerVEdges + outerRes[1]);
+                 countNonUniformEdgeFacets(outerRes[1], vRes);
     nBoundary += uniformEdges[2] ? (innerUEdges + 1 + !uniformCorners[3]) :
-                                   (innerUEdges + outerRes[2]);
+                 countNonUniformEdgeFacets(outerRes[2], uRes);
     nBoundary += uniformEdges[3] ? (innerVEdges + 1 + !uniformCorners[0]) :
-                                   (innerVEdges + outerRes[3]);
+                 countNonUniformEdgeFacets(outerRes[3], vRes);
     return nInterior + nBoundary;
 }
 
@@ -658,8 +877,8 @@ quad::countUniformCoords(int edgeRes) {
 }
 
 inline int
-quad::CountInteriorCoords(int uniformRes) {
-    return (uniformRes - 1) * (uniformRes - 1);
+quad::CountInteriorCoords(int edgeRes) {
+    return (edgeRes - 1) * (edgeRes - 1);
 }
 
 inline int
@@ -667,92 +886,86 @@ quad::CountInteriorCoords(int const uvRes[]) {
     return (uvRes[0] - 1) * (uvRes[1] - 1);
 }
 
+template <typename REAL>
 inline int
-quad::getCenterCoord(Coord coords[]) {
+quad::getCenterCoord(Coord2Array<REAL> coords) {
 
-    coords[0] = Coord(0.5f, 0.5f);
+    coords[0].Set(0.5f, 0.5f);
     return 1;
 }
 
+template <typename REAL>
 int
-quad::GetCornerCoords(Coord coords[]) {
+quad::GetEdgeCoords(int edge, int edgeRes, Coord2Array<REAL> coords) {
 
-    coords[0] = Coord(0.0f, 0.0f);
-    coords[1] = Coord(0.0f, 1.0f);
-    coords[2] = Coord(1.0f, 1.0f);
-    coords[3] = Coord(1.0f, 0.0f);
-    return 4;
-}
+    REAL dt = 1.0 / (REAL)edgeRes;
 
-int
-quad::GetBoundaryEdgeCoords(int edge, int edgeRes, bool v0, bool v1,
-                            Coord coords[]) {
+    REAL t0 = dt;
+    REAL t1 = 1.0f - dt;
 
-    float dt = 1.0 / (float)edgeRes;
-
-    float t0 = v0 ? 0.0f : dt;
-    float t1 = v0 ? 1.0f : (1.0f - dt);
-
-    int nCoords = edgeRes - 1 + v0 + v1;
+    int n = edgeRes - 1;
 
     switch (edge) {
-    case 0:  return getVIsoLineCoords(nCoords, t0,   0.0f,  dt, coords);
-    case 1:  return getUIsoLineCoords(nCoords, 1.0f, t0,    dt, coords);
-    case 2:  return getVIsoLineCoords(nCoords, t1,   1.0f, -dt, coords);
-    case 3:  return getUIsoLineCoords(nCoords, 0.0f, t1,   -dt, coords);
+    case 0:  return appendVIsoLine<REAL>(coords, n, t0,   0.0f,  dt);
+    case 1:  return appendUIsoLine<REAL>(coords, n, 1.0f, t0,    dt);
+    case 2:  return appendVIsoLine<REAL>(coords, n, t1,   1.0f, -dt);
+    case 3:  return appendUIsoLine<REAL>(coords, n, 0.0f, t1,   -dt);
     }
     return 0;
 }
 
+template <typename REAL>
 int
-quad::GetBoundaryCoords(int const edgeRates[], Coord coords[]) {
+quad::GetBoundaryCoords(int const edgeRates[], Coord2Array<REAL> coords) {
 
     int nCoords = 0;
-    nCoords += getVIsoLineCoords(edgeRates[0], 0.0f, 0.0f,
-                      1.0/(float)edgeRates[0], coords + nCoords);
-    nCoords += getUIsoLineCoords(edgeRates[1], 1.0f, 0.0f,
-                      1.0/(float)edgeRates[1], coords + nCoords);
-    nCoords += getVIsoLineCoords(edgeRates[2], 1.0f, 1.0f,
-                     -1.0/(float)edgeRates[2], coords + nCoords);
-    nCoords += getUIsoLineCoords(edgeRates[3], 0.0f, 1.0f,
-                     -1.0/(float)edgeRates[3], coords + nCoords);
+    nCoords += appendVIsoLine<REAL>(coords + nCoords, edgeRates[0], 0.0f, 0.0f,
+                                        1.0f / (REAL) edgeRates[0]);
+    nCoords += appendUIsoLine<REAL>(coords + nCoords, edgeRates[1], 1.0f, 0.0f,
+                                        1.0f / (REAL) edgeRates[1]);
+    nCoords += appendVIsoLine<REAL>(coords + nCoords, edgeRates[2], 1.0f, 1.0f,
+                                       -1.0f / (REAL) edgeRates[2]);
+    nCoords += appendUIsoLine<REAL>(coords + nCoords, edgeRates[3], 0.0f, 1.0f,
+                                       -1.0f / (REAL) edgeRates[3]);
     return nCoords;
 }
 
+template <typename REAL>
 int
 quad::getInteriorRingCoords(int uRes, int vRes,
-                            float u0, float v0, float du, float dv,
-                            Coord coords[]) {
+                            REAL u0, REAL v0, REAL du, REAL dv,
+                            Coord2Array<REAL> coords) {
 
     int nCoords = 0;
     if ((uRes > 0) && (vRes > 0)) {
-        float u1 = 1.0f - u0;
-        float v1 = 1.0f - v0;
+        REAL u1 = 1.0f - u0;
+        REAL v1 = 1.0f - v0;
 
-        nCoords += getVIsoLineCoords(uRes, u0, v0,  du, coords + nCoords);
-        nCoords += getUIsoLineCoords(vRes, u1, v0,  dv, coords + nCoords);
-        nCoords += getVIsoLineCoords(uRes, u1, v1, -du, coords + nCoords);
-        nCoords += getUIsoLineCoords(vRes, u0, v1, -dv, coords + nCoords);
+        nCoords += appendVIsoLine(coords + nCoords, uRes, u0, v0, du);
+        nCoords += appendUIsoLine(coords + nCoords, vRes, u1, v0, dv);
+        nCoords += appendVIsoLine(coords + nCoords, uRes, u1, v1,-du);
+        nCoords += appendUIsoLine(coords + nCoords, vRes, u0, v1,-dv);
     } else if (uRes > 0) {
-        nCoords += getVIsoLineCoords(uRes+1, u0, v0, du, coords);
+        nCoords += appendVIsoLine(coords, uRes+1, u0, v0, du);
     } else if (vRes > 0) {
-        nCoords += getUIsoLineCoords(vRes+1, u0, v0, dv, coords);
+        nCoords += appendUIsoLine(coords, vRes+1, u0, v0, dv);
     } else {
         return getCenterCoord(coords);
     }
     return nCoords;
 }
 
-inline int
-quad::GetInteriorCoords(int const uvRes[2], Coord coords[]) {
+template <typename REAL>
+int
+quad::GetInteriorCoords(int const uvRes[2], Coord2Array<REAL> coords) {
 
     int nIntRings = std::min((uvRes[0] / 2), (uvRes[1] / 2));
     if (nIntRings == 0) return 0;
 
-    float du = 1.0 / (float)uvRes[0];
-    float dv = 1.0 / (float)uvRes[1];
-    float u  = du;
-    float v  = dv;
+    REAL du = 1.0f / (REAL) uvRes[0];
+    REAL dv = 1.0f / (REAL) uvRes[1];
+    REAL u  = du;
+    REAL v  = dv;
 
     int uRes = uvRes[0] - 2;
     int vRes = uvRes[1] - 2;
@@ -764,24 +977,24 @@ quad::GetInteriorCoords(int const uvRes[2], Coord coords[]) {
     int nCoords = 0;
     for (int i=0; i < nIntRings; ++i, uRes -= 2, vRes -= 2, u += du, v += dv) {
         nCoords += getInteriorRingCoords(uRes, vRes, u, v, du, dv,
-                                         &coords[nCoords]);
+                                         coords + nCoords);
     }
     return nCoords;
 }
 
 int
-quad::getSingleStripFacets(int uRes, int vRes, int coord0,
-                           Facet facets[], bool triangulate) {
+quad::getSingleStripFacets(int uRes, int vRes, int coord0, bool triangulate,
+                           FacetArray facets) {
 
     assert((uRes == 1) || (vRes == 1));
 
     FacetStrip qStrip;
     qStrip.quadTopology    = true;
     qStrip.quadTriangulate = triangulate;
-    qStrip.connectFirst    = false;
-    qStrip.connectLast     = false;
+    qStrip.splitFirstFace  = false;
+    qStrip.splitLastFace   = false;
     qStrip.innerReversed   = true;
-    qStrip.includeLast     = true;
+    qStrip.includeLastFace = true;
 
     if (uRes > 1) {
         qStrip.outerEdges = uRes;
@@ -810,8 +1023,8 @@ quad::getSingleStripFacets(int uRes, int vRes, int coord0,
 }
 
 int
-quad::getInteriorRingFacets(int uRes, int vRes, int coord0,
-                            Facet facets[], bool triangulate) {
+quad::getInteriorRingFacets(int uRes, int vRes, int coord0, bool triangulate,
+                            FacetArray facets) {
 
     assert((uRes >= 0) && (vRes >= 0));
 
@@ -822,13 +1035,13 @@ quad::getInteriorRingFacets(int uRes, int vRes, int coord0,
     if (totalInnerFacets == 0) return 0;
 
     if (totalInnerFacets == 1) {
-        return setQuadFacets(facets, coord0, coord0+1, coord0+2, coord0+3,
+        return appendQuad(facets, coord0, coord0+1, coord0+2, coord0+3,
                                 triangulate);
     }
 
     //  The single interior strip is enclosed by a single ring:
     if ((uRes == 1) || (vRes == 1)) {
-        return getSingleStripFacets(uRes, vRes, coord0, facets, triangulate);
+        return getSingleStripFacets(uRes, vRes, coord0, triangulate, facets);
     }
 
     //
@@ -846,8 +1059,8 @@ quad::getInteriorRingFacets(int uRes, int vRes, int coord0,
     FacetStrip qStrip;
     qStrip.quadTopology    = true;
     qStrip.quadTriangulate = triangulate;
-    qStrip.connectFirst    = false;
-    qStrip.connectLast     = false;
+    qStrip.splitFirstFace  = false;
+    qStrip.splitLastFace   = false;
 
     qStrip.outerEdges    = uRes;
     qStrip.outerFirst    = outerRingStart;
@@ -894,8 +1107,8 @@ quad::getInteriorRingFacets(int uRes, int vRes, int coord0,
 
 int
 quad::getBoundaryRingFacets(int const outerRes[], int uRes, int vRes,
-                            int nBoundaryEdges,
-                            Facet facets[], bool triangulate) {
+                            int nBoundaryEdges, bool triangulate,
+                            FacetArray facets) {
 
     //  Identify edges and corners that should preserve uniform behavior:
     bool uniformEdges[4];
@@ -934,11 +1147,13 @@ quad::getBoundaryRingFacets(int const outerRes[], int uRes, int vRes,
     qStrip.innerFirst    = innerRingStart;
     qStrip.innerLast     = innerRingStart + innerResU;
     if (uniformEdges[0]) {
-        qStrip.connectFirst  = !uniformCorners[0];
-        qStrip.connectLast   = !uniformCorners[1];
+        qStrip.splitFirstFace = !uniformCorners[0];
+        qStrip.splitLastFace  = !uniformCorners[1];
         nFacets += qStrip.connectUniformQuads(facets + nFacets);
     } else {
-        nFacets += qStrip.connectNonUniformTris(facets + nFacets);
+        qStrip.splitFirstFace = true;
+        qStrip.splitLastFace  = true;
+        nFacets += qStrip.connectNonUniformFacets(facets + nFacets);
     }
 
     qStrip.outerEdges    = outerRes[1];
@@ -950,11 +1165,13 @@ quad::getBoundaryRingFacets(int const outerRes[], int uRes, int vRes,
     qStrip.innerFirst    = qStrip.innerLast;
     qStrip.innerLast    += innerResV;
     if (uniformEdges[1]) {
-        qStrip.connectFirst  = !uniformCorners[1];
-        qStrip.connectLast   = !uniformCorners[2];
+        qStrip.splitFirstFace = !uniformCorners[1];
+        qStrip.splitLastFace  = !uniformCorners[2];
         nFacets += qStrip.connectUniformQuads(facets + nFacets);
     } else {
-        nFacets += qStrip.connectNonUniformTris(facets + nFacets);
+        qStrip.splitFirstFace = true;
+        qStrip.splitLastFace  = true;
+        nFacets += qStrip.connectNonUniformFacets(facets + nFacets);
     }
 
     qStrip.outerEdges    = outerRes[2];
@@ -966,11 +1183,13 @@ quad::getBoundaryRingFacets(int const outerRes[], int uRes, int vRes,
     qStrip.innerFirst    = qStrip.innerLast;
     qStrip.innerLast    += innerResU * (qStrip.innerReversed ? -1 : 1);
     if (uniformEdges[2]) {
-        qStrip.connectFirst  = !uniformCorners[2];
-        qStrip.connectLast   = !uniformCorners[3];
+        qStrip.splitFirstFace = !uniformCorners[2];
+        qStrip.splitLastFace  = !uniformCorners[3];
         nFacets += qStrip.connectUniformQuads(facets + nFacets);
     } else {
-        nFacets += qStrip.connectNonUniformTris(facets + nFacets);
+        qStrip.splitFirstFace = true;
+        qStrip.splitLastFace  = true;
+        nFacets += qStrip.connectNonUniformFacets(facets + nFacets);
     }
 
     qStrip.outerEdges    = outerRes[3];
@@ -982,33 +1201,34 @@ quad::getBoundaryRingFacets(int const outerRes[], int uRes, int vRes,
     qStrip.innerFirst    = qStrip.innerLast;
     qStrip.innerLast     = innerRingStart;
     if (uniformEdges[3]) {
-        qStrip.connectFirst  = !uniformCorners[3];
-        qStrip.connectLast   = !uniformCorners[0];
+        qStrip.splitFirstFace = !uniformCorners[3];
+        qStrip.splitLastFace  = !uniformCorners[0];
         nFacets += qStrip.connectUniformQuads(facets + nFacets);
     } else {
-        nFacets += qStrip.connectNonUniformTris(facets + nFacets);
+        qStrip.splitFirstFace = true;
+        qStrip.splitLastFace  = true;
+        nFacets += qStrip.connectNonUniformFacets(facets + nFacets);
     }
     return nFacets;
 }
 
 int
-quad::GetSegmentedFacets(int const innerRes[],
-                         Facet facets[], bool triangulate) {
+quad::GetSegmentedFacets(int const innerRes[], bool triangulate,
+                         FacetArray facets) {
 
-    //  WIP - may extend this later to account for differing outer rates
-    //        resulting in a non-uniform strip of faces between the two
-    //        opposing edges
+    //  WIP - may extend later to handle different opposing outer rates
+    //        resulting in a non-uniform strip between the opposing edges
     int uRes = innerRes[0];
     int vRes = innerRes[1];
     assert((uRes == 1) || (vRes == 1));
 
-    return getSingleStripFacets(uRes, vRes, 0, facets, triangulate);
+    return getSingleStripFacets(uRes, vRes, 0, triangulate, facets);
 }
 
 int
 quad::GetNonUniformFacets(int const outerRes[], int const innerRes[],
-                          int nBoundaryEdges,
-                          Facet facets[], bool triangulate){
+                          int nBoundaryEdges, bool triangulate,
+                          FacetArray facets) {
 
     int uRes = innerRes[0];
     int vRes = innerRes[1];
@@ -1016,7 +1236,7 @@ quad::GetNonUniformFacets(int const outerRes[], int const innerRes[],
 
     //  First, generate the ring of boundary facets separately:
     int nFacets = getBoundaryRingFacets(outerRes, uRes, vRes, nBoundaryEdges,
-                                        facets, triangulate);
+                                        triangulate, facets);
 
     //  Second, generate the remaining rings of interior facets:
     int nRings = (std::min(uRes,vRes) + 1) / 2;
@@ -1026,15 +1246,15 @@ quad::GetNonUniformFacets(int const outerRes[], int const innerRes[],
         uRes = std::max(uRes - 2, 0);
         vRes = std::max(vRes - 2, 0);
 
-        nFacets += getInteriorRingFacets(uRes, vRes, coord0,
-                                         facets + nFacets, triangulate);
+        nFacets += getInteriorRingFacets(uRes, vRes, coord0, triangulate,
+                                         facets + nFacets);
         coord0  += 2 * (uRes + vRes);
     }
     return nFacets;
 }
 
 int
-quad::GetUniformFacets(int res, Facet facets[], bool triangulate) {
+quad::GetUniformFacets(int res, bool triangulate, FacetArray facets) {
 
     //  The trivial case should have been handled by the caller:
     assert(res > 1);
@@ -1044,8 +1264,8 @@ quad::GetUniformFacets(int res, Facet facets[], bool triangulate) {
     int nFacets = 0;
     int coord0 = 0;
     for (int ring = 0; ring < nRings; ++ring, res -= 2) {
-        nFacets += getInteriorRingFacets(res, res, coord0,
-                                         facets + nFacets, triangulate);
+        nFacets += getInteriorRingFacets(res, res, coord0, triangulate,
+                                         facets + nFacets);
         coord0  += 4 * res;
     }
     return nFacets;
@@ -1073,7 +1293,7 @@ tri::CountUniformFacets(int edgeRes) {
     return edgeRes * edgeRes;
 }
 
-inline int
+int
 tri::CountNonUniformFacets(int const outerRes[], int innerRes) {
 
     assert(innerRes > 2);
@@ -1106,96 +1326,91 @@ tri::CountInteriorCoords(int edgeRes) {
     return countUniformCoords(edgeRes - 2);
 }
 
+template <typename REAL>
 inline int
-tri::getCenterCoord(Coord coords[]) {
+tri::getCenterCoord(Coord2Array<REAL> coords) {
 
-    coords[0] = Coord(1.0f/3.0f, 1.0f/3.0f);
+    coords[0].Set(1.0f/3.0f, 1.0f/3.0f);
     return 1;
 }
 
+template <typename REAL>
 int
-tri::GetCornerCoords(Coord coords[]) {
+tri::GetEdgeCoords(int edge, int edgeRes, Coord2Array<REAL> coords) {
 
-    coords[0] = Coord(0.0f, 0.0f);
-    coords[1] = Coord(0.0f, 1.0f);
-    coords[2] = Coord(1.0f, 0.0f);
-    return 3;
-}
+    REAL dt = 1.0 / (REAL)edgeRes;
 
-int
-tri::GetBoundaryEdgeCoords(int edge, int edgeRes, bool v0, bool v1,
-                           Coord coords[]) {
+    REAL t0 = dt;
+    REAL t1 = 1.0f - dt;
 
-    float dt = 1.0 / (float)edgeRes;
-
-    float t0 = v0 ? 0.0f : dt;
-    float t1 = v0 ? 1.0f : (1.0f - dt);
-
-    int nCoords = edgeRes - 1 + v0 + v1;
+    int n = edgeRes - 1;
 
     switch (edge) {
-    case 0:  return getVIsoLineCoords(nCoords, t0,  0.0f, dt, coords);
-    case 1:  return getUVLineCoords(  nCoords, t1,  t0,  -dt, dt, coords);
-    case 2:  return getUIsoLineCoords(nCoords, 0.0, t1,  -dt, coords);
+    case 0:  return appendVIsoLine<REAL>(coords, n,  t0, 0.0f, dt);
+    case 1:  return appendUVLine<REAL>(  coords, n,  t1,  t0, -dt, dt);
+    case 2:  return appendUIsoLine<REAL>(coords, n, 0.0f, t1, -dt);
     }
     return 0;
 }
 
+template <typename REAL>
 int
-tri::GetBoundaryCoords(int const edgeRates[], Coord coords[]) {
+tri::GetBoundaryCoords(int const edgeRates[], Coord2Array<REAL> coords) {
 
     int nCoords = 0;
-    nCoords += getVIsoLineCoords(edgeRates[0], 0.0f, 0.0f,
-                      1.0/(float)edgeRates[0], coords + nCoords);
-    nCoords += getUVLineCoords(edgeRates[1], 1.0f, 0.0f,
-                     -1.0/(float)edgeRates[1],
-                      1.0/(float)edgeRates[1], coords + nCoords);
-    nCoords += getUIsoLineCoords(edgeRates[2], 0.0f, 1.0f,
-                     -1.0/(float)edgeRates[2], coords + nCoords);
+    nCoords += appendVIsoLine<REAL>(coords + nCoords, edgeRates[0], 0.0f, 0.0f,
+                                        1.0f / (REAL) edgeRates[0]);
+    nCoords += appendUVLine<REAL>(  coords + nCoords, edgeRates[1], 1.0f, 0.0f,
+                                       -1.0f / (REAL) edgeRates[1],
+                                        1.0f / (REAL) edgeRates[1]);
+    nCoords += appendUIsoLine<REAL>(coords + nCoords, edgeRates[2], 0.0f, 1.0f,
+                                       -1.0f / (REAL) edgeRates[2]);
     return nCoords;
 }
 
+template <typename REAL>
 int
-tri::getInteriorRingCoords(int edgeRes, float u0, float v0, float dt,
-                      Coord coords[]) {
+tri::getInteriorRingCoords(int edgeRes, REAL u0, REAL v0, REAL dt,
+                           Coord2Array<REAL> coords) {
     assert(edgeRes);
 
-    float u1 = 1.0f - u0*2.0f;
-    float v1 = 1.0f - v0*2.0f;
+    REAL u1 = 1.0f - u0*2.0f;
+    REAL v1 = 1.0f - v0*2.0f;
 
     int nCoords = 0;
-    nCoords += getVIsoLineCoords(edgeRes, u0, v0,  dt, coords + nCoords);
-    nCoords += getUVLineCoords(  edgeRes, u1, v0, -dt, dt, coords + nCoords);
-    nCoords += getUIsoLineCoords(edgeRes, u0, v1, -dt, coords + nCoords);
+    nCoords += appendVIsoLine(coords + nCoords, edgeRes, u0, v0, dt);
+    nCoords += appendUVLine(  coords + nCoords, edgeRes, u1, v0,-dt, dt);
+    nCoords += appendUIsoLine(coords + nCoords, edgeRes, u0, v1,-dt);
     return nCoords;
 }
 
+template <typename REAL>
 int
-tri::GetInteriorCoords(int edgeRes, Coord coords[]) {
+tri::GetInteriorCoords(int edgeRes, Coord2Array<REAL> coords) {
 
     int nIntRings = edgeRes / 3;
     if (nIntRings == 0) return 0;
 
-    float dt = 1.0 / (float)edgeRes;
-    float u  = dt;
-    float v  = dt;
+    REAL dt = 1.0f / (REAL) edgeRes;
+    REAL u  = dt;
+    REAL v  = dt;
 
     int ringRes = edgeRes - 3;
 
     int nCoords = 0;
     for (int i = 0; i < nIntRings; ++i, ringRes -= 3, u += dt, v += dt) {
         if (ringRes == 0) {
-            nCoords += getCenterCoord(&coords[nCoords]);
+            nCoords += getCenterCoord(coords + nCoords);
         } else {
             nCoords += getInteriorRingCoords(ringRes, u, v, dt,
-                                             &coords[nCoords]);
+                                             coords + nCoords);
         }
     }
     return nCoords;
 }
 
 int
-tri::getInteriorRingFacets(int edgeRes, int coord0, Facet facets[]) {
+tri::getInteriorRingFacets(int edgeRes, int coord0, FacetArray facets) {
 
     //
     //  Deal with trivial cases with no inner vertices:
@@ -1203,12 +1418,12 @@ tri::getInteriorRingFacets(int edgeRes, int coord0, Facet facets[]) {
     if (edgeRes < 1) {
         return 0;
     } else if (edgeRes == 1) {
-        return setTriFacet(facets, coord0, coord0+1, coord0+2);
+        return appendTri(facets, coord0, coord0+1, coord0+2);
     } else if (edgeRes == 2) {
-        setTriFacet(facets + 0, coord0+0, coord0+1, coord0+5);
-        setTriFacet(facets + 1, coord0+2, coord0+3, coord0+1);
-        setTriFacet(facets + 2, coord0+4, coord0+5, coord0+3);
-        setTriFacet(facets + 3, coord0+1, coord0+3, coord0+5);
+        appendTri(facets + 0, coord0+0, coord0+1, coord0+5);
+        appendTri(facets + 1, coord0+2, coord0+3, coord0+1);
+        appendTri(facets + 2, coord0+4, coord0+5, coord0+3);
+        appendTri(facets + 3, coord0+1, coord0+3, coord0+5);
         return 4;
     }
 
@@ -1255,7 +1470,7 @@ tri::getInteriorRingFacets(int edgeRes, int coord0, Facet facets[]) {
 
 int
 tri::getBoundaryRingFacets(int const outerRes[], int innerRes,
-                           int nBoundaryEdges, Facet facets[]) {
+                           int nBoundaryEdges, FacetArray facets) {
 
     //  Identify edges and corners that should preserve uniform behavior:
     bool uniformEdges[3];
@@ -1290,11 +1505,13 @@ tri::getBoundaryRingFacets(int const outerRes[], int innerRes,
     tStrip.innerFirst   = innerRingStart;
     tStrip.innerLast    = innerRingStart + innerEdges;
     if (uniformEdges[0]) {
-        tStrip.connectFirst = !uniformCorners[0];
-        tStrip.connectLast  = !uniformCorners[1];
+        tStrip.splitFirstFace = !uniformCorners[0];
+        tStrip.splitLastFace  = !uniformCorners[1];
         nFacets += tStrip.connectUniformTris(facets + nFacets);
     } else {
-        nFacets += tStrip.connectNonUniformTris(facets + nFacets);
+        tStrip.splitFirstFace = true;
+        tStrip.splitLastFace  = true;
+        nFacets += tStrip.connectNonUniformFacets(facets + nFacets);
     }
 
     tStrip.outerEdges   = outerRes[1];
@@ -1304,11 +1521,13 @@ tri::getBoundaryRingFacets(int const outerRes[], int innerRes,
     tStrip.innerFirst   = tStrip.innerLast;
     tStrip.innerLast   += innerEdges;
     if (uniformEdges[1]) {
-        tStrip.connectFirst = !uniformCorners[1];
-        tStrip.connectLast  = !uniformCorners[2];
+        tStrip.splitFirstFace = !uniformCorners[1];
+        tStrip.splitLastFace  = !uniformCorners[2];
         nFacets += tStrip.connectUniformTris(facets + nFacets);
     } else {
-        nFacets += tStrip.connectNonUniformTris(facets + nFacets);
+        tStrip.splitFirstFace = true;
+        tStrip.splitLastFace  = true;
+        nFacets += tStrip.connectNonUniformFacets(facets + nFacets);
     }
 
     tStrip.outerEdges   = outerRes[2];
@@ -1318,17 +1537,19 @@ tri::getBoundaryRingFacets(int const outerRes[], int innerRes,
     tStrip.innerFirst   = tStrip.innerLast;
     tStrip.innerLast    = innerRingStart;
     if (uniformEdges[2]) {
-        tStrip.connectFirst = !uniformCorners[2];
-        tStrip.connectLast  = !uniformCorners[0];
+        tStrip.splitFirstFace = !uniformCorners[2];
+        tStrip.splitLastFace  = !uniformCorners[0];
         nFacets += tStrip.connectUniformTris(facets + nFacets);
     } else {
-        nFacets += tStrip.connectNonUniformTris(facets + nFacets);
+        tStrip.splitFirstFace = true;
+        tStrip.splitLastFace  = true;
+        nFacets += tStrip.connectNonUniformFacets(facets + nFacets);
     }
     return nFacets;
 }
 
 int
-tri::GetUniformFacets(int edgeRes, Facet facets[]) {
+tri::GetUniformFacets(int edgeRes, FacetArray facets) {
 
     //  The trivial case should have been handled by the caller:
     assert(edgeRes > 1);
@@ -1346,7 +1567,7 @@ tri::GetUniformFacets(int edgeRes, Facet facets[]) {
 
 int
 tri::GetNonUniformFacets(int const outerRes[], int innerRes,
-                         int nBoundaryEdges, Facet facets[]) {
+                         int nBoundaryEdges, FacetArray facets) {
 
     assert(innerRes > 2);
 
@@ -1391,7 +1612,7 @@ qpoly::CountUniformFacets(int N, int edgeRes, bool triangulate) {
     return (nQuads << triangulate) + nCenter;
 }
 
-inline int
+int
 qpoly::CountNonUniformFacets(int N, int const outerRes[], int innerRes,
                              bool triangulate) {
 
@@ -1413,10 +1634,16 @@ qpoly::CountNonUniformFacets(int N, int const outerRes[], int innerRes,
     //
     int nBoundary = 0;
     for (int i = 0; i < N; ++i) {
-        if ((outerRes[i] == innerRes) && !triangulate) {
+        if (triangulate) {
+            nBoundary += nInnerEdges + outerRes[i];
+        } else if (outerRes[i] == innerRes) {
             nBoundary += nInnerEdges + 1 + (innerRes != outerRes[(i+1) % N]);
         } else {
-            nBoundary += nInnerEdges + outerRes[i];
+            int nEdge = std::max(nInnerEdges, outerRes[i]);
+            if ((nEdge & 1) == 0) {
+                nEdge += (nInnerEdges & 1) || (outerRes[i] & 1);
+            }
+            nBoundary += nEdge;
         }
     }
     return nInterior + nBoundary;
@@ -1437,27 +1664,20 @@ qpoly::CountInteriorCoords(int N, int edgeRes) {
     return countUniformCoords(N, edgeRes - 2);
 }
 
+template <typename REAL>
 inline int
-qpoly::getCenterCoord(Coord coords[]) {
+qpoly::getCenterCoord(Coord2Array<REAL> coords) {
 
-    coords[0] = Coord(0.5f, 0.5f);
+    coords[0].Set(0.5f, 0.5f);
     return 1;
 }
 
+template <typename REAL>
 int
-qpoly::GetCornerCoords(Parameterization P, Coord coords[]) {
-
-    int N = P.GetFaceSize();
-    for (int i = 0; i < N; ++i) {
-        P.GetCornerCoord(i, &coords[i][0], &coords[i][1]);
-    }
-    return N;
-}
-
-inline int
 qpoly::getRingEdgeCoords(Parameterization P, int edge, int edgeRes,
                          bool incFirst, bool incLast,
-                         float tOrigin, float dt, Coord coords[]) {
+                         REAL tOrigin, REAL dt,
+                         Coord2Array<REAL> coords) {
 
     //
     //  Determine number of coords in each half, excluding the ends.  The
@@ -1470,66 +1690,68 @@ qpoly::getRingEdgeCoords(Parameterization P, int edge, int edgeRes,
 
     int nCoords = 0;
     if (incFirst || n0) {
-        float u0, v0;
-        P.GetCornerCoord(edge, &u0, &v0);
+        REAL u0, v0;
+        P.GetVertexCoord(edge, &u0, &v0);
 
         //  u ranges from [tOrigin < 0.5] while v is constant
         if (incFirst) {
-            coords[nCoords++] = Coord(u0 + tOrigin, v0 + tOrigin);
+            coords[nCoords++].Set(u0 + tOrigin, v0 + tOrigin);
         }
         if (n0) {
-            float u = u0 + tOrigin + dt;
-            float v = v0 + tOrigin;
-            nCoords += getVIsoLineCoords(n0, u, v, dt, coords + nCoords);
+            REAL u = u0 + tOrigin + dt;
+            REAL v = v0 + tOrigin;
+            nCoords += appendVIsoLine(coords + nCoords, n0, u, v, dt);
         }
     }
     if (n1 || incLast) {
-        float u1, v1;
-        P.GetCornerCoord((edge + 1) % P.GetFaceSize(), &u1, &v1);
+        REAL u1, v1;
+        P.GetVertexCoord((edge + 1) % P.GetFaceSize(), &u1, &v1);
 
         //  u is constant while v ranges from [0.5 > tOrigin] (even)
         if (n1) {
-            float u = u1 + tOrigin;
-            float v = v1 + ((edgeRes & 1) ? (0.5f - 0.5f * dt) : 0.5f);
-            nCoords += getUIsoLineCoords(n1, u, v, -dt, coords + nCoords);
+            REAL u = u1 + tOrigin;
+            REAL v = v1 + ((edgeRes & 1) ? (0.5f - 0.5f * dt) : 0.5f);
+            nCoords += appendUIsoLine(coords + nCoords, n1, u, v, -dt);
         }
         if (incLast) {
-            coords[nCoords++] = Coord(u1 + tOrigin, v1 + tOrigin);
+            coords[nCoords++].Set(u1 + tOrigin, v1 + tOrigin);
         }
     }
     return nCoords;
 }
 
+template <typename REAL>
 int
-qpoly::GetBoundaryEdgeCoords(Parameterization P, int edge,
-                            int edgeRes, bool inc0, bool inc1,
-                            Coord coords[]) {
+qpoly::GetEdgeCoords(Parameterization P, int edge, int edgeRes,
+                     Coord2Array<REAL> coords) {
 
-    return getRingEdgeCoords(P, edge, edgeRes, inc0, inc1,
-                             0.0f, 1.0f / (float)edgeRes,
-                             coords);
+    return getRingEdgeCoords<REAL>(P, edge, edgeRes, false, false,
+                                   0.0f, 1.0f / (REAL)edgeRes,
+                                   coords);
 }
 
+template <typename REAL>
 int
 qpoly::GetBoundaryCoords(Parameterization P, int const edgeRates[],
-                         Coord coords[]) {
+                         Coord2Array<REAL> coords) {
 
 
     int N = P.GetFaceSize();
 
     int nCoords = 0;
     for (int i = 0; i < N; ++i) {
-        nCoords += getRingEdgeCoords(P, i, edgeRates[i], true, false,
-                                     0.0f, 1.0f / (float)edgeRates[i],
-                                     coords + nCoords);
+        nCoords += getRingEdgeCoords<REAL>(P, i, edgeRates[i], true, false,
+                                           0.0f, 1.0f / (REAL)edgeRates[i],
+                                           coords + nCoords);
     }
     return nCoords;
 }
 
+template <typename REAL>
 int
 qpoly::getInteriorRingCoords(Parameterization P, int edgeRes,
-                             float tOrigin, float dt,
-                             Coord coords[]) {
+                             REAL tOrigin, REAL dt,
+                             Coord2Array<REAL> coords) {
     assert(edgeRes > 1);
 
     int N = P.GetFaceSize();
@@ -1543,55 +1765,59 @@ qpoly::getInteriorRingCoords(Parameterization P, int edgeRes,
     return nCoords;
 }
 
+template <typename REAL>
 int
-qpoly::getCenterRingCoords(Parameterization P, float tOrigin, Coord coords[]) {
+qpoly::getCenterRingCoords(Parameterization P, REAL tOrigin,
+                           Coord2Array<REAL> coords) {
 
     int N = P.GetFaceSize();
 
     //  Just need the single corner point for each edge here:
     for (int i = 0; i < N; ++i) {
-        float uCorner, vCorner;
-        P.GetCornerCoord(i, &uCorner, &vCorner);
-        coords[i] = Coord(uCorner + tOrigin, vCorner + tOrigin);
+        REAL uCorner, vCorner;
+        P.GetVertexCoord(i, &uCorner, &vCorner);
+        coords[i].Set(uCorner + tOrigin, vCorner + tOrigin);
     }
     return (N == 3) ? N : (N + getCenterCoord(coords + N));
 }
 
-inline int
-qpoly::GetInteriorCoords(Parameterization P, int edgeRes, Coord coords[]) {
+template <typename REAL>
+int
+qpoly::GetInteriorCoords(Parameterization P, int edgeRes,
+                         Coord2Array<REAL> coords) {
 
     int nIntRings = edgeRes / 2;
     if (nIntRings == 0) return 0;
 
-    float dt = 1.0 / (float)edgeRes;
-    float t  = dt;
+    REAL dt = 1.0f / (REAL) edgeRes;
+    REAL t  = dt;
 
     int ringRes = edgeRes - 2;
 
     int nCoords = 0;
     for (int i = 0; i < nIntRings; ++i, ringRes -= 2, t += dt) {
         if (ringRes == 0) {
-            nCoords += getCenterCoord(&coords[nCoords]);
+            nCoords += getCenterCoord(coords + nCoords);
         } else if (ringRes == 1) {
-            nCoords += getCenterRingCoords(P, t, &coords[nCoords]);
+            nCoords += getCenterRingCoords(P, t, coords + nCoords);
         } else {
             nCoords += getInteriorRingCoords(P, ringRes, t, dt,
-                                             &coords[nCoords]);
+                                             coords + nCoords);
         }
     }
     return nCoords;
 }
 
 int
-qpoly::getCenterFacets(int N, int coord0, Facet facets[]) {
+qpoly::getCenterFacets(int N, int coord0, FacetArray facets) {
 
-    return (N == 3) ? setSimpleFacet(facets, 3, coord0)
-                    : setTriFanFacets(facets, N, coord0);
+    return (N == 3) ? appendTri(facets, coord0, coord0+1, coord0+2)
+                    : appendTriFan(facets, N, coord0);
 }
 
 int
-qpoly::getInteriorRingFacets(int N, int edgeRes, int coord0,
-                             Facet facets[], bool triangulate) {
+qpoly::getInteriorRingFacets(int N, int edgeRes, int coord0, bool triangulate,
+                             FacetArray facets) {
 
     //
     //  Deal with trivial cases with no inner vertices:
@@ -1619,8 +1845,8 @@ qpoly::getInteriorRingFacets(int N, int edgeRes, int coord0,
     qStrip.outerEdges      = outerRes;
     qStrip.innerEdges      = innerRes;
     qStrip.innerReversed   = false;
-    qStrip.connectFirst    = false;
-    qStrip.connectLast     = false;
+    qStrip.splitFirstFace  = false;
+    qStrip.splitLastFace   = false;
 
     for (int edge = 0; edge < N; ++edge) {
         qStrip.outerFirst = outerRing + edge * outerRes;
@@ -1643,8 +1869,8 @@ qpoly::getInteriorRingFacets(int N, int edgeRes, int coord0,
 
 int
 qpoly::getBoundaryRingFacets(int N, int const outerRes[], int innerRes,
-                             int nBoundaryEdges,
-                             Facet facets[], bool triangulate) {
+                             int nBoundaryEdges, bool triangulate,
+                             FacetArray facets) {
 
     int innerEdges = std::max(innerRes - 2, 0);
 
@@ -1685,20 +1911,23 @@ qpoly::getBoundaryRingFacets(int N, int const outerRes[], int innerRes,
 
         //  Test rates at, before and after this edge for uniform behavior:
         if ((outerRes[edge] == innerRes) && (innerRes > 1)) {
-            qStrip.connectFirst = (outerRes[(edge-1+N) % N] != innerRes);
-            qStrip.connectLast  = (outerRes[(edge + 1) % N] != innerRes);
+            qStrip.splitFirstFace = (outerRes[(edge-1+N) % N] != innerRes);
+            qStrip.splitLastFace  = (outerRes[(edge + 1) % N] != innerRes);
 
             nFacets += qStrip.connectUniformQuads(facets+nFacets);
         } else {
-            nFacets += qStrip.connectNonUniformTris(facets + nFacets);
+            qStrip.splitFirstFace = true;
+            qStrip.splitLastFace  = true;
+
+            nFacets += qStrip.connectNonUniformFacets(facets + nFacets);
         }
     }
     return nFacets;
 }
     
 int
-qpoly::GetUniformFacets(int N, int edgeRes,
-                        Facet facets[], bool triangulate) {
+qpoly::GetUniformFacets(int N, int edgeRes, bool triangulate,
+                        FacetArray facets) {
 
     //  The trivial (single facet) case should be handled externally:
     if (edgeRes == 1) {
@@ -1710,8 +1939,8 @@ qpoly::GetUniformFacets(int N, int edgeRes,
     int nFacets = 0;
     int coord0  = 0;
     for (int ring = 0; ring < nRings; ++ring, edgeRes -= 2) {
-        nFacets += getInteriorRingFacets(N, edgeRes, coord0,
-                                         facets + nFacets, triangulate);
+        nFacets += getInteriorRingFacets(N, edgeRes, coord0, triangulate,
+                                         facets + nFacets);
         coord0  += N * edgeRes;
     }
     return nFacets;
@@ -1719,12 +1948,12 @@ qpoly::GetUniformFacets(int N, int edgeRes,
 
 int
 qpoly::GetNonUniformFacets(int N, int const outerRes[], int innerRes,
-                           int nBoundaryEdges,
-                           Facet facets[], bool triangulate){
+                           int nBoundaryEdges, bool triangulate,
+                           FacetArray facets) {
 
     //  First, generate the ring of boundary facets separately:
     int nFacets = getBoundaryRingFacets(N, outerRes, innerRes, nBoundaryEdges,
-                                        facets, triangulate);
+                                        triangulate, facets);
 
     //  Second, generate the remaining rings of interior facets:
     int nRings = (innerRes + 1) / 2;
@@ -1733,8 +1962,8 @@ qpoly::GetNonUniformFacets(int N, int const outerRes[], int innerRes,
     for (int ring = 1; ring < nRings; ++ring) {
         innerRes = std::max(innerRes - 2, 0);
 
-        nFacets += getInteriorRingFacets(N, innerRes, coord0,
-                                         facets + nFacets, triangulate);
+        nFacets += getInteriorRingFacets(N, innerRes, coord0, triangulate,
+                                         facets + nFacets);
         coord0  += N * innerRes;
     }
     return nFacets;
@@ -1969,49 +2198,33 @@ Tessellation::Tessellation(Parameterization p, int numRates, int const rates[],
 //
 //  Main methods to retrieve samples and facets:
 //
+template <typename REAL>
 int
-Tessellation::GetCornerCoords(Coord coords[]) const {
+Tessellation::GetEdgeCoords(int edge, REAL uvPairs[]) const {
+
+    //  Remember this method excludes coords at the end vertices
+    int edgeRes = _outerRates[edge];
+
+    Coord2Array<REAL> coords(uvPairs);
 
     switch (_param.GetType()) {
     case Parameterization::QUAD:
-        return quad::GetCornerCoords(coords);
+        return quad::GetEdgeCoords(edge, edgeRes, coords);
     case Parameterization::TRI:
-        return tri::GetCornerCoords(coords);
+        return tri::GetEdgeCoords(edge, edgeRes, coords);
     case Parameterization::QPOLY:
-        return qpoly::GetCornerCoords(_param, coords);
+        return qpoly::GetEdgeCoords(_param, edge, edgeRes, coords);
     default:
         assert(0);
     }
     return -1;
 }
 
+template <typename REAL>
 int
-Tessellation::GetBoundaryCoords(int edge, bool v0, bool v1,
-                                Coord coords[]) const {
+Tessellation::GetBoundaryCoords(REAL uvPairs[]) const {
 
-    //  Remember - "edge coords" here excludes coords at the end vertices
-
-    int res = _outerRates[edge];
-
-    switch (_param.GetType()) {
-    case Parameterization::QUAD:
-        return quad::GetBoundaryEdgeCoords(edge, res, v0, v1, coords);
-    case Parameterization::TRI:
-        return tri::GetBoundaryEdgeCoords(edge, res, v0, v1, coords);
-    case Parameterization::QPOLY:
-        return qpoly::GetBoundaryEdgeCoords(_param, edge, res, v0, v1, coords);
-    default:
-        assert(0);
-    }
-    return -1;
-}
-
-int
-Tessellation::GetBoundaryCoords(Coord coords[]) const {
-
-    if (_numBoundaryPoints == GetFaceSize()) {
-        return GetCornerCoords(coords);
-    }
+    Coord2Array<REAL> coords(uvPairs);
 
     switch (_param.GetType()) {
     case Parameterization::QUAD:
@@ -2026,15 +2239,18 @@ Tessellation::GetBoundaryCoords(Coord coords[]) const {
     return -1;
 }
 
+template <typename REAL>
 int
-Tessellation::GetInteriorCoords(Coord coords[]) const {
+Tessellation::GetInteriorCoords(REAL uvPairs[]) const {
 
     if (_numInteriorPoints == 0) return 0;
 
     if (_numInteriorPoints == 1) {
-        _param.GetCenterCoord(&coords[0][0], &coords[0][1]);
+        _param.GetCenterCoord(&uvPairs[0], &uvPairs[1]);
         return 1;
     }
+
+    Coord2Array<REAL> coords(uvPairs);
 
     switch (_param.GetType()) {
     case Parameterization::QUAD:
@@ -2050,44 +2266,43 @@ Tessellation::GetInteriorCoords(Coord coords[]) const {
 }
 
 int
-Tessellation::GetCoords(Coord coords[]) const {
+Tessellation::GetFacets(int facetIndices[], int facetSize) const {
 
-    if (_numTotalPoints == GetFaceSize()) {
-        return GetCornerCoords(coords);
+    assert((facetSize == 3) || (facetSize == 4));
+    if ((facetSize == 3) && !_triangulate) {
+        assert(_param.GetType() == Parameterization::TRI);
     }
 
-    int nCoords = GetBoundaryCoords(coords);
-    nCoords += GetInteriorCoords(coords + nCoords);
-    return nCoords;
-}
-
-int
-Tessellation::GetFacets(Facet facets[]) const {
+    FacetArray facets(facetIndices, facetSize);
 
     int N = GetFaceSize();
 
     if (_singleFace) {
-        return setSimpleFacet(facets, N);
+        if (N == 3) {
+            return appendTri(facets, 0, 1, 2);
+        } else {
+            return appendQuad(facets, 0, 1, 2, 3, 0);
+        }
     }
     if (_triangleFan) {
-        return setTriFanFacets(facets, _numFacets);
+        return appendTriFan(facets, _numFacets, 0);
     }
     if (_splitQuad) {
-        return setQuadFacets(facets, 0, 1, 2, 3, _triangulate);
+        return appendQuad(facets, 0, 1, 2, 3, _triangulate);
     }
 
-int nFacets = 0;
+    int nFacets = 0;
     switch (_param.GetType()) {
     case Parameterization::QUAD:
         if (_isUniform) {
-            nFacets = quad::GetUniformFacets(_innerRates[0],
-                                facets, _triangulate);
+            nFacets = quad::GetUniformFacets(_innerRates[0], _triangulate,
+                                facets);
         } else if (_segmentedFace) {
-            nFacets = quad::GetSegmentedFacets(_innerRates,
-                                facets, _triangulate);
+            nFacets = quad::GetSegmentedFacets(_innerRates, _triangulate,
+                                facets);
         } else {
             nFacets = quad::GetNonUniformFacets(_outerRates, _innerRates,
-                                _numBoundaryPoints, facets, _triangulate);
+                                _numBoundaryPoints, _triangulate, facets);
         }
         break;
     case Parameterization::TRI:
@@ -2100,94 +2315,107 @@ int nFacets = 0;
         break;
     case Parameterization::QPOLY:
         if (_isUniform) {
-            nFacets = qpoly::GetUniformFacets(N, _innerRates[0],
-                                facets, _triangulate);
+            nFacets = qpoly::GetUniformFacets(N, _innerRates[0], _triangulate,
+                                facets);
         } else {
             nFacets = qpoly::GetNonUniformFacets(N, _outerRates, _innerRates[0],
-                                _numBoundaryPoints, facets, _triangulate);
+                                _numBoundaryPoints, _triangulate, facets);
         }
         break;
     default:
         assert(0);
     }
-if (nFacets != _numFacets) {
-    printf("Expecting %d facets -- assigned %d\n", _numFacets, nFacets);
-}
-assert(nFacets == _numFacets);
-if (_triangulate) {
-for (int i = 0; i < nFacets; ++i) {
-    assert(_triangulate && (facets[i][3] < 0));
-}
-}
+    assert(nFacets == _numFacets);
     return nFacets;
 }
 
 void
-Tessellation::TransformFacetIndices(Facet facets[], int commonOffset) {
+Tessellation::TransformFacetIndices(int facetIndices[], int facetSize,
+                                    int commonOffset) {
 
-    for (int i = 0; i < _numFacets; ++i) {
-        Facet & f = facets[i];
-        for (int j = 0; j < 4; ++j) {
-            if (f[j] >= 0) {
-                f[j] += commonOffset;
+    int numIndices = _numFacets * facetSize;
+
+    for (int i = 0; i < numIndices; ++i) {
+        int & index = facetIndices[i];
+        if (index >= 0) {
+            index += commonOffset;
+        }
+    }
+}
+
+void
+Tessellation::TransformFacetIndices(int facetIndices[], int facetSize,
+                                    int boundaryOffset, int interiorOffset) {
+
+    int numIndices = _numFacets * facetSize;
+
+    for (int i = 0; i < numIndices; ++i) {
+        int & index = facetIndices[i];
+        if (index >= 0) {
+            if (index < _numBoundaryPoints) {
+                index += boundaryOffset;
+            } else {
+                index += interiorOffset;
             }
         }
     }
 }
 
 void
-Tessellation::TransformFacetIndices(Facet facets[], int boundaryOffset,
-                                                   int interiorOffset) {
+Tessellation::TransformFacetIndices(int facetIndices[], int facetSize,
+                                    int const boundaryIndices[],
+                                    int interiorOffset) {
 
-    for (int i = 0; i < _numFacets; ++i) {
-        Facet & f = facets[i];
-        for (int j = 0; j < 4; ++j) {
-            if (f[j] >= 0) {
-                if (f[j] > _numBoundaryPoints) {
-                    f[j] += interiorOffset;
-                } else {
-                    f[j] += boundaryOffset;
-                }
+    int numIndices = _numFacets * facetSize;
+
+    for (int i = 0; i < numIndices; ++i) {
+        int & index = facetIndices[i];
+        if (index >= 0) {
+            if (index < _numBoundaryPoints) {
+                index = boundaryIndices[index];
+            } else {
+                index += interiorOffset;
             }
         }
     }
 }
 
 void
-Tessellation::TransformFacetIndices(Facet facets[], int const boundaryIndices[],
-                                                   int interiorOffset) {
+Tessellation::TransformFacetIndices(int facetIndices[], int facetSize,
+                                    int const boundaryIndices[],
+                                    int const interiorIndices[]) {
 
-    for (int i = 0; i < _numFacets; ++i) {
-        Facet & f = facets[i];
-        for (int j = 0; j < 4; ++j) {
-            if (f[j] >= 0) {
-                if (f[j] > _numBoundaryPoints) {
-                    f[j] += interiorOffset;
-                } else {
-                    f[j] = boundaryIndices[f[j]];
-                }
+    int numIndices = _numFacets * facetSize;
+
+    for (int i = 0; i < numIndices; ++i) {
+        int & index = facetIndices[i];
+        if (index >= 0) {
+            if (index < _numBoundaryPoints) {
+                index = boundaryIndices[index];
+            } else {
+                index = interiorIndices[index - _numBoundaryPoints];
             }
         }
     }
 }
 
-void
-Tessellation::TransformFacetIndices(Facet facets[], int const boundaryIndices[],
-                                                   int const interiorIndices[]) {
+//
+//  Explicit instantiation for multiple precision coordinate pairs:
+//
+template int
+Tessellation::GetBoundaryCoords<float>(float uvPairs[]) const;
+template int
+Tessellation::GetBoundaryCoords<double>(double uvPairs[]) const;
 
-    for (int i = 0; i < _numFacets; ++i) {
-        Facet & f = facets[i];
-        for (int j = 0; j < 4; ++j) {
-            if (f[j] >= 0) {
-                if (f[j] > _numBoundaryPoints) {
-                    f[j] = interiorIndices[f[j] - _numBoundaryPoints];
-                } else {
-                    f[j] = boundaryIndices[f[j]];
-                }
-            }
-        }
-    }
-}
+template int
+Tessellation::GetInteriorCoords<float>(float uvPairs[]) const;
+template int
+Tessellation::GetInteriorCoords<double>(double uvPairs[]) const;
+
+template int
+Tessellation::GetEdgeCoords<float>(int edge, float uvPairs[]) const;
+template int
+Tessellation::GetEdgeCoords<double>(int edge, double uvPairs[]) const;
 
 } // end namespace Bfr
 

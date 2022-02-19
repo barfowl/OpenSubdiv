@@ -30,6 +30,8 @@
 #include "../bfr/types.h"
 #include "../sdc/types.h"
 
+#include <cmath>
+
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
@@ -72,22 +74,18 @@ public:
     //
     //  Methods to query common features of a parameterization.
     //
-    //  Methods for corners and boundaries require a corner or boundary
-    //  index.  The parameter "t" for boundaries locally parameterizes a
-    //  boundary edge over [0,1] in a counter-clockwise orientation.
+    //  Methods for vertices and edges require an index of the vertex
+    //  or edge.  The edge parameter "t" locally parameterizes the edge
+    //  over [0,1] in a counter-clockwise orientation.
     //
-    //  Methods returning singular (u,v) coordinates:
-    void GetCornerCoord(int index, float * u, float * v) const;
+    template <typename REAL>
+    void GetVertexCoord(int vertexIndex, REAL * u, REAL * v) const;
 
-    void GetBoundaryCoord(int index, float t, float * u, float * v) const;
+    template <typename REAL>
+    void GetEdgeCoord(int edgeIndex, REAL t, REAL * u, REAL * v) const;
 
-    void GetCenterCoord(float * u, float * v) const;
-
-    //  Potential methods returning multiple (u,v) coordinates:
-    //  WIP - return type Coord[] is likely to be replaced
-    int GetCornerCoords(Coord uvs[]) const;
-
-    int GetBoundaryCoords(int, float t0, float dt, int n, Coord uvs[]) const;
+    template <typename REAL>
+    void GetCenterCoord(REAL * u, REAL * v) const;
 
 public:
     //
@@ -124,10 +122,10 @@ public:
 private:
     void initialize();
 
-    unsigned int _faceSize  : 16;
-    unsigned int _type      :  4;
-    unsigned int _scheme    :  4;
-    unsigned int _qPolyUDim :  8;
+    unsigned int _faceSize : 16;
+    unsigned int _type     :  4;
+    unsigned int _scheme   :  4;
+    unsigned int _uDim     :  8;
 };
 
 //
@@ -145,13 +143,19 @@ Parameterization::initialize() {
         _type = QUAD;
     } else {
         _type = QPOLY;
-        _qPolyUDim = 0;  // eventually make this integer sqrt(faceSize)
+
+        //  Use int sqrt to reduce accuracy loss tiling with large sizes
+        if (_faceSize < 10) {
+            _uDim = 2 + (_faceSize > 4);
+        } else {
+            _uDim = 1 + (int) std::sqrt((float)(_faceSize - 1));
+        }
     }
 }
 
 inline
 Parameterization::Parameterization(Sdc::SchemeType scheme) :
-        _scheme(scheme), _qPolyUDim(0) {
+        _scheme(scheme), _uDim(0) {
 
     _faceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(scheme);
     initialize();
@@ -159,7 +163,7 @@ Parameterization::Parameterization(Sdc::SchemeType scheme) :
 
 inline
 Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) :
-        _faceSize(faceSize), _scheme(scheme), _qPolyUDim(0) {
+        _faceSize(faceSize), _scheme(scheme), _uDim(0) {
 
     initialize();
 }
@@ -171,23 +175,91 @@ Parameterization::Resize(int faceSize) {
     initialize();
 }
 
-
 //
-//  Inline Ptex conversion methods:
-//
-//  WIP - Eventually the QPOLY parameterization will make use of a "udim"
-//  member -- set to the integer sqrt(faceSize) to reduce roundoff for
-//  large face sizes.  Until then, all UV tiles are sequential in U.
+//  Simple coordinate queries:
 //
 template <typename REAL>
-inline void
+void
+Parameterization::GetVertexCoord(int vertex, REAL * u, REAL * v) const {
+
+    switch (GetType()) {
+    case QUAD:
+        *u = (REAL) (vertex && (vertex < 3));
+        *v = (REAL) (vertex > 1);
+        break;
+    case TRI:
+        *u = (REAL) (vertex == 1);
+        *v = (REAL) (vertex == 2);
+        break;
+    case QPOLY:
+        *u = (REAL) (vertex % _uDim);
+        *v = (REAL) (vertex / _uDim);
+        break;
+    }
+}
+
+template <typename REAL>
+void
+Parameterization::GetEdgeCoord(int edge, REAL t, REAL * u, REAL * v) const {
+
+    switch (GetType()) {
+    case QUAD:
+        switch (edge) {
+        case 0: *u = t;        *v = 0.0f;     break;
+        case 1: *u = 1.0f;     *v = t;        break;
+        case 2: *u = 1.0f - t; *v = 1.0f;     break;
+        case 3: *u = 0.0f;     *v = 1.0f - t; break;
+        }
+        break;
+
+    case TRI:
+        switch (edge) {
+        case 0: *u = t;        *v = 0.0f;     break;
+        case 1: *u = 1.0f - t; *v = t;        break;
+        case 2: *u = 0.0f;     *v = 1.0f - t; break;
+        }
+        break;
+
+    case QPOLY:
+        if (t < 0.5f) {
+            GetVertexCoord(edge, u, v);
+            *u += t;
+        } else {
+            GetVertexCoord((edge + 1) % _faceSize, u, v);
+            *v += 1.0f - t;
+        }
+        break;
+    }
+}
+
+template <typename REAL>
+void
+Parameterization::GetCenterCoord(REAL * u, REAL * v) const {
+
+    if (GetType() == TRI) {
+        *u = 1.0f / 3.0f;
+        *v = 1.0f / 3.0f;
+    } else {
+        *u = 0.5f;
+        *v = 0.5f;
+    }
+}
+
+//
+//  Ptex conversion methods:
+//
+template <typename REAL>
+void
 Parameterization::ConvertUvToPtex(REAL inU, REAL inV,
         REAL * ptexU, REAL * ptexV, int * ptexFace) const {
 
     if (_type == QPOLY) {
-        *ptexFace = (int) inU;
-        *ptexU    = 2.0f * (inU - *ptexFace);
-        *ptexV    = 2.0f *  inV;
+        int tileU = (int) inU;
+        int tileV = (int) inV;
+
+        *ptexFace = _uDim * tileV + tileU;
+        *ptexU    = (inU - tileU) * 2.0f;
+        *ptexV    = (inV - tileV) * 2.0f;
     } else {
         *ptexFace = 0;
         *ptexU    = inU;
@@ -196,13 +268,16 @@ Parameterization::ConvertUvToPtex(REAL inU, REAL inV,
 }
 
 template <typename REAL>
-inline void
+void
 Parameterization::ConvertPtexToUv(REAL ptexU, REAL ptexV, int ptexFace,
         REAL * outU, REAL * outV) const {
 
     if (_type == QPOLY) {
-        *outU = 0.5f * ptexU + ptexFace;
-        *outV = 0.5f * ptexV;
+        int tileU = ptexFace % _uDim;
+        int tileV = ptexFace / _uDim;
+
+        *outU = (REAL) tileU + ptexU * 0.5f;
+        *outV = (REAL) tileV + ptexV * 0.5f;
     } else {
         *outU = ptexU;
         *outV = ptexV;
