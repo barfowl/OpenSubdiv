@@ -115,7 +115,7 @@ Surface::evalIrregularPatchBasis(REAL u, REAL v,
     int subFace = 0;
     if (_param.GetType() == Parameterization::QPOLY) {
         //  Quadrangulated faces internally use a Ptex parameterization
-        _param.ConvertUvToPtex(u, v, &u, &v, &subFace);
+        _param.ConvertCoordToPtex(u, v, &u, &v, &subFace);
     }
 
     int subPatchIndex = _irregPatch->FindSubPatch(u, v, subFace);
@@ -138,7 +138,7 @@ Surface::evalIrregularPatchStencils(REAL u, REAL v,
     int subFace = 0;
     if (_param.GetType() == Parameterization::QPOLY) {
         //  Quadrangulated faces internally use a Ptex parameterization
-        _param.ConvertUvToPtex(u, v, &u, &v, &subFace);
+        _param.ConvertCoordToPtex(u, v, &u, &v, &subFace);
     }
 
     int subPatchIndex = _irregPatch->FindSubPatch(u, v, subFace);
@@ -200,7 +200,7 @@ Surface::evalMultiLinearPatchBasis(REAL u, REAL v,
     assert(_param.GetType() == Parameterization::QPOLY);
 
     int subFace = 0;
-    _param.ConvertUvToPtex(u, v, &u, &v, &subFace);
+    _param.ConvertCoordToPtex(u, v, &u, &v, &subFace);
 
     //  WIP - Prefer to eval Linear basis directly, i.e.:
     //

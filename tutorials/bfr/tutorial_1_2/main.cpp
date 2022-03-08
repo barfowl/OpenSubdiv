@@ -26,10 +26,10 @@
 //  Description:
 //      This tutorial builds on the previous tutorial that makes use of the
 //      SurfaceFactory, Surface and Tessellation classes for evaluating and
-//      tessellating the limit surface of faces of a mesh.  This tutorial
-//      adds support for evaluating and tessellating face-varying UVs.  If
-//      UVs are present in the mesh, they will be evaluated, tessellated
-//      and written to the Obj file.
+//      tessellating the limit surface of faces of a mesh -- adding support
+//      for evaluating and tessellating face-varying UVs.  If UVs exist in
+//      the given mesh, they will be evaluated, tessellated and written to
+//      the Obj file in addition to vertex positions and normals.
 //
 
 #include "../../../regression/common/far_utils.h"
@@ -242,7 +242,7 @@ public:
                             std::vector<Vec3f> const & dv);
     void writeVertexUVs(std::vector<Vec3f> const & uv);
 
-    void writeFaces(std::vector<Bfr::Facet> const & faces,
+    void writeFaces(std::vector<int> const & faceVertices, int faceSize,
                     bool writeNormalIndices = false,
                     bool writeUVIndices = false);
 
@@ -314,15 +314,15 @@ ObjWriter::writeVertexUVs(std::vector<Vec3f> const & uv) {
 }
 
 void
-ObjWriter::writeFaces(std::vector<Bfr::Facet> const & faces,
+ObjWriter::writeFaces(std::vector<int> const & faceVertices, int faceSize,
                       bool includeNormalIndices, bool includeUVIndices) {
 
-    int numNewFaces = (int)faces.size();
+    int numNewFaces = (int)faceVertices.size() / faceSize;
 
-    for (int i = 0; i < numNewFaces; ++i) {
-        int const * v = faces[i].v;
+    int const * v = &faceVertices[0];
+    for (int i = 0; i < numNewFaces; ++i, v += faceSize) {
         fprintf(_fptr, "f ");
-        for (int j = 0; j < 4; ++j) {
+        for (int j = 0; j < faceSize; ++j) {
             if (v[j] >= 0) {
                 int vIndex = v[j];
 
@@ -386,8 +386,10 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     Bfr::Tessellation::Options tessOptions;
     tessOptions.SetTriangulateQuadFacets(args.triTessFlag);
 
-    std::vector<Bfr::Coord> tessCoords;
-    std::vector<Bfr::Facet> tessFacets;
+    std::vector<float> tessCoordPairs;
+
+    int const        tessFacetSize = 4;
+    std::vector<int> tessFacetIndices;
 
     std::vector<Vec3f> tessXYZ, tessDu, tessDv;
     std::vector<Vec3f> tessUV;
@@ -471,9 +473,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
         int numTessCoords = tessPattern.GetNumCoords();
 
-        tessCoords.resize(numTessCoords);
+        tessCoordPairs.resize(numTessCoords * 2);
 
-        tessPattern.GetCoords(&tessCoords[0]);
+        tessPattern.GetCoords(&tessCoordPairs[0]);
 
         //
         //  For both position and UVs (when present), assemble the local
@@ -491,8 +493,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
             tessDu.resize(numTessCoords);
             tessDv.resize(numTessCoords);
 
-            for (int i = 0; i < numTessCoords; ++i) {
-                posSurface.Evaluate(tessCoords[i][0], tessCoords[i][1],
+            float const * coordPair = &tessCoordPairs[0];
+            for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
+                posSurface.Evaluate(coordPair[0], coordPair[1],
                                     limitSurfaceXYZPoints,
                                     &tessXYZ[i], &tessDu[i], &tessDv[i]);
             }
@@ -505,8 +508,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
             tessUV.resize(numTessCoords);
 
-            for (int i = 0; i < numTessCoords; ++i) {
-                uvSurface.Evaluate(tessCoords[i][0], tessCoords[i][1],
+            float const * coordPair = &tessCoordPairs[0];
+            for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
+                uvSurface.Evaluate(coordPair[0], coordPair[1],
                                    limitSurfaceUVPoints,
                                    &tessUV[i]);
             }
@@ -515,22 +519,24 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //
         //  Identify facets connecting sample points of the Tessellation:
         //
-        //  Note that all Coord indices referenced by the Facets are local
+        //  Note that the coordinate indices used by the facets are local
         //  to the face (i.e. they range from [0..N-1], where N is the
-        //  number of Coords in the pattern) and so need to be offset when
-        //  writing to Obj format.  For more advanced use, the Coords
-        //  associated with the boundary and interior of the pattern are
-        //  distinguishable so that those on the boundary can be easily
-        //  remapped to refer to shared edge or corner points, while those
-        //  in the interior can be separately offset or similarly remapped.
+        //  number of coordinates in the pattern) and so need to be offset
+        //  when writing to Obj format.
+        //
+        //  For more advanced use, the coordinates associated with the
+        //  boundary and interior of the pattern are distinguishable so
+        //  that those on the boundary can be easily remapped to refer to
+        //  shared edge or corner points, while those in the interior can
+        //  be separately offset or similarly remapped.
         //
         int numTessFaces = tessPattern.GetNumFacets();
 
-        tessFacets.resize(numTessFaces);
+        tessFacetIndices.resize(numTessFaces * tessFacetSize);
 
-        tessPattern.GetFacets(&tessFacets[0]);
+        tessPattern.GetFacets(&tessFacetIndices[0], tessFacetSize);
 
-        tessPattern.TransformFacetIndices(&tessFacets[0],
+        tessPattern.TransformFacetIndices(&tessFacetIndices[0], tessFacetSize,
                                           1 + objWriter.GetNumVertices());
 
         //
@@ -550,7 +556,8 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
             objWriter.writeVertexUVs(tessUV);
         }
 
-        objWriter.writeFaces(tessFacets, writeNormals, writeUVs);
+        objWriter.writeFaces(tessFacetIndices, tessFacetSize, writeNormals,
+                                                              writeUVs);
     }
 }
 

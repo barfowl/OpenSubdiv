@@ -58,7 +58,6 @@ public:
 
 public:
     Parameterization() : _faceSize(0) { }
-    Parameterization(Sdc::SchemeType scheme);
     Parameterization(Sdc::SchemeType scheme, int faceSize);
     ~Parameterization() { }
 
@@ -66,9 +65,6 @@ public:
 
     int  GetFaceSize() const { return _faceSize; }
     Type GetType() const { return (Type) _type; }
-
-    //  Redefine for a different face of the same subdivision scheme:
-    void Resize(int faceSize);
 
 public:
     //
@@ -103,25 +99,13 @@ public:
     //  scheme (from which a temporary instance can be trivially created).
     //
     template <typename REAL>
-    void ConvertUvToPtex(REAL   inU,   REAL   inV,
-                         REAL * ptexU, REAL * ptexV, int * ptexFace) const;
+    void ConvertCoordToPtex(REAL   inU,   REAL   inV,
+                            REAL * ptexU, REAL * ptexV, int * ptexFace) const;
     template <typename REAL>
-    void ConvertPtexToUv(REAL   ptexU, REAL   ptexV, int   ptexFace,
-                         REAL * outU,  REAL * outV) const;
-
-    //  Method to query if parameterizations is continuous, i.e. two or
-    //  more (u,v) locations can be interpolated to provide a meaningful
-    //  result.
-    //
-    //  WIP - may want to avoid "continuous" to avoid confusion with
-    //        parametric vs geometric continuity, so consider alternatives.
-    //      - also, how useful is this without a method to provide some
-    //        kind of reasonable interpolation in discontinuous cases?
-    bool IsContinuous() const { return _type != QPOLY; }
+    void ConvertPtexToCoord(REAL   ptexU, REAL   ptexV, int   ptexFace,
+                            REAL * outU,  REAL * outV) const;
 
 private:
-    void initialize();
-
     unsigned int _faceSize : 16;
     unsigned int _type     :  4;
     unsigned int _scheme   :  4;
@@ -131,11 +115,11 @@ private:
 //
 //  Inline construction and resizing methods:
 //
-inline void
-Parameterization::initialize() {
+inline
+Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) :
+        _faceSize(faceSize), _scheme(scheme), _uDim(0) {
 
-    Sdc::SchemeType schemeType = (Sdc::SchemeType) _scheme;
-    if (Sdc::SchemeTypeTraits::GetRegularFaceSize(schemeType) == 3) {
+    if (Sdc::SchemeTypeTraits::GetRegularFaceSize(scheme) == 3) {
         _type = TRI;
         //  Reset size as 0 for now for non-tris, possibly assert()
         if (_faceSize != 3) _faceSize = 0;
@@ -151,28 +135,6 @@ Parameterization::initialize() {
             _uDim = 1 + (int) std::sqrt((float)(_faceSize - 1));
         }
     }
-}
-
-inline
-Parameterization::Parameterization(Sdc::SchemeType scheme) :
-        _scheme(scheme), _uDim(0) {
-
-    _faceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(scheme);
-    initialize();
-}
-
-inline
-Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) :
-        _faceSize(faceSize), _scheme(scheme), _uDim(0) {
-
-    initialize();
-}
-
-inline void
-Parameterization::Resize(int faceSize) {
-
-    _faceSize = faceSize;
-    initialize();
 }
 
 //
@@ -250,7 +212,7 @@ Parameterization::GetCenterCoord(REAL * u, REAL * v) const {
 //
 template <typename REAL>
 void
-Parameterization::ConvertUvToPtex(REAL inU, REAL inV,
+Parameterization::ConvertCoordToPtex(REAL inU, REAL inV,
         REAL * ptexU, REAL * ptexV, int * ptexFace) const {
 
     if (_type == QPOLY) {
@@ -269,7 +231,7 @@ Parameterization::ConvertUvToPtex(REAL inU, REAL inV,
 
 template <typename REAL>
 void
-Parameterization::ConvertPtexToUv(REAL ptexU, REAL ptexV, int ptexFace,
+Parameterization::ConvertPtexToCoord(REAL ptexU, REAL ptexV, int ptexFace,
         REAL * outU, REAL * outV) const {
 
     if (_type == QPOLY) {

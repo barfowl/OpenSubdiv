@@ -40,9 +40,6 @@ namespace Bfr {
 //  Tessellation is a simple class that provides topological information
 //  for a specified tessellation pattern of a given parameterization.
 //
-//  WIP - Remember that use of Coord and Facet in the interface here are
-//  subject to change in future.
-//
 class Tessellation {
 public:
     //
@@ -142,24 +139,6 @@ public:
                                int const boundaryIndices[],
                                int const interiorIndices[]);
 
-    //
-    //  WIP - overloads of above methods using Coord[] and Facet[]
-    //      - these are likely to be deprecated
-    //
-    int GetCoords(Coord coords[]) const;
-    int GetBoundaryCoords(Coord coords[]) const;
-    int GetInteriorCoords(Coord coords[]) const;
-    int GetVertexCoord(int vertex, Coord coords[]) const;
-    int GetEdgeCoords(int edge, Coord coords[]) const;
-
-    int  GetFacets(Facet facets[]) const;
-    void TransformFacetIndices(Facet facets[], int commonOffset);
-    void TransformFacetIndices(Facet facets[], int boundaryOffset,
-                                               int interiorOffset);
-    void TransformFacetIndices(Facet facets[], int const boundaryIndices[],
-                                               int       interiorOffset);
-    void TransformFacetIndices(Facet facets[], int const boundaryIndices[],
-                                               int const interiorIndices[]);
 private:
     //  Private initialization methods:
     void initialize(Parameterization, int nRates, int const rates[], Options);
@@ -210,57 +189,6 @@ Tessellation::GetCoords(REAL uvPairs[]) const {
     int nPairs = GetBoundaryCoords(uvPairs);
     nPairs += GetInteriorCoords(uvPairs + nPairs * 2);
     return nPairs;
-}
-
-//
-//  WIP - inline wrappers using Coords, possibly to be deprecated
-//
-inline int
-Tessellation::GetCoords(Coord coords[]) const {
-    return GetCoords(&coords[0][0]);
-}
-inline int
-Tessellation::GetBoundaryCoords(Coord coords[]) const {
-    return GetBoundaryCoords(&coords[0][0]);
-}
-inline int
-Tessellation::GetInteriorCoords(Coord coords[]) const {
-    return GetInteriorCoords(&coords[0][0]);
-}
-inline int
-Tessellation::GetVertexCoord(int vertex, Coord coords[]) const {
-    return GetVertexCoord(vertex, &coords[0][0]);
-}
-inline int
-Tessellation::GetEdgeCoords( int edge, Coord coords[]) const {
-    return GetEdgeCoords(edge, &coords[0][0]);
-}
-
-//
-//  WIP - inline wrappers using Facets, possibly to be deprecated
-//
-inline int
-Tessellation::GetFacets(Facet facets[]) const {
-    return GetFacets(&facets[0][0], 4);
-}
-inline void
-Tessellation::TransformFacetIndices(Facet facets[], int commonOffset) {
-    TransformFacetIndices(&facets[0][0], 4, commonOffset);
-}
-inline void
-Tessellation::TransformFacetIndices(Facet facets[], int boundaryOffset,
-                                                    int interiorOffset) {
-    TransformFacetIndices(&facets[0][0], 4, boundaryOffset, interiorOffset);
-}
-inline void
-Tessellation::TransformFacetIndices(Facet facets[], int const boundaryIndices[],
-                                                    int       interiorOffset) {
-    TransformFacetIndices(&facets[0][0], 4, boundaryIndices, interiorOffset);
-}
-inline void
-Tessellation::TransformFacetIndices(Facet facets[], int const bndIndices[],
-                                                    int const intIndices[]) {
-    TransformFacetIndices(&facets[0][0], 4, bndIndices, intIndices);
 }
 
 } // end namespace Bfr

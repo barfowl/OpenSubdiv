@@ -1982,6 +1982,11 @@ Tessellation::initialize(Parameterization p,
 
     _triangulate = options.GetTriangulateQuadFacets();
 
+    _singleFace    = false;
+    _segmentedFace = false;
+    _triangleFan   = false;
+    _splitQuad     = false;
+
     //  Initialize the full array of rates, returning sum of all edge rates
     int sumOfEdgeRates = initializeRates(numRates, rates);
 

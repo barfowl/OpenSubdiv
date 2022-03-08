@@ -240,9 +240,8 @@ public:
     void writeVertexPositions(std::vector<Vec3f> const & p);
     void writeVertexNormals(std::vector<Vec3f> const & du,
                             std::vector<Vec3f> const & dv);
-    void writeVertexUVs(std::vector<Vec3f> const & uv);
 
-    void writeFaces(std::vector<Bfr::Facet> const & faces,
+    void writeFaces(std::vector<int> const & faceVertices, int faceSize,
                     bool writeNormalIndices = false,
                     bool writeUVIndices = false);
 
@@ -303,26 +302,15 @@ ObjWriter::writeVertexNormals(std::vector<Vec3f> const & du,
 }
 
 void
-ObjWriter::writeVertexUVs(std::vector<Vec3f> const & uv) {
-
-    int numNewUVs = (int)uv.size();
-
-    for (int i = 0; i < numNewUVs; ++i) {
-        fprintf(_fptr, "vt %f %f\n", uv[i][0], uv[i][1]);
-    }
-    _numUVs += numNewUVs;
-}
-
-void
-ObjWriter::writeFaces(std::vector<Bfr::Facet> const & faces,
+ObjWriter::writeFaces(std::vector<int> const & faceVertices, int faceSize,
                       bool includeNormalIndices, bool includeUVIndices) {
 
-    int numNewFaces = (int)faces.size();
+    int numNewFaces = (int)faceVertices.size() / faceSize;
 
-    for (int i = 0; i < numNewFaces; ++i) {
-        int const * v = faces[i].v;
+    int const * v = &faceVertices[0];
+    for (int i = 0; i < numNewFaces; ++i, v += faceSize) {
         fprintf(_fptr, "f ");
-        for (int j = 0; j < 4; ++j) {
+        for (int j = 0; j < faceSize; ++j) {
             if (v[j] >= 0) {
                 int vIndex = v[j];
 
@@ -377,8 +365,10 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     Bfr::Tessellation::Options tessOptions;
     tessOptions.SetTriangulateQuadFacets(args.triTessFlag);
 
-    std::vector<Bfr::Coord> tessCoords;
-    std::vector<Bfr::Facet> tessFacets;
+    std::vector<float> tessCoordPairs;
+
+    int const        tessFacetSize = 4;
+    std::vector<int> tessFacetIndices;
 
     std::vector<Vec3f> tessXYZ, tessDu, tessDv;
 
@@ -424,9 +414,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //
         int numTessCoords = tessPattern.GetNumCoords();
 
-        tessCoords.resize(numTessCoords);
+        tessCoordPairs.resize(numTessCoords * 2);
 
-        tessPattern.GetCoords(&tessCoords[0]);
+        tessPattern.GetCoords(&tessCoordPairs[0]);
 
         //
         //  Assemble the local buffer of points for the Surface evaluation
@@ -442,8 +432,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         tessDu.resize(numTessCoords);
         tessDv.resize(numTessCoords);
 
-        for (int i = 0; i < numTessCoords; ++i) {
-            posSurface.Evaluate(tessCoords[i][0], tessCoords[i][1],
+        float const * coordPair = &tessCoordPairs[0];
+        for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
+            posSurface.Evaluate(coordPair[0], coordPair[1],
                                 limitSurfaceXYZPoints,
                                 &tessXYZ[i], &tessDu[i], &tessDv[i]);
         }
@@ -451,22 +442,24 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //
         //  Identify facets connecting sample points of the Tessellation:
         //
-        //  Note that all Coord indices referenced by the Facets are local
+        //  Note that the coordinate indices used by the facets are local
         //  to the face (i.e. they range from [0..N-1], where N is the
-        //  number of Coords in the pattern) and so need to be offset when
-        //  writing to Obj format.  For more advanced use, the Coords
-        //  associated with the boundary and interior of the pattern are
-        //  distinguishable so that those on the boundary can be easily
-        //  remapped to refer to shared edge or corner points, while those
-        //  in the interior can be separately offset or similarly remapped.
+        //  number of coordinates in the pattern) and so need to be offset
+        //  when writing to Obj format.
+        //
+        //  For more advanced use, the coordinates associated with the
+        //  boundary and interior of the pattern are distinguishable so
+        //  that those on the boundary can be easily remapped to refer to
+        //  shared edge or corner points, while those in the interior can
+        //  be separately offset or similarly remapped.
         //
         int numTessFaces = tessPattern.GetNumFacets();
 
-        tessFacets.resize(numTessFaces);
+        tessFacetIndices.resize(numTessFaces * tessFacetSize);
 
-        tessPattern.GetFacets(&tessFacets[0]);
+        tessPattern.GetFacets(&tessFacetIndices[0], tessFacetSize);
 
-        tessPattern.TransformFacetIndices(&tessFacets[0],
+        tessPattern.TransformFacetIndices(&tessFacetIndices[0], tessFacetSize,
                                           1 + objWriter.GetNumVertices());
 
         //
@@ -478,7 +471,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         objWriter.writeVertexPositions(tessXYZ);
         objWriter.writeVertexNormals(tessDu, tessDv);
 
-        objWriter.writeFaces(tessFacets, true);
+        objWriter.writeFaces(tessFacetIndices, tessFacetSize, true, false);
     }
 }
 

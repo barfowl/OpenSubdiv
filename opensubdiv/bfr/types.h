@@ -27,7 +27,7 @@
 
 #include "../version.h"
 
-#include "../vtr/types.h"
+#include "../far/types.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -35,51 +35,22 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 
 //
-//  WORK IN PROGRESS...
+//  Typedefs for indices and limits used either directly with or for
+//  purposes similar to those of Far classes:
 //
-//  Simple (temporary?) types used with evaluation and tessellation:
-//      - interfaces often require dealing with arrays of these
-//      - explicit types may be removed in favor of more primitive types
-//      - use of float[] and int[] or templates may be preferable
-//
-struct Coord {
-    Coord() { }
-    Coord(float u, float v) { uv[0] = u, uv[1] = v; }
+typedef Far::Index       Index;
+typedef Far::LocalIndex  LocalIndex;
 
-    float const & operator[](int i) const { return uv[i]; }
-    float       & operator[](int i)       { return uv[i]; }
+typedef Far::IndexArray       IndexArray;
+typedef Far::LocalIndexArray  LocalIndexArray;
 
-    float uv[2];  // will need template versions of this <typename REAL>
-};
+typedef Far::ConstIndexArray       ConstIndexArray;
+typedef Far::ConstLocalIndexArray  ConstLocalIndexArray;
 
-struct Facet {
-    Facet() { }
-    Facet(int a, int b, int c, int d = -1) { v[0] = a, v[1] = b, v[2] = c, v[3] = d; }
+inline bool IndexIsValid(Index index) { return Far::IndexIsValid(index); }
 
-    int const & operator[](int i) const { return v[i]; }
-    int       & operator[](int i)       { return v[i]; }
-
-    int v[4];
-};
-
-
-//
-//  Typedefs for indices that are inherited from the Vtr level -- eventually
-//  these primitive Vtr types may be declared at a lower, more public level.
-//
-typedef Vtr::Index       Index;
-typedef Vtr::LocalIndex  LocalIndex;
-
-typedef Vtr::IndexArray       IndexArray;
-typedef Vtr::LocalIndexArray  LocalIndexArray;
-
-typedef Vtr::ConstIndexArray       ConstIndexArray;
-typedef Vtr::ConstLocalIndexArray  ConstLocalIndexArray;
-
-inline bool IndexIsValid(Index index) { return Vtr::IndexIsValid(index); }
-
-static const Index INDEX_INVALID = Vtr::INDEX_INVALID;
-static const int   VALENCE_LIMIT = Vtr::VALENCE_LIMIT;
+static const Index INDEX_INVALID = Far::INDEX_INVALID;
+static const int   VALENCE_LIMIT = Far::VALENCE_LIMIT;
 
 } // end namespace Bfr
 
