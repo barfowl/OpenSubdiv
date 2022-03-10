@@ -26,6 +26,7 @@
 
 #include <cstring>
 #include <cstdio>
+#include <limits>
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -1974,13 +1975,13 @@ qpoly::GetNonUniformFacets(int N, int const outerRes[], int innerRes,
 //  Internal initialization methods:
 //
 void
-Tessellation::initialize(Parameterization p,
-        int numRates, int const rates[], Options options) {
+Tessellation::initialize(Parameterization const & p,
+        int numRates, int const rates[], Options const & options) {
 
     //  Initialize trivial members:
     _param = p;
 
-    _triangulate = options.GetTriangulateQuadFacets();
+    _triangulate = !options.PreserveQuadFacets();
 
     _singleFace    = false;
     _segmentedFace = false;
@@ -2021,54 +2022,97 @@ Tessellation::initialize(Parameterization p,
     }
 }
 
-int
-Tessellation::initializeRates(int numRates, int const rates[]) {
+inline int
+Tessellation::clampRate(int rate) const {
 
-    //  Members related to tessellation rates:
+    int maxRate = std::numeric_limits<short>::max();
+    return std::max(1, std::min(rate, maxRate));
+}
+
+int
+Tessellation::initializeRates(int numGivenRates, int const givenRates[]) {
+
+    _numGivenRates = numGivenRates;
+
+    //  Allocate space for rates of N-sided faces if necessary:
     int N = _param.GetFaceSize();
-    if (N > 4) {
-        _outerRatesDynamic.resize(N);
-        _outerRates = &_outerRatesDynamic[0];
+    if (N > (int)(sizeof(_outerRatesLocal) / sizeof(int))) {
+        _outerRates = new int[N];
     } else {
         _outerRates = &_outerRatesLocal[0];
     }
+    bool isQuad = (N == 4);
 
-    int numBoundaryEdges = 0;
-    if (numRates < N) {
-        _isUniform = true;
+    //  Keep track of the total tessellation rate for all edges to return:
+    int totalEdgeRate = 0;
+    if (numGivenRates < N) {
+        //  Given one or two inner rates, infer outer (others < N ignored):
+        if ((numGivenRates == 2) && isQuad) {
+            //  Infer outer rates from two given inner rates of quad:
+            _innerRates[0] = clampRate(givenRates[0]);
+            _innerRates[1] = clampRate(givenRates[1]);
 
-        std::fill(_outerRates, _outerRates + N, rates[0]);
-        _innerRates[0] = rates[0];
-        _innerRates[1] = rates[0];
+            _outerRates[0] = _outerRates[2] = _innerRates[0];
+            _outerRates[1] = _outerRates[3] = _innerRates[1];
 
-        numBoundaryEdges = rates[0] * N;
-    } else {
-        _isUniform = true;  // will be marked false below if warranted
-        for (int i = 0; i < N; ++i) {
-            _outerRates[i] = rates[i];
-            _isUniform &= (rates[i] == rates[0]);
-            numBoundaryEdges += rates[i];
-        }
-
-        //  Assign or infer the inner rates:
-        if (N != 4) {
-            _innerRates[0] = (numRates > N) ? rates[N] : (numBoundaryEdges / N);
-            _innerRates[1] = _innerRates[0];
-        } else if (numRates > 4) {
-            _innerRates[0] = rates[4];
-            _innerRates[1] = rates[4 + (numRates > 5)];
+            _isUniform = (_innerRates[0] == _innerRates[1]);
+            totalEdgeRate = 2 * (_innerRates[0] + _innerRates[1]);
         } else {
-            _innerRates[0] = (rates[0] + rates[2]) / 2;
-            _innerRates[1] = (rates[1] + rates[3]) / 2;
+            //  Infer outer rates from single inner rate (uniform):
+            _innerRates[0] = clampRate(givenRates[0]);
+            _innerRates[1] = _innerRates[0];
+
+            std::fill(_outerRates, _outerRates + N, _innerRates[0]);
+
+            _isUniform = true;
+            totalEdgeRate = _innerRates[0] * N;
+        }
+    } else {
+        //  Assign the N outer rates:
+        _isUniform = true;
+        for (int i = 0; i < N; ++i) {
+            _outerRates[i] = clampRate(givenRates[i]);
+            _isUniform &= (_outerRates[i] == _outerRates[0]);
+            totalEdgeRate += _outerRates[i];
         }
 
-        //  Test specified inner-rates to confirm still uniform:
-        if (_isUniform && (numRates > N)) {
-            _isUniform &= (_innerRates[0] == rates[0]);
-            _isUniform &= (_innerRates[1] == rates[0]);
+        //  Assign any given inner rates or infer:
+        if (numGivenRates > N) {
+            //  Assign single inner rate, assign/infer second for quad:
+            _innerRates[0] = clampRate(givenRates[N]);
+            _innerRates[1] = ((numGivenRates == 6) && isQuad)
+                           ? clampRate(givenRates[5]) : _innerRates[0];
+
+            _isUniform &= (_innerRates[0] == _outerRates[0]);
+            _isUniform &= (_innerRates[1] == _outerRates[0]);
+        } else if (isQuad) {
+            //  Infer two inner rates for quads (avg of opposite edges):
+            _innerRates[0] = (_outerRates[0] + _outerRates[2]) / 2;
+            _innerRates[1] = (_outerRates[1] + _outerRates[3]) / 2;
+        } else {
+            //  Infer single inner rate for non-quads (avg of edge rates)
+            _innerRates[0] = totalEdgeRate / N;
+            _innerRates[1] = _innerRates[0];
         }
     }
-    return numBoundaryEdges;
+    return totalEdgeRate;
+}
+
+int
+Tessellation::GetRates(int rates[]) const {
+
+    int N = _param.GetFaceSize();
+
+    int numOuterRates = std::min<int>(N, _numGivenRates);
+    int numInnerRates = std::max<int>(0, _numGivenRates - N);
+
+    for (int i = 0; i < numOuterRates; ++i) {
+        rates[i] = _outerRates[i];
+    }
+    for (int i = 0; i < numInnerRates; ++i) {
+        rates[N + i] = _innerRates[std::max(1,i)];
+    }
+    return _numGivenRates;
 }
 
 void
@@ -2119,7 +2163,6 @@ Tessellation::quadInitializeInventory(int sumOfEdgeRates) {
         }
     }
     _numBoundaryPoints = sumOfEdgeRates;
-    _numTotalPoints    = _numBoundaryPoints + _numInteriorPoints;
 }
 
 void
@@ -2147,7 +2190,6 @@ Tessellation::triInitializeInventory(int sumOfEdgeRates) {
         }
     }
     _numBoundaryPoints = sumOfEdgeRates;
-    _numTotalPoints    = _numBoundaryPoints + _numInteriorPoints;
 }
 
 void
@@ -2181,22 +2223,28 @@ Tessellation::qpolyInitializeInventory(int sumOfEdgeRates) {
         }
     }
     _numBoundaryPoints = sumOfEdgeRates;
-    _numTotalPoints    = _numBoundaryPoints + _numInteriorPoints;
 }
 
 //
 //  Tessellation constructors and destructor:
 //
-Tessellation::Tessellation(Parameterization p, int uniformRate,
-                           Options options) {
+Tessellation::Tessellation(Parameterization const & p,
+        int uniformRate, Options options) {
 
     initialize(p, 1, &uniformRate, options);
 }
 
-Tessellation::Tessellation(Parameterization p, int numRates, int const rates[],
-                           Options options) {
+Tessellation::Tessellation(Parameterization const & p,
+        int numRates, int const rates[], Options options) {
 
     initialize(p, numRates, rates, options);
+}
+
+Tessellation::~Tessellation() {
+
+    if (_outerRates != &_outerRatesLocal[0]) {
+        delete[] _outerRates;
+    }
 }
 
 

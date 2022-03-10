@@ -189,16 +189,16 @@ public:
     std::string     inputObjFile;
     std::string     outputObjFile;
     Sdc::SchemeType schemeType;
-    int             tessUniform;
-    bool            triTessFlag;
+    int             tessUniformRate;
+    bool            tessQuadsFlag;
 
 public:
     Args(int argc, char ** argv) :
         inputObjFile(),
         outputObjFile(),
         schemeType(Sdc::SCHEME_CATMARK),
-        tessUniform(5),
-        triTessFlag(false) {
+        tessUniformRate(5),
+        tessQuadsFlag(false) {
 
         for (int i = 1; i < argc; ++i) {
             if (strstr(argv[i], ".obj")) {
@@ -216,15 +216,12 @@ public:
             } else if (!strcmp(argv[i], "-loop")) {
                 schemeType = Sdc::SCHEME_LOOP;
             } else if (!strcmp(argv[i], "-res")) {
-                if (++i < argc) tessUniform = atoi(argv[i]);
-            } else if (!strcmp(argv[i], "-tris")) {
-                triTessFlag = true;
+                if (++i < argc) tessUniformRate = atoi(argv[i]);
+            } else if (!strcmp(argv[i], "-quads")) {
+                tessQuadsFlag = true;
             } else {
                 fprintf(stderr, "Warning: Argument '%s' ignored\n", argv[i]);
             }
-        }
-        if (triTessFlag) {
-            fprintf(stderr, "Warning: Argument -tris not yet supported.\n");
         }
     }
 
@@ -366,7 +363,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  here to reuse memory for each face):
     //
     Bfr::Tessellation::Options tessOptions;
-    tessOptions.SetTriangulateQuadFacets(args.triTessFlag);
+    tessOptions.PreserveQuadFacets(args.tessQuadsFlag);
 
     std::vector<float> tessCoordPairs;
 
@@ -407,7 +404,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         }
 
         Bfr::Tessellation tessPattern(posSurface.GetParameterization(),
-                                      args.tessUniform,
+                                      args.tessUniformRate,
                                       tessOptions);
 
         //
