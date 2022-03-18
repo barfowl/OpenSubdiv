@@ -295,18 +295,18 @@ Surface::evalMultiLinearPatchStencils(REAL u, REAL v,
 //
 template <typename REAL>
 int
-Surface::EvaluateStencils(double u, double v,
+Surface::EvaluateStencils(REAL const uv[2],
                   REAL sP[],   REAL sDu[],  REAL sDv[],
                   REAL sDuu[], REAL sDuv[], REAL sDvv[]) const {
 
     if (_isRegular) {
-        return evalRegularPatchStencils<REAL>((REAL)u, (REAL)v,
+        return evalRegularPatchStencils<REAL>(uv[0], uv[1],
                                         sP, sDu, sDv, sDuu, sDuv, sDvv);
     } else if (_isLinear) {
-        return evalMultiLinearPatchStencils<REAL>((REAL)u, (REAL)v,
+        return evalMultiLinearPatchStencils<REAL>(uv[0], uv[1],
                                             sP, sDu, sDv, sDuu, sDuv, sDvv);
     } else {
-        return evalIrregularPatchStencils<REAL>((REAL)u, (REAL)v,
+        return evalIrregularPatchStencils<REAL>(uv[0], uv[1],
                                           sP, sDu, sDv, sDuu, sDuv, sDvv);
     }
 }
@@ -398,11 +398,11 @@ Surface::evalMultiLinearPatchStencils<double>(double u, double v,
 
 //  Top-level stencil evaluation:
 template int
-Surface::EvaluateStencils<float>(double u, double v,
+Surface::EvaluateStencils<float>(float const uv[2],
         float sP[],   float sDu[],  float sDv[],
         float sDuu[], float sDuv[], float sDvv[]) const;
 template int
-Surface::EvaluateStencils<double>(double u, double v,
+Surface::EvaluateStencils<double>(double const uv[2],
         double sP[],   double sDu[],  double sDv[],
         double sDuu[], double sDuv[], double sDvv[]) const;
 

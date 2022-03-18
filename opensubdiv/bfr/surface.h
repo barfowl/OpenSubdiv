@@ -90,16 +90,16 @@ public:
     void PreparePatchPointValues(T const & meshVertices,
                                  U       & patchPoints) const;
 
-    template <class T, class U>
-    void Evaluate(double u, double v, T const & patchPoints, U * P) const;
+    template <typename REAL, class T, class U>
+    void Evaluate(REAL const uv[2], T const & patchPoints, U * P) const;
 
-    template <class T, class U>
-    void Evaluate(double u, double v, T const & patchPoints, U * P,
-                                      U * Du, U * Dv) const;
-    template <class T, class U>
-    void Evaluate(double u, double v, T const & patchPoints, U * P,
-                                      U * Du,  U * Dv,
-                                      U * Duu, U * Duv, U * Dvv) const;
+    template <typename REAL, class T, class U>
+    void Evaluate(REAL const uv[2], T const & patchPoints, U * P,
+                                    U * Du, U * Dv) const;
+    template <typename REAL, class T, class U>
+    void Evaluate(REAL const uv[2], T const & patchPoints, U * P,
+                                    U * Du,  U * Dv,
+                                    U * Duu, U * Duv, U * Dvv) const;
 
     //
     //  The "control vertices" identify the subset of vertices of the
@@ -119,14 +119,14 @@ public:
     ConstIndexArray GetControlVertexIndices() const;
 
     template <typename REAL>
-    int EvaluateStencils(double u, double v, REAL sP[]) const;
+    int EvaluateStencils(REAL const uv[2], REAL sP[]) const;
 
     template <typename REAL>
-    int EvaluateStencils(double u, double v, REAL sP[],
+    int EvaluateStencils(REAL const uv[2], REAL sP[],
                          REAL sDu[], REAL sDv[]) const;
 
     template <typename REAL>
-    int EvaluateStencils(double u, double v, REAL sP[],
+    int EvaluateStencils(REAL const uv[2], REAL sP[],
                          REAL sDu[],  REAL sDv[],
                          REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
 
@@ -144,9 +144,9 @@ public:
 private:
     //  Evaluation applying weighted combinations of client type <T>:
     template <typename REAL, class T, class U>
-    void evaluate(double u, double v, T const & patchPoints, U * P,
-                                      U * Du,  U * Dv,
-                                      U * Duu, U * Duv, U * Dvv) const;
+    void evaluate(REAL u, REAL v, T const & patchPoints, U * P,
+                                  U * Du,  U * Dv,
+                                  U * Duu, U * Duv, U * Dvv) const;
 
     template <typename REAL, class T, class U>
     void evalRegularPatch(REAL u, REAL v, T const & patchPoints,
@@ -465,61 +465,57 @@ Surface::evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
 
 template <typename REAL, class T, class U>
 inline void
-Surface::evaluate(double u, double v, T const & patchPoints,
+Surface::evaluate(REAL u, REAL v, T const & patchPoints,
                   U * P, U * Du, U * Dv, U * Duu, U * Duv, U * Dvv) const {
 
     if (_isRegular) {
-        evalRegularPatch<REAL,T,U>((REAL)u, (REAL)v, patchPoints,
+        evalRegularPatch<REAL,T,U>(u, v, patchPoints,
                                    P, Du, Dv, Duu, Duv, Dvv);
     } else if (_isLinear) {
-        evalMultiLinearPatch<REAL,T,U>((REAL)u, (REAL)v, patchPoints,
+        evalMultiLinearPatch<REAL,T,U>(u, v, patchPoints,
                                        P, Du, Dv, Duu, Duv, Dvv);
     } else {
-        evalIrregularPatch<REAL,T,U>((REAL)u, (REAL)v, patchPoints,
+        evalIrregularPatch<REAL,T,U>(u, v, patchPoints,
                                      P, Du, Dv, Duu, Duv, Dvv);
     }
 }
 
-template <class T, class U>
+template <typename REAL, class T, class U>
 inline void
-Surface::Evaluate(double u, double v, T const & patchPoints,
+Surface::Evaluate(REAL const uv[2], T const & patchPoints,
                   U * P, U * Du, U * Dv, U * Duu, U * Duv, U * Dvv) const {
 
-    if (_useDouble) {
-        evaluate<double,T,U>(u, v, patchPoints, P, Du, Dv, Duu, Duv, Dvv);
-    } else {
-        evaluate<float,T,U>(u, v, patchPoints, P, Du, Dv, Duu, Duv, Dvv);
-    }
+    evaluate<REAL,T,U>(uv[0], uv[1], patchPoints, P, Du, Dv, Duu, Duv, Dvv);
 }
 
-template <class T, class U>
+template <typename REAL, class T, class U>
 inline void
-Surface::Evaluate(double u, double v, T const & patchPoints,
+Surface::Evaluate(REAL const uv[2], T const & patchPoints,
                   U * P, U * Du, U * Dv) const {
 
-    Evaluate<T,U>(u, v, patchPoints, P, Du, Dv, 0, 0, 0);
+    evaluate<REAL,T,U>(uv[0], uv[1], patchPoints, P, Du, Dv, 0, 0, 0);
 }
 
-template <class T, class U>
+template <typename REAL, class T, class U>
 inline void
-Surface::Evaluate(double u, double v, T const & patchPoints, U * P) const {
+Surface::Evaluate(REAL const uv[2], T const & patchPoints, U * P) const {
 
-    Evaluate<T,U>(u, v, patchPoints, P, 0, 0, 0, 0, 0);
+    evaluate<REAL,T,U>(uv[0], uv[1], patchPoints, P, 0, 0, 0, 0, 0);
 }
 
 template <typename REAL>
 inline int
-Surface::EvaluateStencils(double u, double v,
+Surface::EvaluateStencils(REAL const uv[2],
                           REAL sP[], REAL sDu[], REAL sDv[]) const {
 
-    return EvaluateStencils<REAL>(u, v, sP, sDu, sDv, 0, 0, 0);
+    return EvaluateStencils<REAL>(uv, sP, sDu, sDv, 0, 0, 0);
 }
 
 template <typename REAL>
 inline int
-Surface::EvaluateStencils(double u, double v, REAL sP[]) const {
+Surface::EvaluateStencils(REAL const uv[2], REAL sP[]) const {
 
-    return EvaluateStencils<REAL>(u, v, sP, 0, 0, 0, 0, 0);
+    return EvaluateStencils<REAL>(uv, sP, 0, 0, 0, 0, 0);
 }
 
 template <typename REAL, class T, class U>

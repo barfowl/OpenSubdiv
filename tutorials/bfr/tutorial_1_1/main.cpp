@@ -434,8 +434,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
         float const * coordPair = &tessCoordPairs[0];
         for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
-            posSurface.Evaluate(coordPair[0], coordPair[1],
-                                limitSurfaceXYZPoints,
+            posSurface.Evaluate(coordPair, limitSurfaceXYZPoints,
                                 &tessXYZ[i], &tessDu[i], &tessDv[i]);
         }
 
