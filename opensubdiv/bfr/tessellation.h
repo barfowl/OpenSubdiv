@@ -194,7 +194,7 @@ private:
 template <typename REAL>
 inline int
 Tessellation::GetVertexCoord(int vertex, REAL uvPair[]) const {
-    _param.GetVertexCoord(vertex, &uvPair[0], &uvPair[1]);
+    _param.GetVertexCoord(vertex, uvPair);
     return 1;
 }
 

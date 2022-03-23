@@ -1691,31 +1691,31 @@ qpoly::getRingEdgeCoords(Parameterization P, int edge, int edgeRes,
 
     int nCoords = 0;
     if (incFirst || n0) {
-        REAL u0, v0;
-        P.GetVertexCoord(edge, &u0, &v0);
+        REAL uv0[2];
+        P.GetVertexCoord(edge, uv0);
 
         //  u ranges from [tOrigin < 0.5] while v is constant
         if (incFirst) {
-            coords[nCoords++].Set(u0 + tOrigin, v0 + tOrigin);
+            coords[nCoords++].Set(uv0[0] + tOrigin, uv0[1] + tOrigin);
         }
         if (n0) {
-            REAL u = u0 + tOrigin + dt;
-            REAL v = v0 + tOrigin;
+            REAL u = uv0[0] + tOrigin + dt;
+            REAL v = uv0[1] + tOrigin;
             nCoords += appendVIsoLine(coords + nCoords, n0, u, v, dt);
         }
     }
     if (n1 || incLast) {
-        REAL u1, v1;
-        P.GetVertexCoord((edge + 1) % P.GetFaceSize(), &u1, &v1);
+        REAL uv1[2];
+        P.GetVertexCoord((edge + 1) % P.GetFaceSize(), uv1);
 
         //  u is constant while v ranges from [0.5 > tOrigin] (even)
         if (n1) {
-            REAL u = u1 + tOrigin;
-            REAL v = v1 + ((edgeRes & 1) ? (0.5f - 0.5f * dt) : 0.5f);
+            REAL u = uv1[0] + tOrigin;
+            REAL v = uv1[1] + ((edgeRes & 1) ? (0.5f - 0.5f * dt) : 0.5f);
             nCoords += appendUIsoLine(coords + nCoords, n1, u, v, -dt);
         }
         if (incLast) {
-            coords[nCoords++].Set(u1 + tOrigin, v1 + tOrigin);
+            coords[nCoords++].Set(uv1[0] + tOrigin, uv1[1] + tOrigin);
         }
     }
     return nCoords;
@@ -1775,9 +1775,9 @@ qpoly::getCenterRingCoords(Parameterization P, REAL tOrigin,
 
     //  Just need the single corner point for each edge here:
     for (int i = 0; i < N; ++i) {
-        REAL uCorner, vCorner;
-        P.GetVertexCoord(i, &uCorner, &vCorner);
-        coords[i].Set(uCorner + tOrigin, vCorner + tOrigin);
+        REAL uv[2];
+        P.GetVertexCoord(i, uv);
+        coords[i].Set(uv[0] + tOrigin, uv[1] + tOrigin);
     }
     return (N == 3) ? N : (N + getCenterCoord(coords + N));
 }
@@ -2299,7 +2299,7 @@ Tessellation::GetInteriorCoords(REAL uvPairs[]) const {
     if (_numInteriorPoints == 0) return 0;
 
     if (_numInteriorPoints == 1) {
-        _param.GetCenterCoord(&uvPairs[0], &uvPairs[1]);
+        _param.GetCenterCoord(uvPairs);
         return 1;
     }
 

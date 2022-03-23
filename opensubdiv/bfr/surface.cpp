@@ -112,16 +112,14 @@ Surface::evalIrregularPatchBasis(REAL u, REAL v,
         REAL wP[],   REAL wDu[],  REAL wDv[],
         REAL wDuu[], REAL wDuv[], REAL wDvv[]) const {
 
-    int subFace = 0;
-    if (_param.GetType() == Parameterization::QPOLY) {
-        //  Quadrangulated faces internally use a Ptex parameterization
-        _param.ConvertCoordToPtex(u, v, &u, &v, &subFace);
-    }
+    REAL uv[2] = { u, v };
+    int subFace = _param.HasSubFaces() ?
+                  _param.ConvertCoordToNormalizedSubFace(uv, uv) : 0;
 
-    int subPatchIndex = _irregPatch->FindSubPatch(u, v, subFace);
+    int subPatchIndex = _irregPatch->FindSubPatch(uv[0], uv[1], subFace);
     assert(subPatchIndex >= 0);
 
-    _irregPatch->EvalSubPatchBasis(subPatchIndex,u, v,
+    _irregPatch->EvalSubPatchBasis(subPatchIndex, uv[0], uv[1],
                                    wP, wDu, wDv, wDuu, wDuv, wDvv);
 
     return _irregPatch->GetSubPatchPoints(subPatchIndex);
@@ -135,17 +133,15 @@ Surface::evalIrregularPatchStencils(REAL u, REAL v,
 
     assert(_irregPatch->SupportsStencilEval());
 
-    int subFace = 0;
-    if (_param.GetType() == Parameterization::QPOLY) {
-        //  Quadrangulated faces internally use a Ptex parameterization
-        _param.ConvertCoordToPtex(u, v, &u, &v, &subFace);
-    }
+    REAL uv[2] = { u, v };
+    int subFace = _param.HasSubFaces() ?
+                  _param.ConvertCoordToNormalizedSubFace(uv, uv) : 0;
 
-    int subPatchIndex = _irregPatch->FindSubPatch(u, v, subFace);
+    int subPatchIndex = _irregPatch->FindSubPatch(uv[0], uv[1], subFace);
     assert(subPatchIndex >= 0);
 
-    return _irregPatch->EvalSubPatchStencils<REAL>(subPatchIndex, u, v, sP,
-                                                   sDu, sDv, sDuu, sDuv, sDvv);
+    return _irregPatch->EvalSubPatchStencils<REAL>(subPatchIndex, uv[0], uv[1],
+                                            sP, sDu, sDv, sDuu, sDuv, sDvv);
 }
 
 //
@@ -199,8 +195,9 @@ Surface::evalMultiLinearPatchBasis(REAL u, REAL v,
 
     assert(_param.GetType() == Parameterization::QPOLY);
 
-    int subFace = 0;
-    _param.ConvertCoordToPtex(u, v, &u, &v, &subFace);
+    REAL uv[2] = { u, v };
+    int subFace = _param.HasSubFaces() ?
+                  _param.ConvertCoordToNormalizedSubFace(uv, uv) : 0;
 
     //  WIP - Prefer to eval Linear basis directly, i.e.:
     //
@@ -209,7 +206,7 @@ Surface::evalMultiLinearPatchBasis(REAL u, REAL v,
     //  but this internal Far function is sometimes optimized out, causing
     //  link errors.  Need to fix in Far with explicit instantiation...
     Far::internal::EvaluatePatchBasisNormalized(Far::PatchDescriptor::QUADS,
-            Far::PatchParam(), u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
+            Far::PatchParam(), uv[0], uv[1], wP, wDu, wDv, wDuu, wDuv, wDvv);
 
     int numControlPoints = GetNumControlVertices();
 

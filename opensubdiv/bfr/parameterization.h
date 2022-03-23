@@ -75,35 +75,51 @@ public:
     //  over [0,1] in a counter-clockwise orientation.
     //
     template <typename REAL>
-    void GetVertexCoord(int vertexIndex, REAL * u, REAL * v) const;
+    void GetVertexCoord(int vertexIndex, REAL uvCoord[2]) const;
 
     template <typename REAL>
-    void GetEdgeCoord(int edgeIndex, REAL t, REAL * u, REAL * v) const;
+    void GetEdgeCoord(int edgeIndex, REAL t, REAL uvCoord[2]) const;
 
     template <typename REAL>
-    void GetCenterCoord(REAL * u, REAL * v) const;
+    void GetCenterCoord(REAL uvCoord[2]) const;
 
 public:
     //
-    //  Utilities to convert (u,v) coordinates to Ptex coordinates -- for
-    //  either direct use with Ptex per-face textures, or as an alternative
-    //  parameterization for non-quads with quad-based subdivision schemes
-    //  (as used in other places in OpenSubdiv).
+    //  Methods to deal with discontinuous parameterizations, i.e. those
+    //  partitioned into sub-faces:
     //
-    //  The (u,v) coordinates of quads and triangles will pass through the
-    //  conversions unchanged when used with the appropriate schemes as Bfr
-    //  and Ptex parameterizations are consistent in these cases.
+    bool HasSubFaces() const { return (_type == QPOLY); }
+
+    template <typename REAL>
+    int GetSubFace(REAL const uvCoord[2]) const;
+
     //
-    //  Note that instance methods are preferred here to static methods as
-    //  the conversion depends on both the face size and the subdivision
-    //  scheme (from which a temporary instance can be trivially created).
+    //  Conversion methods to/from sub-face coordinates:
+    //
+    //  Note that sub-face coordinates that are normalized correspond to
+    //  coordinates for Ptex faces.
     //
     template <typename REAL>
-    void ConvertCoordToPtex(REAL   inU,   REAL   inV,
-                            REAL * ptexU, REAL * ptexV, int * ptexFace) const;
+    int ConvertCoordToSubFace(
+                REAL const uvCoord[2], REAL subFaceCoord[2]) const;
     template <typename REAL>
-    void ConvertPtexToCoord(REAL   ptexU, REAL   ptexV, int   ptexFace,
-                            REAL * outU,  REAL * outV) const;
+    int ConvertCoordToNormalizedSubFace(
+                REAL const uvCoord[2], REAL subFaceCoord[2]) const;
+
+    template <typename REAL>
+    void ConvertSubFaceToCoord(int subFace,
+                REAL const subFaceCoord[2], REAL uvCoord[2]) const;
+    template <typename REAL>
+    void ConvertNormalizedSubFaceToCoord(int subFace,
+                REAL const subFaceCoord[2], REAL uvCoord[2]) const;
+
+private:
+    template <typename REAL, bool NORMALIZED>
+    int convertCoordToSubFace(
+                REAL const uvCoord[2], REAL subFaceCoord[2]) const;
+    template <typename REAL, bool NORMALIZED>
+    void convertSubFaceToCoord(int subFace,
+                REAL const subFaceCoord[2], REAL uvCoord[2]) const;
 
 private:
     unsigned int _faceSize : 16;
@@ -142,53 +158,53 @@ Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) :
 //
 template <typename REAL>
 void
-Parameterization::GetVertexCoord(int vertex, REAL * u, REAL * v) const {
+Parameterization::GetVertexCoord(int vertex, REAL uv[2]) const {
 
     switch (GetType()) {
     case QUAD:
-        *u = (REAL) (vertex && (vertex < 3));
-        *v = (REAL) (vertex > 1);
+        uv[0] = (REAL) (vertex && (vertex < 3));
+        uv[1] = (REAL) (vertex > 1);
         break;
     case TRI:
-        *u = (REAL) (vertex == 1);
-        *v = (REAL) (vertex == 2);
+        uv[0] = (REAL) (vertex == 1);
+        uv[1] = (REAL) (vertex == 2);
         break;
     case QPOLY:
-        *u = (REAL) (vertex % _uDim);
-        *v = (REAL) (vertex / _uDim);
+        uv[0] = (REAL) (vertex % _uDim);
+        uv[1] = (REAL) (vertex / _uDim);
         break;
     }
 }
 
 template <typename REAL>
 void
-Parameterization::GetEdgeCoord(int edge, REAL t, REAL * u, REAL * v) const {
+Parameterization::GetEdgeCoord(int edge, REAL t, REAL uv[2]) const {
 
     switch (GetType()) {
     case QUAD:
         switch (edge) {
-        case 0: *u = t;        *v = 0.0f;     break;
-        case 1: *u = 1.0f;     *v = t;        break;
-        case 2: *u = 1.0f - t; *v = 1.0f;     break;
-        case 3: *u = 0.0f;     *v = 1.0f - t; break;
+        case 0: uv[0] = t;        uv[1] = 0.0f;     break;
+        case 1: uv[0] = 1.0f;     uv[1] = t;        break;
+        case 2: uv[0] = 1.0f - t; uv[1] = 1.0f;     break;
+        case 3: uv[0] = 0.0f;     uv[1] = 1.0f - t; break;
         }
         break;
 
     case TRI:
         switch (edge) {
-        case 0: *u = t;        *v = 0.0f;     break;
-        case 1: *u = 1.0f - t; *v = t;        break;
-        case 2: *u = 0.0f;     *v = 1.0f - t; break;
+        case 0: uv[0] = t;        uv[1] = 0.0f;     break;
+        case 1: uv[0] = 1.0f - t; uv[1] = t;        break;
+        case 2: uv[0] = 0.0f;     uv[1] = 1.0f - t; break;
         }
         break;
 
     case QPOLY:
         if (t < 0.5f) {
-            GetVertexCoord(edge, u, v);
-            *u += t;
+            GetVertexCoord(edge, uv);
+            uv[0] += t;
         } else {
-            GetVertexCoord((edge + 1) % _faceSize, u, v);
-            *v += 1.0f - t;
+            GetVertexCoord((edge + 1) % _faceSize, uv);
+            uv[1] += 1.0f - t;
         }
         break;
     }
@@ -196,54 +212,98 @@ Parameterization::GetEdgeCoord(int edge, REAL t, REAL * u, REAL * v) const {
 
 template <typename REAL>
 void
-Parameterization::GetCenterCoord(REAL * u, REAL * v) const {
+Parameterization::GetCenterCoord(REAL uv[2]) const {
 
     if (GetType() == TRI) {
-        *u = 1.0f / 3.0f;
-        *v = 1.0f / 3.0f;
+        uv[0] = 1.0f / 3.0f;
+        uv[1] = 1.0f / 3.0f;
     } else {
-        *u = 0.5f;
-        *v = 0.5f;
+        uv[0] = 0.5f;
+        uv[1] = 0.5f;
     }
 }
 
 //
-//  Ptex conversion methods:
+//  Sub-face coordinate conversion methods:
 //
 template <typename REAL>
-void
-Parameterization::ConvertCoordToPtex(REAL inU, REAL inV,
-        REAL * ptexU, REAL * ptexV, int * ptexFace) const {
+int
+Parameterization::GetSubFace(REAL const uvCoord[2]) const {
 
-    if (_type == QPOLY) {
-        int tileU = (int) inU;
-        int tileV = (int) inV;
+    return HasSubFaces() ? (_uDim * (int)uvCoord[1] + (int)uvCoord[0]) : 0;
+}
 
-        *ptexFace = _uDim * tileV + tileU;
-        *ptexU    = (inU - tileU) * 2.0f;
-        *ptexV    = (inV - tileV) * 2.0f;
+//  Private conversions used by the public conversions:
+template <typename REAL, bool NORMALIZED>
+inline int
+Parameterization::convertCoordToSubFace(
+        REAL const uvCoord[2], REAL subCoord[2]) const {
+
+    assert(HasSubFaces());
+
+    //  Be sure this assignment always supports conversion in-place:
+    int uTile = (int) uvCoord[0];
+    int vTile = (int) uvCoord[1];
+
+    if (NORMALIZED) {
+        subCoord[0] = (uvCoord[0] - uTile) * 2.0f;
+        subCoord[1] = (uvCoord[1] - vTile) * 2.0f;
     } else {
-        *ptexFace = 0;
-        *ptexU    = inU;
-        *ptexV    = inV;
+        subCoord[0] = (uvCoord[0] - uTile);
+        subCoord[1] = (uvCoord[1] - vTile);
+    }
+    return _uDim * vTile + uTile;
+}
+template <typename REAL, bool NORMALIZED>
+inline void
+Parameterization::convertSubFaceToCoord(
+        int subFace, REAL const subCoord[2], REAL uvCoord[2]) const {
+
+    assert(HasSubFaces());
+
+    //  Be sure this assignment always supports conversion in-place:
+    int uTile = subFace % _uDim;
+    int vTile = subFace / _uDim;
+
+    if (NORMALIZED) {
+        uvCoord[0] = (REAL) uTile + subCoord[0] * 0.5f;
+        uvCoord[1] = (REAL) vTile + subCoord[1] * 0.5f;
+    } else {
+        uvCoord[0] = (REAL) uTile + subCoord[0];
+        uvCoord[1] = (REAL) vTile + subCoord[1];
     }
 }
 
+//  Conversions to unnormalized sub-face coordinates:
 template <typename REAL>
-void
-Parameterization::ConvertPtexToCoord(REAL ptexU, REAL ptexV, int ptexFace,
-        REAL * outU, REAL * outV) const {
+inline int
+Parameterization::ConvertCoordToSubFace(
+        REAL const uvCoord[2], REAL subCoord[2]) const {
 
-    if (_type == QPOLY) {
-        int tileU = ptexFace % _uDim;
-        int tileV = ptexFace / _uDim;
+    return convertCoordToSubFace<REAL,false>(uvCoord, subCoord);
+}
+template <typename REAL>
+inline void
+Parameterization::ConvertSubFaceToCoord(
+        int subFace, REAL const subCoord[2], REAL uvCoord[2]) const {
 
-        *outU = (REAL) tileU + ptexU * 0.5f;
-        *outV = (REAL) tileV + ptexV * 0.5f;
-    } else {
-        *outU = ptexU;
-        *outV = ptexV;
-    }
+    convertSubFaceToCoord<REAL,false>(subFace, subCoord, uvCoord);
+}
+
+//  Conversions to normalized sub-face coordinates:
+template <typename REAL>
+inline int
+Parameterization::ConvertCoordToNormalizedSubFace(
+        REAL const uvCoord[2], REAL subCoord[2]) const {
+
+    return convertCoordToSubFace<REAL,true>(uvCoord, subCoord);
+}
+template <typename REAL>
+inline void
+Parameterization::ConvertNormalizedSubFaceToCoord(
+        int subFace, REAL const subCoord[2], REAL uvCoord[2]) const {
+
+    convertSubFaceToCoord<REAL,true>(subFace, subCoord, uvCoord);
 }
 
 } // end namespace Bfr
