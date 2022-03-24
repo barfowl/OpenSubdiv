@@ -376,18 +376,19 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     std::vector<Vec3f> limitSurfaceUVPoints;
 
     //
-    //  Initialize specified tessellation options and declare buffers
-    //  required for evaluation of Bfr::Tessellation patterns (declared
-    //  here to reuse memory for each face):
+    //  Initialize tessellation options (use 4 indices per facet to
+    //  accomodate quads), declare buffers required for evaluation of
+    //  Bfr::Tessellation patterns (declared here to reuse memory for
+    //  each face):
     //
+    int const tessFacetSize = 3 + args.tessQuadsFlag;
+
     Bfr::Tessellation::Options tessOptions;
-    tessOptions.PreserveQuadFacets(args.tessQuadsFlag);
+    tessOptions.Use4dFacets(args.tessQuadsFlag);
+    tessOptions.PreserveQuads(args.tessQuadsFlag);
 
     std::vector<float> tessCoordPairs;
-
-    int const        tessFacetSize = 4;
-    std::vector<int> tessFacetIndices;
-
+    std::vector<int>   tessFacetIndices;
     std::vector<Vec3f> tessXYZ, tessDu, tessDv;
     std::vector<Vec3f> tessUV;
 
@@ -529,9 +530,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
         tessFacetIndices.resize(numTessFaces * tessFacetSize);
 
-        tessPattern.GetFacets(&tessFacetIndices[0], tessFacetSize);
+        tessPattern.GetFacets(&tessFacetIndices[0]);
 
-        tessPattern.TransformFacetIndices(&tessFacetIndices[0], tessFacetSize,
+        tessPattern.TransformFacetIndices(&tessFacetIndices[0],
                                           1 + objWriter.GetNumVertices());
 
         //

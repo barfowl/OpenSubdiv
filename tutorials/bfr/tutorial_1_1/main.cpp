@@ -358,18 +358,19 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     std::vector<Vec3f> limitSurfaceXYZPoints;
 
     //
-    //  Initialize specified tessellation options and declare buffers
-    //  required for evaluation of Bfr::Tessellation patterns (declared
-    //  here to reuse memory for each face):
+    //  Initialize tessellation options (use 4 indices per facet to
+    //  accomodate quads), declare buffers required for evaluation of
+    //  Bfr::Tessellation patterns (declared here to reuse memory for
+    //  each face):
     //
+    int const tessFacetSize = 3 + args.tessQuadsFlag;
+
     Bfr::Tessellation::Options tessOptions;
-    tessOptions.PreserveQuadFacets(args.tessQuadsFlag);
+    tessOptions.Use4dFacets(args.tessQuadsFlag);
+    tessOptions.PreserveQuads(args.tessQuadsFlag);
 
     std::vector<float> tessCoordPairs;
-
-    int const        tessFacetSize = 4;
-    std::vector<int> tessFacetIndices;
-
+    std::vector<int>   tessFacetIndices;
     std::vector<Vec3f> tessXYZ, tessDu, tessDv;
 
     //
@@ -395,7 +396,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  (The position Surface can also first be used to evaluate points
         //  that may then determine non-uniform Tessellation parameters per
         //  edge, e.g. evaluating positions and normals at corners of the
-        //  face to assess curvature, etc.)
+        //  face to assess curvature, etc.  Note that invalid tessellation
+        //  parameters can cause Tessellation construction to fail, so use
+        //  an assert to catch programming errors.)
         //
         Bfr::Surface posSurface;
 
@@ -406,6 +409,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         Bfr::Tessellation tessPattern(posSurface.GetParameterization(),
                                       args.tessUniformRate,
                                       tessOptions);
+        assert(tessPattern.IsValid());
 
         //
         //  Identify coordinates of the sample points of the Tessellation
@@ -456,9 +460,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
         tessFacetIndices.resize(numTessFaces * tessFacetSize);
 
-        tessPattern.GetFacets(&tessFacetIndices[0], tessFacetSize);
+        tessPattern.GetFacets(&tessFacetIndices[0]);
 
-        tessPattern.TransformFacetIndices(&tessFacetIndices[0], tessFacetSize,
+        tessPattern.TransformFacetIndices(&tessFacetIndices[0],
                                           1 + objWriter.GetNumVertices());
 
         //

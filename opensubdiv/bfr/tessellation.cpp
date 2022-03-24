@@ -1975,34 +1975,76 @@ qpoly::GetNonUniformFacets(int N, int const outerRes[], int innerRes,
 //  Internal initialization methods:
 //
 void
+Tessellation::initializeDefaults() {
+
+    std::memset(this, 0, sizeof(*this));
+
+    //  Assign any non-zero defaults:
+    _triangulate = true;
+
+    _isValid = false;
+}
+
+bool
+Tessellation::validateArguments(Parameterization const & p,
+        int numRates, int const rates[], Options const & options) {
+
+    //  Check the Parameterization:
+    if (!p.IsValid()) return false;
+
+    //  Check given tessellation rates:
+    if (numRates < 1) return false;
+    for (int i = 0; i < numRates; ++i) {
+        if (rates[i] < 1) return false;
+    }
+
+    //  Check given buffer strides in Options:
+    int coordStride = options.GetCoordStride();
+    if (coordStride && (coordStride < options.GetCoordSize())) return false;
+
+    int facetStride = options.GetFacetStride();
+    if (facetStride && (facetStride < options.GetFacetSize())) return false;
+
+    return true;
+}
+
+void
 Tessellation::initialize(Parameterization const & p,
         int numRates, int const rates[], Options const & options) {
 
-    //  Initialize trivial members:
+    //  Validate arguments and initialize simple members:
+    initializeDefaults();
+
+    if (!validateArguments(p, numRates, rates, options)) return;
+
     _param = p;
 
-    _triangulate = !options.PreserveQuadFacets();
+    _facetSize   = options.GetFacetSize();
+    _facetStride = options.GetFacetStride() ? 
+                   options.GetFacetStride() : options.GetFacetSize();
 
-    _singleFace    = false;
-    _segmentedFace = false;
-    _triangleFan   = false;
-    _splitQuad     = false;
+    _coordSize   = options.GetCoordSize();
+    _coordStride = options.GetCoordStride() ? 
+                   options.GetCoordStride() : options.GetCoordSize();
 
-    //  Initialize the full array of rates, returning sum of all edge rates
-    int sumOfEdgeRates = initializeRates(numRates, rates);
+    //  Initialize the full array of rates, returning sum of outer edge rates
+    int sumOfOuterRates = initializeRates(numRates, rates);
 
     //  Initialize the inventory based on the Parameterization type:
+    _triangulate = (_facetSize == 3) || !options.PreserveQuads();
+
     switch (_param.GetType()) {
     case Parameterization::QUAD:
-        quadInitializeInventory(sumOfEdgeRates);
+        initializeInventoryForParamQuad(sumOfOuterRates);
         break;
     case Parameterization::TRI:
-        triInitializeInventory(sumOfEdgeRates);
+        initializeInventoryForParamTri(sumOfOuterRates);
         break;
     case Parameterization::QPOLY:
-        qpolyInitializeInventory(sumOfEdgeRates);
+        initializeInventoryForParamQPoly(sumOfOuterRates);
         break;
     }
+    _isValid = true;
 
     //  Debugging output:
     bool printNonUniform = false; // !_isUniform;
@@ -2022,13 +2064,6 @@ Tessellation::initialize(Parameterization const & p,
     }
 }
 
-inline int
-Tessellation::clampRate(int rate) const {
-
-    int maxRate = std::numeric_limits<short>::max();
-    return std::max(1, std::min(rate, maxRate));
-}
-
 int
 Tessellation::initializeRates(int numGivenRates, int const givenRates[]) {
 
@@ -2044,13 +2079,15 @@ Tessellation::initializeRates(int numGivenRates, int const givenRates[]) {
     bool isQuad = (N == 4);
 
     //  Keep track of the total tessellation rate for all edges to return:
+    int const MaxRate = std::numeric_limits<short>::max();
+
     int totalEdgeRate = 0;
     if (numGivenRates < N) {
         //  Given one or two inner rates, infer outer (others < N ignored):
         if ((numGivenRates == 2) && isQuad) {
             //  Infer outer rates from two given inner rates of quad:
-            _innerRates[0] = clampRate(givenRates[0]);
-            _innerRates[1] = clampRate(givenRates[1]);
+            _innerRates[0] = std::min(givenRates[0], MaxRate);
+            _innerRates[1] = std::min(givenRates[1], MaxRate);
 
             _outerRates[0] = _outerRates[2] = _innerRates[0];
             _outerRates[1] = _outerRates[3] = _innerRates[1];
@@ -2059,7 +2096,7 @@ Tessellation::initializeRates(int numGivenRates, int const givenRates[]) {
             totalEdgeRate = 2 * (_innerRates[0] + _innerRates[1]);
         } else {
             //  Infer outer rates from single inner rate (uniform):
-            _innerRates[0] = clampRate(givenRates[0]);
+            _innerRates[0] = std::min(givenRates[0], MaxRate);
             _innerRates[1] = _innerRates[0];
 
             std::fill(_outerRates, _outerRates + N, _innerRates[0]);
@@ -2071,7 +2108,7 @@ Tessellation::initializeRates(int numGivenRates, int const givenRates[]) {
         //  Assign the N outer rates:
         _isUniform = true;
         for (int i = 0; i < N; ++i) {
-            _outerRates[i] = clampRate(givenRates[i]);
+            _outerRates[i] = std::min(givenRates[i], MaxRate);
             _isUniform &= (_outerRates[i] == _outerRates[0]);
             totalEdgeRate += _outerRates[i];
         }
@@ -2079,9 +2116,9 @@ Tessellation::initializeRates(int numGivenRates, int const givenRates[]) {
         //  Assign any given inner rates or infer:
         if (numGivenRates > N) {
             //  Assign single inner rate, assign/infer second for quad:
-            _innerRates[0] = clampRate(givenRates[N]);
+            _innerRates[0] = std::min(givenRates[N], MaxRate);
             _innerRates[1] = ((numGivenRates == 6) && isQuad)
-                           ? clampRate(givenRates[5]) : _innerRates[0];
+                           ? std::min(givenRates[5], MaxRate) : _innerRates[0];
 
             _isUniform &= (_innerRates[0] == _outerRates[0]);
             _isUniform &= (_innerRates[1] == _outerRates[0]);
@@ -2116,7 +2153,7 @@ Tessellation::GetRates(int rates[]) const {
 }
 
 void
-Tessellation::quadInitializeInventory(int sumOfEdgeRates) {
+Tessellation::initializeInventoryForParamQuad(int sumOfEdgeRates) {
 
     int const * inner = &_innerRates[0];
     int const * outer = &_outerRates[0];
@@ -2166,7 +2203,7 @@ Tessellation::quadInitializeInventory(int sumOfEdgeRates) {
 }
 
 void
-Tessellation::triInitializeInventory(int sumOfEdgeRates) {
+Tessellation::initializeInventoryForParamTri(int sumOfEdgeRates) {
 
     int res = _innerRates[0];
 
@@ -2193,7 +2230,7 @@ Tessellation::triInitializeInventory(int sumOfEdgeRates) {
 }
 
 void
-Tessellation::qpolyInitializeInventory(int sumOfEdgeRates) {
+Tessellation::initializeInventoryForParamQPoly(int sumOfEdgeRates) {
 
     int N   = _param.GetFaceSize();
     int res = _innerRates[0];
@@ -2319,14 +2356,9 @@ Tessellation::GetInteriorCoords(REAL uvPairs[]) const {
 }
 
 int
-Tessellation::GetFacets(int facetIndices[], int facetSize) const {
+Tessellation::GetFacets(int facetIndices[]) const {
 
-    assert((facetSize == 3) || (facetSize == 4));
-    if ((facetSize == 3) && !_triangulate) {
-        assert(_param.GetType() == Parameterization::TRI);
-    }
-
-    FacetArray facets(facetIndices, facetSize);
+    FacetArray facets(facetIndices, _facetSize);
 
     int N = GetFaceSize();
 
@@ -2383,11 +2415,13 @@ Tessellation::GetFacets(int facetIndices[], int facetSize) const {
 }
 
 void
-Tessellation::TransformFacetIndices(int facetIndices[], int facetSize,
+Tessellation::TransformFacetIndices(int facetIndices[],
                                     int commonOffset) {
 
-    int numIndices = _numFacets * facetSize;
+    int numIndices = _numFacets * _facetSize;
 
+    //  WIP - will need a dual loop here if we adopt a stride per facet
+    assert(_facetSize == _facetStride);
     for (int i = 0; i < numIndices; ++i) {
         int & index = facetIndices[i];
         if (index >= 0) {
@@ -2397,11 +2431,13 @@ Tessellation::TransformFacetIndices(int facetIndices[], int facetSize,
 }
 
 void
-Tessellation::TransformFacetIndices(int facetIndices[], int facetSize,
+Tessellation::TransformFacetIndices(int facetIndices[],
                                     int boundaryOffset, int interiorOffset) {
 
-    int numIndices = _numFacets * facetSize;
+    int numIndices = _numFacets * _facetSize;
 
+    //  WIP - will need a dual loop here if we adopt a stride per facet
+    assert(_facetSize == _facetStride);
     for (int i = 0; i < numIndices; ++i) {
         int & index = facetIndices[i];
         if (index >= 0) {
@@ -2415,12 +2451,14 @@ Tessellation::TransformFacetIndices(int facetIndices[], int facetSize,
 }
 
 void
-Tessellation::TransformFacetIndices(int facetIndices[], int facetSize,
+Tessellation::TransformFacetIndices(int facetIndices[],
                                     int const boundaryIndices[],
                                     int interiorOffset) {
 
-    int numIndices = _numFacets * facetSize;
+    int numIndices = _numFacets * _facetSize;
 
+    //  WIP - will need a dual loop here if we adopt a stride per facet
+    assert(_facetSize == _facetStride);
     for (int i = 0; i < numIndices; ++i) {
         int & index = facetIndices[i];
         if (index >= 0) {
@@ -2434,12 +2472,14 @@ Tessellation::TransformFacetIndices(int facetIndices[], int facetSize,
 }
 
 void
-Tessellation::TransformFacetIndices(int facetIndices[], int facetSize,
+Tessellation::TransformFacetIndices(int facetIndices[],
                                     int const boundaryIndices[],
                                     int const interiorIndices[]) {
 
-    int numIndices = _numFacets * facetSize;
+    int numIndices = _numFacets * _facetSize;
 
+    //  WIP - will need a dual loop here if we adopt a stride per facet
+    assert(_facetSize == _facetStride);
     for (int i = 0; i < numIndices; ++i) {
         int & index = facetIndices[i];
         if (index >= 0) {

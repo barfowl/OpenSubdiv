@@ -43,19 +43,48 @@ namespace Bfr {
 class Tessellation {
 public:
     //
-    //  Currently the only standard option is whether to preserve quad
-    //  facets for quad-based subdivisions schemes (off by default, i.e.
-    //  all generated facets are triangles):
+    //  Options configure a Tessellation to determine the nature of its
+    //  results and to specify the structure of the coordinate and facet
+    //  arrays that its methods will populate:
     //
+    //  WIP - some of these are for review only, i.e. not yet implemented:
+    //          - strides for facets and coordinates
+    //          - use of 3D coordinates
     class Options {
     public:
-        Options() : _preserveQuads(false) { }
+        Options() : _preserveQuads(false),
+                    _use3dCoords(0), _use4dFacets(0),
+                    _coordStride(0), _facetStride(0) { }
 
-        void PreserveQuadFacets(bool arg) { _preserveQuads = arg; }
-        bool PreserveQuadFacets() const   { return _preserveQuads; }
+        //  Choice of triangulation (default) or preservation of quads with
+        //  quad-based subdivision (ignored if facets are tris):
+        void PreserveQuads(bool on) { _preserveQuads = on; }
+        bool PreserveQuads() const  { return _preserveQuads; }
+
+        //  Options assigning the number of integer indices per facet (dflt
+        //  of 3 or 4) and a stride of integers within a larger buffer:
+        void Use4dFacets(bool on) { _use4dFacets = on; }
+        int  Use4dFacets() const  { return _use4dFacets; }
+        int  GetFacetSize() const { return 3 + _use4dFacets; }
+
+        void SetFacetStride(int numInts) { _facetStride = numInts; }
+        int  GetFacetStride() const      { return _facetStride; }
+
+        //  Options assigning the number of floats per coordinate (dflt of
+        //  2 or 3) and a stride of floats within a larger buffer:
+        void Use3dCoords(bool on) { _use3dCoords = on; }
+        int  Use3dCoords() const  { return _use3dCoords; }
+        int  GetCoordSize() const { return 2 + _use3dCoords; }
+
+        void SetCoordStride(int numFloats) { _coordStride = numFloats; }
+        int  GetCoordStride() const        { return _coordStride; }
 
     private:
         unsigned int _preserveQuads : 1;
+        unsigned int _use3dCoords   : 1;
+        unsigned int _use4dFacets   : 1;
+        unsigned int _coordStride   : 8;
+        unsigned int _facetStride   : 8;
     };
 
 public:
@@ -88,11 +117,17 @@ public:
     //  corresponds to the more explicit specification of X as the outer
     //  rate for each of its edges and X for the inner rate.
     //
+    //  Like other classes, constructors can produce invalid instances if
+    //  given obviously invalid arguments, e.g. an invalid Parameterization,
+    //  non-positive tessellation rates, etc.
+    //
     Tessellation(Parameterization const & p, int uniformRate,
                  Options options = Options());
     Tessellation(Parameterization const & p, int numRates, int const rates[],
                  Options options = Options());
     ~Tessellation();
+
+    bool IsValid() const { return _isValid; }
 
     //
     //  General queries:
@@ -141,42 +176,51 @@ public:
     //  to tranform (offset or remap) facet indices for various uses:
     //
     int GetNumFacets() const { return _numFacets; }
+    int GetFacetSize() const { return _facetSize; }
 
-    int GetFacets(int facetIndices[], int facetSize) const;
+    int GetFacets(int facetIndices[]) const;
 
-    void TransformFacetIndices(int facetIndices[], int facetSize,
+    void TransformFacetIndices(int facetIndices[],
                                int commonOffset);
-    void TransformFacetIndices(int facetIndices[], int facetSize,
+    void TransformFacetIndices(int facetIndices[],
                                int boundaryOffset, int interiorOffset);
-    void TransformFacetIndices(int facetIndices[], int facetSize,
+    void TransformFacetIndices(int facetIndices[],
                                int const boundaryIndices[],
                                int       interiorOffset);
-    void TransformFacetIndices(int facetIndices[], int facetSize,
+    void TransformFacetIndices(int facetIndices[],
                                int const boundaryIndices[],
                                int const interiorIndices[]);
 
 private:
     //  Private initialization methods:
-    void initialize(Parameterization const & p, int nRates, int const rates[],
-                    Options const & options);
+    bool validateArguments(Parameterization const & p,
+                    int nRates, int const rates[], Options const & options);
 
-    int clampRate(int rate) const;
-    int initializeRates(int nRates, int const rates[]);
+    void initialize(Parameterization const & p,
+                    int nRates, int const rates[], Options const & options);
 
-    void triInitializeInventory(int sumOfEdgeRates);
-    void quadInitializeInventory(int sumOfEdgeRates);
-    void qpolyInitializeInventory(int sumOfEdgeRates);
+    void initializeDefaults();
+    int  initializeRates(int nRates, int const rates[]);
+    void initializeInventoryForParamTri(int sumOfOuterRates);
+    void initializeInventoryForParamQuad(int sumOfOuterRates);
+    void initializeInventoryForParamQPoly(int sumOfOuterRates);
 
 private:
     //  Private members:
     Parameterization _param;
 
-    unsigned int _triangulate   :  1;
+    unsigned int _isValid       :  1;
     unsigned int _isUniform     :  1;
+    unsigned int _triangulate   :  1;
     unsigned int _singleFace    :  1;
     unsigned int _segmentedFace :  1;
     unsigned int _triangleFan   :  1;
     unsigned int _splitQuad     :  1;
+
+    unsigned int _facetSize     :  3;
+    unsigned int _coordSize     :  3;
+    unsigned int _facetStride   :  8;
+    unsigned int _coordStride   :  8;
 
     int _numGivenRates;
     int _numBoundaryPoints;
