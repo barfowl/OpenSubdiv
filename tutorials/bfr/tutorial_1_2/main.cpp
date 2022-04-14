@@ -26,10 +26,12 @@
 //  Description:
 //      This tutorial builds on the previous tutorial that makes use of the
 //      SurfaceFactory, Surface and Tessellation classes for evaluating and
-//      tessellating the limit surface of faces of a mesh -- adding support
-//      for evaluating and tessellating face-varying UVs.  If UVs exist in
-//      the given mesh, they will be evaluated, tessellated and written to
-//      the Obj file in addition to vertex positions and normals.
+//      tessellating the limit surface of faces of a mesh by adding support
+//      for evaluating and tessellating face-varying UVs.
+//
+//      If UVs exist in the given mesh, they will be evaluated, tessellated
+//      and written to the Obj file in addition to the vertex positions and
+//      normals that were handled in the first tutorial.
 //
 
 #include "../../../regression/common/far_utils.h"
@@ -184,7 +186,6 @@ public:
     Sdc::SchemeType schemeType;
     int             tessUniformRate;
     bool            tessQuadsFlag;
-    bool            noUVFlag;
 
 public:
     Args(int argc, char ** argv) :
@@ -192,8 +193,7 @@ public:
         outputObjFile(),
         schemeType(Sdc::SCHEME_CATMARK),
         tessUniformRate(5),
-        tessQuadsFlag(false),
-        noUVFlag(false) {
+        tessQuadsFlag(false) {
 
         for (int i = 1; i < argc; ++i) {
             if (strstr(argv[i], ".obj")) {
@@ -214,8 +214,6 @@ public:
                 if (++i < argc) tessUniformRate = atoi(argv[i]);
             } else if (!strcmp(argv[i], "-quads")) {
                 tessQuadsFlag = true;
-            } else if (!strcmp(argv[i], "-nouvs")) {
-                noUVFlag = true;
             } else {
                 fprintf(stderr, "Warning: Argument '%s' ignored\n", argv[i]);
             }
@@ -321,7 +319,8 @@ ObjWriter::writeFaces(std::vector<int> const & faceVertices, int faceSize,
         fprintf(_fptr, "f ");
         for (int j = 0; j < faceSize; ++j) {
             if (v[j] >= 0) {
-                int vIndex = v[j];
+                //  Remember Obj indices start with 1:
+                int vIndex = 1 + v[j];
 
                 if (includeNormalIndices && includeUVIndices) {
                     fprintf(_fptr, " %d/%d/%d", vIndex, vIndex, vIndex);
@@ -359,21 +358,16 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     ObjWriter objWriter(args.outputObjFile);
 
     //
-    //  Initialize specified options for the Factory (currently nothing
-    //  explicit) and declare an instance of the Factory for the given
-    //  base mesh (very low cost in terms of time and space):
+    //  Initialize specified evaluation options (none explicit here) and
+    //  declare buffers required by use of instances of Bfr::Surface
+    //  during evaluation (declared here to reuse memory for each face):
     //
-    Bfr::RefinerSurfaceFactory::Options limitFactoryOptions;
+    Bfr::RefinerSurfaceFactory::Options surfaceOptions;
 
-    Bfr::RefinerSurfaceFactory limitFactory(baseMesh, limitFactoryOptions);
+    std::vector<Vec3f> surfaceXYZPoints;
+    std::vector<Vec3f> surfaceUVPoints;
 
-    //
-    //  Declare buffers required by the Bfr::Surfaces for position and UV
-    //  to gather and compute control points prior to evaluation (declared
-    //  here to reuse memory for each face):
-    //
-    std::vector<Vec3f> limitSurfaceXYZPoints;
-    std::vector<Vec3f> limitSurfaceUVPoints;
+    bool meshHasUVs = (baseMeshFVarUVs.size() > 0);
 
     //
     //  Initialize tessellation options (use 4 indices per facet to
@@ -381,7 +375,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  Bfr::Tessellation patterns (declared here to reuse memory for
     //  each face):
     //
-    int const tessFacetSize = 3 + args.tessQuadsFlag;
+    int const FacetSize = 3 + args.tessQuadsFlag;
 
     Bfr::Tessellation::Options tessOptions;
     tessOptions.Use4dFacets(args.tessQuadsFlag);
@@ -393,7 +387,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     std::vector<Vec3f> tessUV;
 
     //
-    //  Tessellate each face independently (i.e. no shared vertices):
+    //  Initialize the Bfr::SurfaceFactory for the given base mesh
+    //  (very low cost in terms of time and space) and tessellate each
+    //  face independently (i.e. no shared vertices):
     //
     //  Note that the SurfaceFactory is not thread-safe by default
     //  due to use of an internal cache.  Creating a separate instance
@@ -401,10 +397,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  parallelize this loop.  Another (preferred) is to assign a
     //  thread-safe cache to the single instance.
     //
-    bool meshHasUvs  = (baseMeshFVarUVs.size() > 0);
-    bool evaluateUvs = meshHasUvs && !args.noUVFlag;
+    Bfr::RefinerSurfaceFactory surfaceFactory(baseMesh, surfaceOptions);
 
-    int numFaces = limitFactory.GetNumFaces();
+    int numFaces = surfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
         //
         //  Create/populate the Surfaces for position and UVs for this face
@@ -431,13 +426,13 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
             //  on a separate thread is a case where the effect of that
             //  duplicated effort is eliminated.)
             //
-            if (!limitFactory.InitVertexSurface(faceIndex, &posSurface)) {
+            if (!surfaceFactory.InitVertexSurface(faceIndex, &posSurface)) {
                 continue;
             }
             //  Could potentially defer the declaration and creation of the
             //  UV Surface to the scope where it is used:
-            if (evaluateUvs &&
-                !limitFactory.InitFaceVaryingSurface(faceIndex, &uvSurface)) {
+            if (meshHasUVs &&
+                !surfaceFactory.InitFaceVaryingSurface(faceIndex, &uvSurface)) {
                 continue;
             }
         } else {
@@ -446,10 +441,10 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
             //  the Surface for vertex data (position), use of the method to
             //  create multiple surfaces at once is preferred.
             //
-            Bfr::Surface * fvarSurfaces = evaluateUvs ? &uvSurface : 0;
-            int            fvarCount    = evaluateUvs;
+            Bfr::Surface * fvarSurfaces = meshHasUVs ? &uvSurface : 0;
+            int            fvarCount    = meshHasUVs;
 
-            if (!limitFactory.InitSurfaces(faceIndex,
+            if (!surfaceFactory.InitSurfaces(faceIndex,
                     &posSurface,     // Surface for vertex data
                     0,               // Surface for varying data
                     fvarSurfaces,    // Surfaces for face-varying data
@@ -460,15 +455,18 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
         //
         //  Declare a simple uniform Tessellation using the Parameterization
-        //  of the position Surface.  Then identify parametric coordinates
-        //  of the sample points of the Tessellation pattern (more specific
-        //  inspection methods are available, but gathering the full set of
-        //  data is simplest for this example):
+        //  of the position Surface:
         //
         Bfr::Tessellation tessPattern(posSurface.GetParameterization(),
                                       args.tessUniformRate,
                                       tessOptions);
+        assert(tessPattern.IsValid());
 
+        //
+        //  Identify coordinates of the sample points of the Tessellation
+        //  pattern (more specific inspection methods are available, but
+        //  gathering the full set of data is simplest for this example):
+        //
         int numTessCoords = tessPattern.GetNumCoords();
 
         tessCoordPairs.resize(numTessCoords * 2);
@@ -480,36 +478,48 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  buffer of points for evaluation of the Surfaces (resizing as
         //  needed) and evaluate the sample points of the Tessellation:
         //
-        //  if (evaluating position):
-        {
-            limitSurfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
+        //  Evaluate positions first -- as in the previous tutorial:
+        surfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
 
-            posSurface.PreparePatchPointValues(baseMeshVertexXYZs,
-                                               limitSurfaceXYZPoints);
+        posSurface.PreparePatchPointValues(baseMeshVertexXYZs,
+                                           surfaceXYZPoints);
 
-            tessXYZ.resize(numTessCoords);
-            tessDu.resize(numTessCoords);
-            tessDv.resize(numTessCoords);
+        tessXYZ.resize(numTessCoords);
+        tessDu.resize(numTessCoords);
+        tessDv.resize(numTessCoords);
 
-            float const * coordPair = &tessCoordPairs[0];
-            for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
-                posSurface.Evaluate(coordPair, limitSurfaceXYZPoints,
-                                    &tessXYZ[i], &tessDu[i], &tessDv[i]);
-            }
+        float const * coordPair = &tessCoordPairs[0];
+        for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
+            posSurface.Evaluate(coordPair, surfaceXYZPoints,
+                                &tessXYZ[i], &tessDu[i], &tessDv[i]);
         }
-        if (evaluateUvs) {
-            limitSurfaceUVPoints.resize(uvSurface.GetNumPatchPoints());
+
+        //  Evaluate UVs when present:
+        if (meshHasUVs) {
+            surfaceUVPoints.resize(uvSurface.GetNumPatchPoints());
 
             uvSurface.PreparePatchPointValues(baseMeshFVarUVs,
-                                              limitSurfaceUVPoints);
+                                              surfaceUVPoints);
 
             tessUV.resize(numTessCoords);
 
             float const * coordPair = &tessCoordPairs[0];
             for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
-                uvSurface.Evaluate(coordPair, limitSurfaceUVPoints,
+                uvSurface.Evaluate(coordPair, surfaceUVPoints,
                                    &tessUV[i]);
             }
+        }
+
+        //
+        //  Write the positions and normals of tessellated points to
+        //  the Obj file before dealing with the faces:
+        //
+        objWriter.writeGroupName("baseFace_", faceIndex);
+
+        objWriter.writeVertexPositions(tessXYZ);
+        objWriter.writeVertexNormals(tessDu, tessDv);
+        if (meshHasUVs) {
+            objWriter.writeVertexUVs(tessUV);
         }
 
         //
@@ -526,34 +536,17 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  shared edge or corner points, while those in the interior can
         //  be separately offset or similarly remapped.
         //
-        int numTessFaces = tessPattern.GetNumFacets();
+        int tessIndexOffset = objWriter.GetNumVertices() - numTessCoords;
 
-        tessFacetIndices.resize(numTessFaces * tessFacetSize);
-
+        int numFacets = tessPattern.GetNumFacets();
+        tessFacetIndices.resize(numFacets * FacetSize);
         tessPattern.GetFacets(&tessFacetIndices[0]);
 
         tessPattern.TransformFacetIndices(&tessFacetIndices[0],
-                                          1 + objWriter.GetNumVertices());
+                                          tessIndexOffset);
 
-        //
-        //  Write the positions, normals and UVs of tessellated points to
-        //  the Obj, along with the faces that connect them:
-        //
-        bool writeNormals = (tessDu.size() > 0);
-        bool writeUVs     = (tessUV.size() > 0);
-
-        objWriter.writeGroupName("baseFace_", faceIndex);
-
-        objWriter.writeVertexPositions(tessXYZ);
-        if (writeNormals) {
-            objWriter.writeVertexNormals(tessDu, tessDv);
-        }
-        if (writeUVs) {
-            objWriter.writeVertexUVs(tessUV);
-        }
-
-        objWriter.writeFaces(tessFacetIndices, tessFacetSize, writeNormals,
-                                                              writeUVs);
+        //  Write faces connecting tessellated points to the Obj file:
+        objWriter.writeFaces(tessFacetIndices, FacetSize, true, meshHasUVs);
     }
 }
 

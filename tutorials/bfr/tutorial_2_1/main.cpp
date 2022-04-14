@@ -309,7 +309,8 @@ ObjWriter::writeFaces(std::vector<int> const & faceVertices, int faceSize,
         fprintf(_fptr, "f ");
         for (int j = 0; j < faceSize; ++j) {
             if (v[j] >= 0) {
-                int vIndex = v[j];
+                //  Remember Obj indices start with 1:
+                int vIndex = 1 + v[j];
 
                 if (includeNormalIndices && includeUVIndices) {
                     fprintf(_fptr, " %d/%d/%d", vIndex, vIndex, vIndex);
@@ -350,9 +351,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  declare buffers required by use of instances of Bfr::Surface
     //  during evaluation (declared here to reuse memory for each face):
     //
-    SubclassOfSurfaceFactory::Options limitFactoryOptions;
+    SubclassOfSurfaceFactory::Options surfaceOptions;
 
-    std::vector<Vec3f> limitSurfaceXYZPoints;
+    std::vector<Vec3f> surfaceXYZPoints;
 
     //
     //  Initialize tessellation options (use 4 indices per facet to
@@ -360,7 +361,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  Bfr::Tessellation patterns (declared here to reuse memory for
     //  each face):
     //
-    int const tessFacetSize = 3 + args.tessQuadsFlag;
+    int const FacetSize = 3 + args.tessQuadsFlag;
 
     Bfr::Tessellation::Options tessOptions;
     tessOptions.Use4dFacets(args.tessQuadsFlag);
@@ -381,9 +382,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  parallelize this loop.  Another (preferred) is to assign a
     //  thread-safe cache to the single instance.
     //
-    SubclassOfSurfaceFactory limitFactory(baseMesh, limitFactoryOptions);
+    SubclassOfSurfaceFactory surfaceFactory(baseMesh, surfaceOptions);
 
-    int numFaces = limitFactory.GetNumFaces();
+    int numFaces = surfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
         //
         //  Create/populate the Bfr::Surface for this face (if present,
@@ -393,17 +394,20 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  (The position Surface can also first be used to evaluate points
         //  that may then determine non-uniform Tessellation parameters per
         //  edge, e.g. evaluating positions and normals at corners of the
-        //  face to assess curvature, etc.)
+        //  face to assess curvature, etc.  Note that invalid tessellation
+        //  parameters can cause Tessellation construction to fail, so use
+        //  an assert to catch programming errors.)
         //
         Bfr::Surface posSurface;
 
-        if (!limitFactory.InitVertexSurface(faceIndex, &posSurface)) {
+        if (!surfaceFactory.InitVertexSurface(faceIndex, &posSurface)) {
             continue;
         }
 
         Bfr::Tessellation tessPattern(posSurface.GetParameterization(),
                                       args.tessUniformRate,
                                       tessOptions);
+        assert(tessPattern.IsValid());
 
         //
         //  Identify coordinates of the sample points of the Tessellation
@@ -417,24 +421,35 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         tessPattern.GetCoords(&tessCoordPairs[0]);
 
         //
-        //  Assemble the local buffer of points for the Surface evaluation
-        //  (resizing as needed) and evaluate the sample points of the
-        //  Tessellation:
+        //  Assemble/resize the local buffer of points for the Surface
+        //  evaluation and resize buffers for the evaluated points:
         //
-        limitSurfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
+        surfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
 
         posSurface.PreparePatchPointValues(baseMeshVertexXYZs,
-                                           limitSurfaceXYZPoints);
+                                           surfaceXYZPoints);
 
         tessXYZ.resize(numTessCoords);
         tessDu.resize(numTessCoords);
         tessDv.resize(numTessCoords);
 
+        //
+        //  Evaluate the sample points of the Tessellation:
+        //
         float const * coordPair = &tessCoordPairs[0];
         for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
-            posSurface.Evaluate(coordPair, limitSurfaceXYZPoints,
+            posSurface.Evaluate(coordPair, surfaceXYZPoints,
                                 &tessXYZ[i], &tessDu[i], &tessDv[i]);
         }
+
+        //
+        //  Write the positions and normals of tessellated points to
+        //  the Obj file before dealing with the faces:
+        //
+        objWriter.writeGroupName("baseFace_", faceIndex);
+
+        objWriter.writeVertexPositions(tessXYZ);
+        objWriter.writeVertexNormals(tessDu, tessDv);
 
         //
         //  Identify facets connecting sample points of the Tessellation:
@@ -450,25 +465,17 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  shared edge or corner points, while those in the interior can
         //  be separately offset or similarly remapped.
         //
-        int numTessFaces = tessPattern.GetNumFacets();
+        int tessIndexOffset = objWriter.GetNumVertices() - numTessCoords;
 
-        tessFacetIndices.resize(numTessFaces * tessFacetSize);
-
+        int numFacets = tessPattern.GetNumFacets();
+        tessFacetIndices.resize(numFacets * FacetSize);
         tessPattern.GetFacets(&tessFacetIndices[0]);
 
         tessPattern.TransformFacetIndices(&tessFacetIndices[0],
-                                          1 + objWriter.GetNumVertices());
+                                          tessIndexOffset);
 
-        //
-        //  Write the positions and normals of tessellated points to
-        //  the Obj, along with the faces that connect them:
-        //
-        objWriter.writeGroupName("baseFace_", faceIndex);
-
-        objWriter.writeVertexPositions(tessXYZ);
-        objWriter.writeVertexNormals(tessDu, tessDv);
-
-        objWriter.writeFaces(tessFacetIndices, tessFacetSize, true, false);
+        //  Write faces connecting tessellated points to the Obj file:
+        objWriter.writeFaces(tessFacetIndices, FacetSize, true, false);
     }
 }
 
