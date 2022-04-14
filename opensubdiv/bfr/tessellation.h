@@ -45,24 +45,25 @@ public:
     //
     //  Options configure a Tessellation to determine the nature of its
     //  results and to specify the structure of the coordinate and facet
-    //  arrays that its methods will populate:
+    //  index buffers that its methods will populate.
     //
-    //  WIP - some of these are for review only, i.e. not yet implemented:
-    //          - strides for facets and coordinates
-    //          - use of 3D coordinates
+    //  The sizes and strides of the target buffers should be specified
+    //  explicitly as they are not inferred by the presence of other
+    //  options.
+    //
     class Options {
     public:
         Options() : _preserveQuads(false),
                     _use3dCoords(0), _use4dFacets(0),
                     _coordStride(0), _facetStride(0) { }
 
-        //  Choice of triangulation (default) or preservation of quads with
-        //  quad-based subdivision (ignored if facets are tris):
+        //  Choice of triangulation (default) or preservation of quads
+        //  with quad-based subdivision:
         void PreserveQuads(bool on) { _preserveQuads = on; }
         bool PreserveQuads() const  { return _preserveQuads; }
 
-        //  Options assigning the number of integer indices per facet (dflt
-        //  of 3 or 4) and a stride of integers within a larger buffer:
+        //  Options assigning the number of integer indices per facet
+        //  (dflt 3) and a stride for indices part of a larger set:
         void Use4dFacets(bool on) { _use4dFacets = on; }
         int  Use4dFacets() const  { return _use4dFacets; }
         int  GetFacetSize() const { return 3 + _use4dFacets; }
@@ -70,12 +71,7 @@ public:
         void SetFacetStride(int numInts) { _facetStride = numInts; }
         int  GetFacetStride() const      { return _facetStride; }
 
-        //  Options assigning the number of floats per coordinate (dflt of
-        //  2 or 3) and a stride of floats within a larger buffer:
-        void Use3dCoords(bool on) { _use3dCoords = on; }
-        int  Use3dCoords() const  { return _use3dCoords; }
-        int  GetCoordSize() const { return 2 + _use3dCoords; }
-
+        //  Option for stride of (u,v) pairs part of a larger set:
         void SetCoordStride(int numFloats) { _coordStride = numFloats; }
         int  GetCoordStride() const        { return _coordStride; }
 
@@ -159,17 +155,17 @@ public:
     //  been adequately sized:
     //
     template <typename REAL>
-    int GetCoords(REAL uvPairs[]) const;
+    int GetCoords(REAL coordBuffer[]) const;
 
     template <typename REAL>
-    int GetBoundaryCoords(REAL uvPairs[]) const;
+    int GetBoundaryCoords(REAL coordBuffer[]) const;
     template <typename REAL>
-    int GetInteriorCoords(REAL uvPairs[]) const;
+    int GetInteriorCoords(REAL coordBuffer[]) const;
 
     template <typename REAL>
-    int GetVertexCoord(int vertex, REAL uvPair[]) const;
+    int GetVertexCoord(int vertex, REAL coordBuffer[]) const;
     template <typename REAL>
-    int GetEdgeCoords( int edge,   REAL uvPairs[]) const;
+    int GetEdgeCoords( int edge,   REAL coordBuffer[]) const;
 
     //
     //  Methods to query the number and values of facets, and a few methods
@@ -178,16 +174,16 @@ public:
     int GetNumFacets() const { return _numFacets; }
     int GetFacetSize() const { return _facetSize; }
 
-    int GetFacets(int facetIndices[]) const;
+    int GetFacets(int facetIndexBuffer[]) const;
 
-    void TransformFacetIndices(int facetIndices[],
+    void TransformFacetIndices(int facetIndexBuffer[],
                                int commonOffset);
-    void TransformFacetIndices(int facetIndices[],
+    void TransformFacetIndices(int facetIndexBuffer[],
                                int boundaryOffset, int interiorOffset);
-    void TransformFacetIndices(int facetIndices[],
+    void TransformFacetIndices(int facetIndexBuffer[],
                                int const boundaryIndices[],
                                int       interiorOffset);
-    void TransformFacetIndices(int facetIndices[],
+    void TransformFacetIndices(int facetIndexBuffer[],
                                int const boundaryIndices[],
                                int const interiorIndices[]);
 
@@ -218,7 +214,6 @@ private:
     unsigned int _splitQuad     :  1;
 
     unsigned int _facetSize     :  3;
-    unsigned int _coordSize     :  3;
     unsigned int _facetStride   :  8;
     unsigned int _coordStride   :  8;
 
@@ -237,17 +232,17 @@ private:
 //
 template <typename REAL>
 inline int
-Tessellation::GetVertexCoord(int vertex, REAL uvPair[]) const {
-    _param.GetVertexCoord(vertex, uvPair);
+Tessellation::GetVertexCoord(int vertex, REAL coord[]) const {
+    _param.GetVertexCoord(vertex, coord);
     return 1;
 }
 
 template <typename REAL>
 inline int
-Tessellation::GetCoords(REAL uvPairs[]) const {
-    int nPairs = GetBoundaryCoords(uvPairs);
-    nPairs += GetInteriorCoords(uvPairs + nPairs * 2);
-    return nPairs;
+Tessellation::GetCoords(REAL coordBuffer[]) const {
+    int nCoords = GetBoundaryCoords(coordBuffer);
+    nCoords += GetInteriorCoords(coordBuffer + nCoords * _coordStride);
+    return nCoords;
 }
 
 } // end namespace Bfr

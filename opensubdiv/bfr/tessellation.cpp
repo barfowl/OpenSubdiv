@@ -51,8 +51,8 @@ namespace {
     //
     //  Simple classes to provide array-like interfaces to the primitive
     //  data buffers passed by clients.  Both parametric coordinate pairs
-    //  and the integer tuples (size 3 or 4) representing a single tile
-    //  or facet of a tessellation are represented here.
+    //  and the integer tuples (size 3 or 4) representing a single facet
+    //  of a tessellation are represented here.
     //
     //  These array interfaces are "minimal" in the sense that they provide
     //  only what is needed here -- rather than trying to support a wider
@@ -60,6 +60,9 @@ namespace {
     //  operators are limited to those used here for advancing through and
     //  assigning elements of the array, so the full range required for
     //  arbitrary address arithmetic are not included).
+    //
+    //  Both arrays support a user-specified stride within which the tuple
+    //  for the coord or facet is assigned.
     //
 
     //  Floating point pair and its array for points of a tessellation:
@@ -70,7 +73,7 @@ namespace {
         Coord2() : _uv(0) { }
         ~Coord2() { }
 
-        void Set(REAL a, REAL b) { _uv[0] = a, _uv[1] = b; }
+        void Set(REAL u, REAL v) { _uv[0] = u, _uv[1] = v; }
 
         REAL const & operator[](int index) const { return _uv[index]; }
         REAL       & operator[](int index)       { return _uv[index]; }
@@ -82,26 +85,29 @@ namespace {
     template <typename REAL>
     class Coord2Array {
     public:
-        Coord2Array(REAL * data) : _data(data) { }
-        Coord2Array() : _data(0) { }
+        Coord2Array(REAL * data, int stride) : _data(data), _stride(stride) { }
+        Coord2Array() : _data(0), _stride(2) { }
         ~Coord2Array() { }
 
         Coord2Array operator+(int offset) {
-            return Coord2Array(_data + offset*2);
+            return Coord2Array(_data + offset*_stride, _stride);
         }
 
-        Coord2<REAL> operator[](int i) { return Coord2<REAL>(_data + i*2); }
+        Coord2<REAL> operator[](int index) {
+            return Coord2<REAL>(_data + index*_stride);
+        }
 
     private:
         REAL * _data;
+        int    _stride;
     };
 
-    //  Integer tuple and its array for facets of a tessellation:
-    class IntTuple {
+    //  Integer 3- or 4-tuple and its array for facets of a tessellation:
+    class Facet {
     public:
-        IntTuple(int * indices, int n) : _T(indices), _size(n) { }
-        IntTuple() : _T(0), _size(4) { }
-        ~IntTuple() { }
+        Facet(int * indices, int n) : _T(indices), _size(n) { }
+        Facet() : _T(0), _size(4) { }
+        ~Facet() { }
 
         void Set(int a, int b, int c) {
             //  Assign size-1 to ensure last index of 4-tuple is set
@@ -120,24 +126,27 @@ namespace {
         int   _size;
     };
 
-    class IntTupleArray {
+    class FacetArray {
     public:
-        IntTupleArray(int * data, int width) : _data(data), _width(width) { }
-        ~IntTupleArray() { }
+        FacetArray(int * data, int size, int stride) :
+                _data(data), _size(size), _stride(stride) { }
+        ~FacetArray() { }
 
-        IntTupleArray operator+(int offset) {
-            return IntTupleArray(_data + offset*_width, _width);
+        FacetArray operator+(int offset) {
+            return FacetArray(_data + offset*_stride, _size, _stride);
         }
 
-        IntTuple operator[](int i) {return IntTuple(_data + i*_width, _width);}
+        Facet operator[](int index) {
+            return Facet(_data + index*_stride, _size);
+        }
 
     private:
-        IntTupleArray() : _data(0), _width(4) { }
+        FacetArray() : _data(0), _size(4), _stride(4) { }
 
         int * _data;
-        int   _width;
+        int   _size;
+        int   _stride;
     };
-    typedef IntTupleArray FacetArray;
 
     //
     //  Functions for assembling simple, common sets of coordinate pairs:
@@ -2000,7 +2009,7 @@ Tessellation::validateArguments(Parameterization const & p,
 
     //  Check given buffer strides in Options:
     int coordStride = options.GetCoordStride();
-    if (coordStride && (coordStride < options.GetCoordSize())) return false;
+    if (coordStride && (coordStride < 2)) return false;
 
     int facetStride = options.GetFacetStride();
     if (facetStride && (facetStride < options.GetFacetSize())) return false;
@@ -2023,9 +2032,7 @@ Tessellation::initialize(Parameterization const & p,
     _facetStride = options.GetFacetStride() ? 
                    options.GetFacetStride() : options.GetFacetSize();
 
-    _coordSize   = options.GetCoordSize();
-    _coordStride = options.GetCoordStride() ? 
-                   options.GetCoordStride() : options.GetCoordSize();
+    _coordStride = options.GetCoordStride() ? options.GetCoordStride() : 2;
 
     //  Initialize the full array of rates, returning sum of outer edge rates
     int sumOfOuterRates = initializeRates(numRates, rates);
@@ -2290,12 +2297,12 @@ Tessellation::~Tessellation() {
 //
 template <typename REAL>
 int
-Tessellation::GetEdgeCoords(int edge, REAL uvPairs[]) const {
+Tessellation::GetEdgeCoords(int edge, REAL coordBuffer[]) const {
 
     //  Remember this method excludes coords at the end vertices
     int edgeRes = _outerRates[edge];
 
-    Coord2Array<REAL> coords(uvPairs);
+    Coord2Array<REAL> coords(coordBuffer, _coordStride);
 
     switch (_param.GetType()) {
     case Parameterization::QUAD:
@@ -2312,9 +2319,9 @@ Tessellation::GetEdgeCoords(int edge, REAL uvPairs[]) const {
 
 template <typename REAL>
 int
-Tessellation::GetBoundaryCoords(REAL uvPairs[]) const {
+Tessellation::GetBoundaryCoords(REAL coordBuffer[]) const {
 
-    Coord2Array<REAL> coords(uvPairs);
+    Coord2Array<REAL> coords(coordBuffer, _coordStride);
 
     switch (_param.GetType()) {
     case Parameterization::QUAD:
@@ -2331,16 +2338,16 @@ Tessellation::GetBoundaryCoords(REAL uvPairs[]) const {
 
 template <typename REAL>
 int
-Tessellation::GetInteriorCoords(REAL uvPairs[]) const {
+Tessellation::GetInteriorCoords(REAL coordBuffer[]) const {
 
     if (_numInteriorPoints == 0) return 0;
 
     if (_numInteriorPoints == 1) {
-        _param.GetCenterCoord(uvPairs);
+        _param.GetCenterCoord(coordBuffer);
         return 1;
     }
 
-    Coord2Array<REAL> coords(uvPairs);
+    Coord2Array<REAL> coords(coordBuffer, _coordStride);
 
     switch (_param.GetType()) {
     case Parameterization::QUAD:
@@ -2358,7 +2365,7 @@ Tessellation::GetInteriorCoords(REAL uvPairs[]) const {
 int
 Tessellation::GetFacets(int facetIndices[]) const {
 
-    FacetArray facets(facetIndices, _facetSize);
+    FacetArray facets(facetIndices, _facetSize, _facetStride);
 
     int N = GetFaceSize();
 
@@ -2418,14 +2425,12 @@ void
 Tessellation::TransformFacetIndices(int facetIndices[],
                                     int commonOffset) {
 
-    int numIndices = _numFacets * _facetSize;
-
-    //  WIP - will need a dual loop here if we adopt a stride per facet
-    assert(_facetSize == _facetStride);
-    for (int i = 0; i < numIndices; ++i) {
-        int & index = facetIndices[i];
-        if (index >= 0) {
-            index += commonOffset;
+    for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
+        for (int j = 0; j < _facetSize; ++j) {
+            int & index = facetIndices[j];
+            if (index >= 0) {
+                index += commonOffset;
+            }
         }
     }
 }
@@ -2434,17 +2439,13 @@ void
 Tessellation::TransformFacetIndices(int facetIndices[],
                                     int boundaryOffset, int interiorOffset) {
 
-    int numIndices = _numFacets * _facetSize;
-
-    //  WIP - will need a dual loop here if we adopt a stride per facet
-    assert(_facetSize == _facetStride);
-    for (int i = 0; i < numIndices; ++i) {
-        int & index = facetIndices[i];
-        if (index >= 0) {
-            if (index < _numBoundaryPoints) {
-                index += boundaryOffset;
-            } else {
-                index += interiorOffset;
+    for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
+        for (int j = 0; j < _facetSize; ++j) {
+            int & index = facetIndices[j];
+            if (index >= 0) {
+                index += (index < _numBoundaryPoints)
+                       ? boundaryOffset
+                       : interiorOffset;
             }
         }
     }
@@ -2455,17 +2456,13 @@ Tessellation::TransformFacetIndices(int facetIndices[],
                                     int const boundaryIndices[],
                                     int interiorOffset) {
 
-    int numIndices = _numFacets * _facetSize;
-
-    //  WIP - will need a dual loop here if we adopt a stride per facet
-    assert(_facetSize == _facetStride);
-    for (int i = 0; i < numIndices; ++i) {
-        int & index = facetIndices[i];
-        if (index >= 0) {
-            if (index < _numBoundaryPoints) {
-                index = boundaryIndices[index];
-            } else {
-                index += interiorOffset;
+    for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
+        for (int j = 0; j < _facetSize; ++j) {
+            int & index = facetIndices[j];
+            if (index >= 0) {
+                index = (index < _numBoundaryPoints)
+                      ? boundaryIndices[index]
+                      : (index + interiorOffset);
             }
         }
     }
@@ -2476,17 +2473,13 @@ Tessellation::TransformFacetIndices(int facetIndices[],
                                     int const boundaryIndices[],
                                     int const interiorIndices[]) {
 
-    int numIndices = _numFacets * _facetSize;
-
-    //  WIP - will need a dual loop here if we adopt a stride per facet
-    assert(_facetSize == _facetStride);
-    for (int i = 0; i < numIndices; ++i) {
-        int & index = facetIndices[i];
-        if (index >= 0) {
-            if (index < _numBoundaryPoints) {
-                index = boundaryIndices[index];
-            } else {
-                index = interiorIndices[index - _numBoundaryPoints];
+    for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
+        for (int j = 0; j < _facetSize; ++j) {
+            int & index = facetIndices[j];
+            if (index >= 0) {
+                index = (index < _numBoundaryPoints)
+                      ? boundaryIndices[index]
+                      : interiorIndices[index - _numBoundaryPoints];
             }
         }
     }
@@ -2496,19 +2489,19 @@ Tessellation::TransformFacetIndices(int facetIndices[],
 //  Explicit instantiation for multiple precision coordinate pairs:
 //
 template int
-Tessellation::GetBoundaryCoords<float>(float uvPairs[]) const;
+Tessellation::GetBoundaryCoords<float>(float coordBuffer[]) const;
 template int
-Tessellation::GetBoundaryCoords<double>(double uvPairs[]) const;
+Tessellation::GetBoundaryCoords<double>(double coordBuffer[]) const;
 
 template int
-Tessellation::GetInteriorCoords<float>(float uvPairs[]) const;
+Tessellation::GetInteriorCoords<float>(float coordBuffer[]) const;
 template int
-Tessellation::GetInteriorCoords<double>(double uvPairs[]) const;
+Tessellation::GetInteriorCoords<double>(double coordBuffer[]) const;
 
 template int
-Tessellation::GetEdgeCoords<float>(int edge, float uvPairs[]) const;
+Tessellation::GetEdgeCoords<float>(int edge, float coordBuffer[]) const;
 template int
-Tessellation::GetEdgeCoords<double>(int edge, double uvPairs[]) const;
+Tessellation::GetEdgeCoords<double>(int edge, double coordBuffer[]) const;
 
 } // end namespace Bfr
 
