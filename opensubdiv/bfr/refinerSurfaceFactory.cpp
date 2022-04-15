@@ -60,7 +60,7 @@ RefinerSurfaceFactoryBase::~RefinerSurfaceFactoryBase() {
 inline int
 RefinerSurfaceFactoryBase::getFaceVaryingChannel(FVarID fvarID) const {
 
-    return ((0 <= fvarID) && (fvarID < _numFVarChannels)) ? fvarID : -1;
+    return ((0 <= fvarID) && (fvarID < _numFVarChannels)) ? (int)fvarID : -1;
 }
 
 

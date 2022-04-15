@@ -354,6 +354,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
                 std::vector<Vec3f> const &   baseMeshFVarUVs,
                 Args const &                 args) {
 
+    bool meshHasUVs = (baseMesh.GetNumFVarChannels() == 1) &&
+                      (baseMeshFVarUVs.size() > 0);
+
     //  Initialize an Obj writer locally for this mesh:
     ObjWriter objWriter(args.outputObjFile);
 
@@ -363,11 +366,12 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  during evaluation (declared here to reuse memory for each face):
     //
     Bfr::RefinerSurfaceFactory::Options surfaceOptions;
+    if (meshHasUVs) {
+        surfaceOptions.SetDefaultFVarID(0);
+    }
 
     std::vector<Vec3f> surfaceXYZPoints;
     std::vector<Vec3f> surfaceUVPoints;
-
-    bool meshHasUVs = (baseMeshFVarUVs.size() > 0);
 
     //
     //  Initialize tessellation options (use 4 indices per facet to
@@ -416,7 +420,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         Bfr::Surface uvSurface;
 
         bool createSurfacesIndependently = false;
-        if (createSurfacesIndependently) {
+        if (createSurfacesIndependently || !meshHasUVs) {
             //
             //  Creating Bfr::Surfaces for the different data interpolation
             //  types independently is clear and convenient, but some work
@@ -429,11 +433,11 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
             if (!surfaceFactory.InitVertexSurface(faceIndex, &posSurface)) {
                 continue;
             }
-            //  Could potentially defer the declaration and creation of the
-            //  UV Surface to the scope where it is used:
-            if (meshHasUVs &&
-                !surfaceFactory.InitFaceVaryingSurface(faceIndex, &uvSurface)) {
-                continue;
+
+            //  The declaration and creation of the UV Surface could also
+            //  be deferred to the scope where it is used later:
+            if (meshHasUVs) {
+                surfaceFactory.InitFaceVaryingSurface(faceIndex, &uvSurface);
             }
         } else {
             //
@@ -441,14 +445,10 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
             //  the Surface for vertex data (position), use of the method to
             //  create multiple surfaces at once is preferred.
             //
-            Bfr::Surface * fvarSurfaces = meshHasUVs ? &uvSurface : 0;
-            int            fvarCount    = meshHasUVs;
-
             if (!surfaceFactory.InitSurfaces(faceIndex,
-                    &posSurface,     // Surface for vertex data
-                    0,               // Surface for varying data
-                    fvarSurfaces,    // Surfaces for face-varying data
-                    fvarCount)) {    // number of face-varying Surfaces
+                    &posSurface,    // Surface for vertex data
+                    0,              // Surface for varying data, not used
+                    &uvSurface)) {  // Surface for face-varying data
                 continue;
             }
         }

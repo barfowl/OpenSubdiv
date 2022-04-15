@@ -32,6 +32,8 @@
 #include "../sdc/options.h"
 #include "../sdc/types.h"
 
+#include <cstdint>
+
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
@@ -95,12 +97,25 @@ protected: // non-copyable:
 
 public:
     //
+    //  A face-varying ID is used to specifiy face-varying primvars for
+    //  evaluation so that they can be identified by the subclass for
+    //  the mesh.  It can be assigned as an integer ID or pointer -- as
+    //  dictated by the use of the subclass.
+    //
+    //  Often only one face-varying primvar is of interest, so a default
+    //  can be assigned to the factory to avoid repeated specification.
+    //
+    typedef std::intptr_t FVarID;
+
+    //
     //  The Options class is a simple container specfying options for the
     //  construction of the Factory that will apply to it for its lifetime.
-    //  These options cover two areas:
+    //  These options currently include:
     //
-    //      - caching of intermediate topological results (efficiency)
-    //      - approximation of the limit surface (accuracy)
+    //      - a default identifier to use for face-varying surfaces
+    //      - caching of intermediate topological results
+    //      - precision of internal surface representations (float, double)
+    //      - parameters for approximating the limit surface
     //  
     //  Choices for caching behavior include disabling all caching, the
     //  use of an internal cache for each Factory (the default), or the
@@ -117,23 +132,25 @@ public:
     //
     class Options {
     public:
-        Options() : _maxLevelPrimary(6), _maxLevelSecondary(2),
-                    _useDoublePrecision(false), _useStencilTables(false),
-                    _disableCache(false), _sharedCache(0) { }
+        Options() : _dfltFVarID(-1), _sharedCache(0),
+                    _disableCache(false), _useDoublePrecision(false),
+                    _maxLevelPrimary(6), _maxLevelSecondary(2),
+                    _useStencilTables(false) { }
+
+        //  Assign the default face-varying ID:
+        void   SetDefaultFVarID(FVarID id) { _dfltFVarID = id; }
+        FVarID GetDefaultFVarID()    const { return _dfltFVarID; }
 
         //  Alternatives to the default internal topology cache:
         void DisableTopologyCache(bool on) { _disableCache = on; }
         bool DisableTopologyCache()  const { return _disableCache; }
 
-        void SharedTopologyCache(SurfaceFactoryCache * c) { _sharedCache=c; }
+        void SharedTopologyCache(SurfaceFactoryCache * c) { _sharedCache = c; }
         SurfaceFactoryCache * SharedTopologyCache() const {return _sharedCache;}
 
-        //  Other configuration options:
+        //  Assign precision of internal surface representations:
         template <typename REAL> void SetSurfacePrecision();
         template <typename REAL> bool IsSurfacePrecision() const;
-
-        void UseStencilTables(bool on) { _useStencilTables = on; }
-        bool UseStencilTables()  const { return _useStencilTables; }
 
         //  WIP - approximation options are currently in development
         //      - these are not yet recommended for public use
@@ -143,15 +160,21 @@ public:
         void MaxLevelSecondary( int n) { _maxLevelSecondary = n; }
         int  MaxLevelSecondary() const { return _maxLevelSecondary; }
 
+        //  WIP - obsolete and due to be removed
+        void UseStencilTables(bool on) { _useStencilTables = on; }
+        bool UseStencilTables()  const { return _useStencilTables; }
+
     private:
         //  Member variables:
-        unsigned int _maxLevelPrimary    : 4;
-        unsigned int _maxLevelSecondary  : 4;
-        unsigned int _useDoublePrecision : 1;
-        unsigned int _useStencilTables   : 1;
-        unsigned int _disableCache       : 1;
+        FVarID _dfltFVarID;
 
         SurfaceFactoryCache * _sharedCache;
+
+        unsigned int _disableCache       : 1;
+        unsigned int _useDoublePrecision : 1;
+        unsigned int _maxLevelPrimary    : 4;
+        unsigned int _maxLevelSecondary  : 4;
+        unsigned int _useStencilTables   : 1;
     };
 
 public:
@@ -207,17 +230,16 @@ public:
     //  First, methods to create or initialize instances of a Surface for
     //  eac of the three different data interpolation types:
     //
-    typedef int FVarID;
-
     Surface * CreateVertexSurface(     Index faceIndex) const;
     Surface * CreateVaryingSurface(    Index faceIndex) const;
-    Surface * CreateFaceVaryingSurface(Index faceIndex,
-                                       FVarID fvarID = FVarID()) const;
+    Surface * CreateFaceVaryingSurface(Index faceIndex) const;
+    Surface * CreateFaceVaryingSurface(Index faceIndex, FVarID fvarID) const;
 
     bool InitVertexSurface(     Index faceIndex, Surface * vtxSurface) const;
     bool InitVaryingSurface(    Index faceIndex, Surface * varSurface) const;
+    bool InitFaceVaryingSurface(Index faceIndex, Surface * fvarSurface) const;
     bool InitFaceVaryingSurface(Index faceIndex, Surface * fvarSurface,
-                                FVarID fvarID = FVarID()) const;
+                                                 FVarID    fvarID) const;
 
     //
     //  Second, a single general method to initialize several Surfaces at
@@ -228,8 +250,18 @@ public:
     //  for both the vertex data (position) and one or more sets of
     //  face-varying data (e.g. texture coordinates).
     //
+    //  If using the variant with for a single face-varying surface, the
+    //  assigned default ID will be applied. When using the variant for
+    //  multiple face-varying surfaces, the default is not applied --
+    //  either all face-varying IDs must be specified or they will be
+    //  assigned sequentially beginning with 0.
+    //
     //  WIP - overloads and alternative interfaces are under consideration
     //
+    bool InitSurfaces(Index faceIndex, Surface * vtxSurface,
+                                       Surface * varSurface,
+                                       Surface * fvarSurface) const;
+
     bool InitSurfaces(Index faceIndex, Surface    * vtxSurface,
                                        Surface    * varSurface,
                                        Surface    * fvarSurfaces,
@@ -465,6 +497,29 @@ template <>
 inline bool
 SurfaceFactory::Options::IsSurfacePrecision<double>() const {
     return _useDoublePrecision;
+}
+
+//
+//  Inline methods:
+//
+inline Surface *
+SurfaceFactory::CreateFaceVaryingSurface(Index face) const {
+    return CreateFaceVaryingSurface(face, _limitOptions.GetDefaultFVarID());
+}
+
+inline bool
+SurfaceFactory::InitFaceVaryingSurface(Index face, Surface * s) const {
+    return InitFaceVaryingSurface(face, s, _limitOptions.GetDefaultFVarID());
+}
+
+inline bool
+SurfaceFactory::InitSurfaces(Index face, Surface * vtxSurface,
+                                         Surface * varSurface,
+                                         Surface * fvarSurface) const {
+
+    FVarID fvarID = _limitOptions.GetDefaultFVarID();
+
+    return InitSurfaces(face, vtxSurface, varSurface, fvarSurface, 1, &fvarID);
 }
 
 } // end namespace Bfr

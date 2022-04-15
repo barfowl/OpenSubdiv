@@ -102,9 +102,7 @@ public:
     int       GetNumFVarSurfaces() const { return numFVarSurfs; }
 
     FVarID GetFVarSurfaceID(int i) const {
-        //  Be sure to return explicit default if only one unspecified:
-        return fvarIDs ? fvarIDs[i] :
-                        ((numFVarSurfs > 1) ? FVarID(i) : FVarID());
+        return fvarIDs ? fvarIDs[i] : FVarID(i);
     }
 
     Surface * GetFVarSurface(int i)   const {

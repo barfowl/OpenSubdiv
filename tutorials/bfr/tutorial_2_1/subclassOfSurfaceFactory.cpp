@@ -64,7 +64,7 @@ SubclassOfSurfaceFactory::~SubclassOfSurfaceFactory() {
 inline int
 SubclassOfSurfaceFactory::getFaceVaryingChannel(FVarID fvarID) const {
 
-    return ((0 <= fvarID) && (fvarID < GetNumFVarChannels())) ? fvarID : -1;
+    return ((0 <= fvarID) && (fvarID < GetNumFVarChannels())) ? (int)fvarID : -1;
 }
 
 
