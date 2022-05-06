@@ -56,13 +56,11 @@ class IrregularPatchBuilder {
 public:
     //  WIP - see note above
     struct Options {
-        Options() : sharpLevel(6), smoothLevel(2),
-                    doublePrecision(false), stencilTables(false) { }
+        Options() : sharpLevel(6), smoothLevel(2), doublePrecision(false) { }
 
         int  sharpLevel;
         int  smoothLevel;
         bool doublePrecision;
-        bool stencilTables;
     };
 
 public:

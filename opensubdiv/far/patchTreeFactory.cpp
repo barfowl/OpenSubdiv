@@ -25,7 +25,6 @@
 #include "../far/primvarRefiner.h"
 #include "../far/topologyRefiner.h"
 #include "../far/topologyDescriptor.h"
-#include "../far/stencilTableFactory.h"
 #include "../far/patchTreeFactory.h"
 #include "../far/patchBuilder.h"
 #include "../far/sparseMatrix.h"
@@ -53,12 +52,12 @@ public:
     //
     typedef PatchTreeFactory::Options Options;
 
-    PatchTreeBuilder(Index face, TopologyRefiner & refiner, Options options);
+    PatchTreeBuilder(TopologyRefiner & refiner, Options options);
     ~PatchTreeBuilder();
 
     void IdentifyPatches();
     void InitializePatches();
-    void InitializeStencils();
+    void InitializeStencilMatrix();
     void InitializeQuadTree();
 
     PatchTree * GetPatchTree() const { return _patchTree; }
@@ -74,14 +73,9 @@ private:
     };
 
     //
-    //  Internal helper functions to assign stencils converting points
-    //  of irregular patches from source points in the refined levels:
-    //
-    //  WIP - PatchTree currently supports a StencilTable and a raw matrix
-    //      - either can be optionally constructed but the StencilTable is
-    //        going to be eliminated given the better peformance and lower
-    //        memory use of the raw matrix in all observed cases
-    //      - it exists until then for comparison purposes only
+    //  Internal helper functions to assign a full matrix of stencils
+    //  converting points of irregular patches from source points in
+    //  the refined levels:
     //
     template <typename REAL>
     void initializeStencilMatrix();
@@ -96,12 +90,6 @@ private:
                                           SparseMatrix<REAL> const & convMatrix,
                                           std::vector<Index> const & srcPoints);
 
-    //  WIP - support for optional StencilTable to be removed (see above)
-    void initializeStencilTable();
-    void appendConversionStencilsToTable(StencilTableReal<float> * stencilTable,
-                                         SparseMatrix<float> const & convMatrix,
-                                         std::vector<Index> const  & srcPoints);
-
 private:
     //  The PatchTree instance being assembled:
     PatchTree * _patchTree;
@@ -115,11 +103,11 @@ private:
     PatchBuilder *            _patchBuilder;
 };
 
-PatchTreeBuilder::PatchTreeBuilder(Index face, TopologyRefiner & faceRefiner,
-                                               Options options) :
+PatchTreeBuilder::PatchTreeBuilder(TopologyRefiner & faceRefiner,
+                                   Options options) :
     _patchTree(new PatchTree),
     _faceRefiner(faceRefiner),
-    _faceAtRoot(face),
+    _faceAtRoot(0),
     _ptexIndices(faceRefiner),
     _patchBuilder(0) {
 
@@ -127,10 +115,12 @@ PatchTreeBuilder::PatchTreeBuilder(Index face, TopologyRefiner & faceRefiner,
     //  If generating patches for the base level, force one level of
     //  refinement if the face is or is adjacent to a non-quad:
     //
+    Vtr::internal::Level const & baseLevel = _faceRefiner.getLevel(0);
+
     int adaptiveLevelPrimary = options.maxPatchDepthSharp;
     if (adaptiveLevelPrimary == 0) {
         //  Vertices incident non-quads are tagged, so inspect combined tags:
-        if (_faceRefiner.getLevel(0).getFaceCompositeVTag(face)._incidIrregFace)
+        if (baseLevel.getFaceCompositeVTag(_faceAtRoot)._incidIrregFace)
             adaptiveLevelPrimary = 1;
     }
 
@@ -188,14 +178,12 @@ PatchTreeBuilder::PatchTreeBuilder(Index face, TopologyRefiner & faceRefiner,
     //
     //  Initialize general PatchTree members relating to patch topology:
     //
-    int thisFaceSize = _faceRefiner.GetLevel(0).GetFaceVertices(face).size();
+    int thisFaceSize = baseLevel.getFaceVertices(_faceAtRoot).size();
     int regFaceSize  = Sdc::SchemeTypeTraits::GetRegularFaceSize(
                                                 _faceRefiner.GetSchemeType());
 
     //  Configuration:
-    _patchTree->_useDoubleStencils   = options.useDoublePrecision;
-    _patchTree->_useStencilTable     = options.useStencilTables;
-    _patchTree->_supportsStencilEval = !options.useStencilTables;
+    _patchTree->_useDoublePrecision = options.useDoublePrecision;
 
     _patchTree->_patchesIncludeNonLeaf = options.includeInteriorPatches;
     _patchTree->_patchesAreTriangular  = (regFaceSize == 3);
@@ -493,123 +481,12 @@ PatchTreeBuilder::appendConversionStencilsToMatrix(
 }
 
 void
-PatchTreeBuilder::initializeStencilTable() {
+PatchTreeBuilder::InitializeStencilMatrix() {
 
-    if (_patchTree->_numSubPatchPoints == 0) return;
-
-    //
-    //  Use the Factory to create the StencilTable for the refined
-    //  points and create a StencilTable for local patch points (to
-    //  be appended once populated):
-    //
-    StencilTableFactoryReal<float>::Options stencilOptions;
-    stencilOptions.generateOffsets = true;
-    stencilOptions.generateControlVerts = true;
-    stencilOptions.generateIntermediateLevels = true;
-    stencilOptions.factorizeIntermediateLevels = true;
-
-    _patchTree->_stencilTable = StencilTableFactoryReal<float>::Create(
-            _faceRefiner, stencilOptions);
-
-    if (_patchTree->_numIrregPatches == 0) return;
-
-    //
-    //  Add stencils to a local StencilTable -- to be appended later:
-    //
-    StencilTableReal<float>*
-            localPointStencils = new StencilTableReal<float>(0);
-
-    SparseMatrix<float> irregConvMatrix;
-    std::vector<Index>  irregSourcePoints;
-
-    for (size_t i = 0; i < _patchFaces.size(); ++i) {
-        if (!_patchFaces[i].isRegular) {
-            getIrregularPatchConversion(_patchFaces[i],
-                    irregConvMatrix, irregSourcePoints);
-
-            appendConversionStencilsToTable(localPointStencils,
-                    irregConvMatrix, irregSourcePoints);
-        }
-    }
-
-    //
-    //  Append local point stencils to the refined stencils:
-    //
-    StencilTableReal<float> const *
-            refPointStencils = _patchTree->_stencilTable;
-
-    localPointStencils->generateOffsets();
-
-    _patchTree->_stencilTable = 
-        StencilTableFactoryReal<float>::AppendLocalPointStencilTable(
-            _faceRefiner, refPointStencils, localPointStencils, true);
-
-    delete refPointStencils;
-    delete localPointStencils;
-}
-
-void
-PatchTreeBuilder::appendConversionStencilsToTable(
-        StencilTableReal<float>   * localStencilTablePtr,
-        SparseMatrix<float> const & conversionMatrix,
-        std::vector<Index> const  & sourcePoints) {
-
-    //
-    //  This is where we need protected access to the StencilTable as it
-    //  lacks any public modifiers.  This is essentially the same method
-    //  used by the PatchTableBuilder to append a SparseMatrix and set of
-    //  associated column indices to a StencilTable.
-    //
-    //  Resize the StencilTable members to accomodate all rows and elements
-    //  from the given set of points represented by the matrix
-    //
-    StencilTableReal<float> & stencilTable = *localStencilTablePtr;
-
-    int numNewStencils = conversionMatrix.GetNumRows();
-    int numNewElements = conversionMatrix.GetNumElements();
-
-    size_t numOldStencils = stencilTable._sizes.size();
-    size_t numOldElements = stencilTable._indices.size();
-
-    //  Assign the sizes for the new stencils:
-    stencilTable._sizes.resize(numOldStencils + numNewStencils);
-
-    int * newSizes = &stencilTable._sizes[numOldStencils];
-    for (int i = 0; i < numNewStencils; ++i) {
-        newSizes[i] = conversionMatrix.GetRowSize(i);
-    }
-
-    //  Assign remapped indices for the stencils:
-    stencilTable._indices.resize(numOldElements + numNewElements);
-
-    int const * mtxIndices = &conversionMatrix.GetColumns()[0];
-    int *       newIndices = &stencilTable._indices[numOldElements];
-
-    for (int i = 0; i < numNewElements; ++i) {
-        newIndices[i] = sourcePoints[mtxIndices[i]];
-    }
-
-    //  Copy the stencil weights direct from the matrix elements:
-    stencilTable._weights.resize(numOldElements + numNewElements);
-
-    float const * mtxWeights = &conversionMatrix.GetElements()[0];
-    float *       newWeights = &stencilTable._weights[numOldElements];
-
-    std::memcpy(newWeights, mtxWeights, numNewElements * sizeof(float));
-}
-
-void
-PatchTreeBuilder::InitializeStencils() {
-
-    //  WIP - the StencilTable option will eventually be removed
-    if (_patchTree->_useStencilTable) {
-        initializeStencilTable();
+    if (_patchTree->_useDoublePrecision) {
+        initializeStencilMatrix<double>();
     } else {
-        if (_patchTree->_useDoubleStencils) {
-            initializeStencilMatrix<double>();
-        } else {
-            initializeStencilMatrix<float>();
-        }
+        initializeStencilMatrix<float>();
     }
 }
 
@@ -663,51 +540,18 @@ PatchTree *
 PatchTreeFactory::Create(TopologyRefiner & faceRefiner,
                          Options options) {
 
-    //  WIP - cannot support double precision combined with StencilTables
-    assert(!(options.useStencilTables && options.useDoublePrecision));
-
     if (faceRefiner.GetNumLevels() > 1) faceRefiner.Unrefine();
 
-    PatchTreeBuilder builder(0, faceRefiner, options);
+    PatchTreeBuilder builder(faceRefiner, options);
 
     builder.IdentifyPatches();
     builder.InitializePatches();
-    builder.InitializeStencils();
+    builder.InitializeStencilMatrix();
     builder.InitializeQuadTree();
 
     PatchTree * result = builder.GetPatchTree();
 
     faceRefiner.Unrefine();
-    return result;
-}
-
-PatchTree *
-PatchTreeFactory::Create(TopologyRefiner const & meshRefiner, int face,
-                         Options options) {
-
-    //  WIP - this variant of Create() must make use of StencilTables
-    //        rather than a full matrix (given the full mesh)
-    //      - and double precision is not supported with StencilTables
-    assert(options.useStencilTables);
-    assert(!options.useDoublePrecision);
-
-    //
-    //  Create a local TopologyRefiner so a face can be refined independently:
-    //
-    Far::TopologyRefiner * faceRefiner =
-        Far::TopologyRefinerFactory<Far::TopologyDescriptor>::Create(
-            meshRefiner);
-
-    PatchTreeBuilder builder(face, *faceRefiner, options);
-
-    builder.IdentifyPatches();
-    builder.InitializePatches();
-    builder.InitializeStencils();
-    builder.InitializeQuadTree();
-
-    PatchTree * result = builder.GetPatchTree();
-
-    delete faceRefiner;
     return result;
 }
 

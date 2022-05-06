@@ -81,9 +81,7 @@ PatchTree::TreeNode::SetChild(int quadrant, int index, bool isLeaf) {
 //  PatchTree constructor and destructor:
 //
 PatchTree::PatchTree() :
-    _supportsStencilEval(false),
-    _useDoubleStencils(false),
-    _useStencilTable(false),
+    _useDoublePrecision(false),
     _patchesIncludeNonLeaf(false),
     _patchesAreTriangular(false),
     _regPatchType(PatchDescriptor::NON_PATCH),
@@ -96,12 +94,10 @@ PatchTree::PatchTree() :
     _numRefinedPoints(0),
     _numSubPatchPoints(0),
     _numIrregPatches(0),
-    _treeDepth(-1),
-    _stencilTable(0) {
+    _treeDepth(-1) {
 }
 
 PatchTree::~PatchTree() {
-    delete _stencilTable;
 }
 
 
@@ -149,7 +145,7 @@ PatchTree::EvalSubPatchStencils(int patchIndex, REAL u, REAL v,
     }
 
     //  Invoke according to precision of the internal stencil matrix:
-    if (_useDoubleStencils) {
+    if (_useDoublePrecision) {
         return evalSubPatchStencils<double>(patchIndex, u, v,
                                             sP, sDu, sDv, sDuu, sDuv, sDvv);
     } else {

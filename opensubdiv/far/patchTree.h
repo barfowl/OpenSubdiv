@@ -29,11 +29,11 @@
 
 #include "../far/patchDescriptor.h"
 #include "../far/patchParam.h"
-#include "../far/stencilTable.h"
 
 #include "../sdc/options.h"
 
 #include <vector>
+#include <cstring>
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -41,7 +41,7 @@ namespace OPENSUBDIV_VERSION {
 namespace Far {
 
 //
-//  WORK IN PROGRESS...
+//  WIP ...
 //
 //  A PatchTree is a hierarchical collection of sub-patches that form a
 //  piecewise representation of the limit surface for a single face of a
@@ -55,11 +55,11 @@ namespace Far {
 //  that are for internal use but not publicly exposed, it is not added
 //  to the "internal" namespace.
 //
-//  The PatchTree is intended for internal use by other classes that will
-//  provide a simpler interface to the limit surface for the base faces
-//  of a mesh.  It is kept in Far as it's use of other Far classes, e.g.
-//  TopologyRefiner and StencilTable, currently requires protected access
-//  (which is not typically granted to classes outside Far).
+//  The PatchTree was initially intended for internal use by other classes
+//  to provide a simpler interface to the limit surface for the base faces
+//  of a mesh.  It was kept in Far as previous use of other Far classes
+//  required protected access, but that is no longer the case -- so it may
+//  be moved elsewhere.
 //
 class PatchTree {
 public:
@@ -80,7 +80,7 @@ public:
     template <typename REAL>
     REAL const * GetStencilMatrix() const;
 
-    bool UsesDoubleStencils() const { return _useDoubleStencils; }
+    bool UsesDoublePrecision() const { return _useDoublePrecision; }
 
     //  Methods supporting evaluation:
     int HasSubFaces() const    { return _numSubFaces > 0; }
@@ -101,14 +101,6 @@ public:
     int EvalSubPatchStencils(int subPatch, REAL u, REAL v, REAL s[],
                              REAL sDu[],  REAL sDv[],
                              REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
-
-    //  WIP - depending on runtime options in used during development,
-    //        a PatchTree may not fully support evaluation of stencils
-    //      - once the StencilTable options is removed, this can too
-    bool SupportsStencilEval() const { return _supportsStencilEval; }
-
-    bool UsesStencilTable() const   { return _useStencilTable; }
-    StencilTableReal<float> const * GetStencilTable() const;
 
 protected:
     PatchTree();
@@ -156,9 +148,7 @@ private:
     typedef PatchDescriptor::Type PatchType;
 
     //  Simple configuration members:
-    unsigned int _supportsStencilEval   : 1;
-    unsigned int _useDoubleStencils     : 1;
-    unsigned int _useStencilTable       : 1;
+    unsigned int _useDoublePrecision    : 1;
     unsigned int _patchesIncludeNonLeaf : 1;
     unsigned int _patchesAreTriangular  : 1;
 
@@ -195,11 +185,6 @@ private:
     //  (single or double to be used as specified on construction):
     std::vector<float>  _stencilMatrixFloat;
     std::vector<double> _stencilMatrixDouble;
-
-    //  WIP - optional use of StencilTable for patch point stencils will
-    //        be removed, as a full matrix is more efficient and uses less
-    //        memory in all observed cases
-    StencilTableReal<float> const * _stencilTable;
 };
 
 //
@@ -247,14 +232,7 @@ PatchTree::FindSubPatch(double u, double v, int subFace, int maxDep) const {
 template <typename REAL>
 inline REAL const *
 PatchTree::GetStencilMatrix() const {
-    assert(!_useStencilTable);
     return &getStencilMatrix<REAL>()[0];
-}
-
-inline StencilTableReal<float> const *
-PatchTree::GetStencilTable() const {
-    assert(_useStencilTable);
-    return _stencilTable;
 }
 
 } // end namespace Far

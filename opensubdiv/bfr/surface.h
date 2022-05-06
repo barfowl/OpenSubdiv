@@ -29,7 +29,6 @@
 
 #include "../bfr/parameterization.h"
 #include "../bfr/types.h"
-#include "../far/stencilTable.h"
 #include "../far/patchDescriptor.h"
 #include "../far/patchParam.h"
 #include "../vtr/stackBuffer.h"
@@ -190,10 +189,6 @@ private:
     template <typename REAL>
     REAL const * getIrregPatchStencilMatrix() const;
 
-    //  WIP - use of StencilTable is likely to be replaced
-    bool irregPatchNeedsStencilTable() const;
-    Far::StencilTableReal<float> const * getIrregPatchStencilTable() const;
-
 private:
     friend class SurfaceFactory;
 
@@ -285,11 +280,7 @@ Surface::PreparePatchPointValues(T const & meshPoints,
     if (numPatchPoints > numControlPoints) {
         //  Apply the patch point stencils to compute remaining patch
         //  points from those gathered above from the control points:
-        if (irregPatchNeedsStencilTable()) {
-            //  WIP - use of the StencilTable will eventually be removed
-            getIrregPatchStencilTable()->UpdateValues(
-                patchPoints, patchPoints, numControlPoints);
-        } else if (_useDouble) {
+        if (_useDouble) {
             applyIrregPatchStencils<double>(patchPoints);
         } else {
             applyIrregPatchStencils<float>(patchPoints);

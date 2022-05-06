@@ -23,7 +23,6 @@
 //
 
 #include "../bfr/surface.h"
-#include "../far/stencilTable.h"
 #include "../far/patchBasis.h"
 #include "../far/patchTree.h"
 
@@ -130,8 +129,6 @@ int
 Surface::evalIrregularPatchStencils(REAL u, REAL v,
         REAL sP[],   REAL sDu[],  REAL sDv[],
         REAL sDuu[], REAL sDuv[], REAL sDvv[]) const {
-
-    assert(_irregPatch->SupportsStencilEval());
 
     REAL uv[2] = { u, v };
     int subFace = _param.HasSubFaces() ?
@@ -317,20 +314,6 @@ REAL const *
 Surface::getIrregPatchStencilMatrix() const {
 
     return _irregPatch->GetStencilMatrix<REAL>();
-}
-
-
-//  WIP - use of StencilTables will eventually be removed
-bool
-Surface::irregPatchNeedsStencilTable() const {
-
-    return _irregPatch->UsesStencilTable();
-}
-
-Far::StencilTableReal<float> const *
-Surface::getIrregPatchStencilTable() const {
-
-    return _irregPatch->GetStencilTable();
 }
 
 //

@@ -773,7 +773,6 @@ IrregularPatchBuilder::Build() {
     patchTreeOptions.maxPatchDepthSharp  = _options.sharpLevel;
     patchTreeOptions.maxPatchDepthSmooth = _options.smoothLevel;
     patchTreeOptions.useDoublePrecision  = _options.doublePrecision;
-    patchTreeOptions.useStencilTables    = _options.stencilTables;
 
     Far::PatchTree const * patchTree =
             Far::PatchTreeFactory::Create(*refiner, patchTreeOptions);

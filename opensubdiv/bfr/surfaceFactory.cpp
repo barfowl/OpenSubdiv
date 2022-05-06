@@ -786,7 +786,6 @@ SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
     buildOptions.sharpLevel      = _limitOptions.MaxLevelPrimary();
     buildOptions.smoothLevel     = _limitOptions.MaxLevelSecondary();
     buildOptions.doublePrecision = _limitOptions.IsSurfacePrecision<double>();
-    buildOptions.stencilTables   = _limitOptions.UseStencilTables();
 
     IrregularPatchBuilder builder(descriptor, buildOptions);
 

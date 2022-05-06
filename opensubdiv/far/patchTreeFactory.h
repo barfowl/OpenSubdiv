@@ -52,31 +52,21 @@ public:
                                  maxPatchDepthSharp(depth),
                                  maxPatchDepthSmooth(15),
                                  includeInteriorPatches(false),
-                                 useDoublePrecision(false),
-                                 useStencilTables(false) { }
+                                 useDoublePrecision(false) { }
 
         unsigned int irregularBasis         : 4;
         unsigned int maxPatchDepthSharp     : 4;
         unsigned int maxPatchDepthSmooth    : 4;
         unsigned int includeInteriorPatches : 1;
         unsigned int useDoublePrecision     : 1;
-        unsigned int useStencilTables       : 1;
     };
 
     //
-    //  Static methods to create a PatchTree...
-    //
-    //  A PatchTree can be constructed from a TopologyRefiner for two
-    //  use cases.  First, a non-const TopologyRefiner is constructed
-    //  for the full neighborhood of a single face (the first) and is
-    //  intended to be internally refined.  Second, a TopologyRefiner
-    //  for a full mesh is given and a PatchTree created for a given
-    //  face.
+    //  Static method to create a PatchTree from a TopologyRefiner --
+    //  which is now limited to the first face of the TopologyRefiner
+    //  and which uses a non-const TopologyRefiner to be updated:
     //
     static PatchTree * Create(TopologyRefiner & faceRefiner,
-                              Options options = Options());
-
-    static PatchTree * Create(TopologyRefiner const & meshRefiner, int face,
                               Options options = Options());
 };
 

@@ -76,7 +76,6 @@ public:
 
     //  options affecting configuration and execution:
     unsigned int evalByStencils : 1;
-    unsigned int useStencilTable : 1;
     unsigned int doublePrecision : 1;
     unsigned int noTopCacheFlag : 1;
     unsigned int noTagsFlag : 1;
@@ -118,7 +117,6 @@ public:
         printWarnings(true),
         ptexConvert(false),
         evalByStencils(false),
-        useStencilTable(false),
         doublePrecision(false),
         noTopCacheFlag(false),
         noTagsFlag(false),
@@ -219,8 +217,6 @@ public:
                 noTopCacheFlag = true;
             } else if (!strcmp(arg, "-double")) {
                 doublePrecision = true;
-            } else if (!strcmp(arg, "-stable")) {
-                useStencilTable = true;
 
             //  Options affecting the shapes to be included:
             } else if (!strcmp(arg, "-bilinear")) {
@@ -273,10 +269,6 @@ public:
             fprintf(stderr, "Warning: Ignoring bad value to -uvint (%d)\n",
                     uvInterp);
             uvInterp = -1;
-        }
-        if (evalByStencils && useStencilTable) {
-            fprintf(stderr, "Error: Use of -stable prevents -stencil.\n");
-            exit(0);
         }
 
         if (d2Evaluate) {
@@ -644,14 +636,14 @@ testMesh(Far::TopologyRefiner      const & mesh,
     EvalResults<REAL> bfrResults;
     bfrResults.evalPosition = evalPos;
     bfrResults.eval1stDeriv = evalD1;
-    bfrResults.eval2ndDeriv = evalD1;
+    bfrResults.eval2ndDeriv = evalD2;
     bfrResults.evalUV       = evalUV;
     bfrResults.useStencils  = args.evalByStencils;
 
     EvalResults<REAL> farResults;
     farResults.evalPosition = evalPos;
     farResults.eval1stDeriv = evalD1;
-    farResults.eval2ndDeriv = evalD1;
+    farResults.eval2ndDeriv = evalD2;
     farResults.evalUV       = evalUV;
 
     //
@@ -671,7 +663,6 @@ testMesh(Far::TopologyRefiner      const & mesh,
     surfaceOptions.SetDefaultFVarID(0);
     surfaceOptions.SetSurfacePrecision<REAL>();
     surfaceOptions.DisableTopologyCache(args.noTopCacheFlag);
-    surfaceOptions.UseStencilTables(args.useStencilTable);
 
     BfrSurfaceEvaluator<REAL> bfrEval(mesh, meshPos, meshUVs, surfaceOptions);
     FarPatchEvaluator<REAL>   farEval(mesh, meshPos, meshUVs, surfaceOptions);

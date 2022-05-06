@@ -134,8 +134,7 @@ public:
     public:
         Options() : _dfltFVarID(-1), _sharedCache(0),
                     _disableCache(false), _useDoublePrecision(false),
-                    _maxLevelPrimary(6), _maxLevelSecondary(2),
-                    _useStencilTables(false) { }
+                    _maxLevelPrimary(6), _maxLevelSecondary(2) { }
 
         //  Assign the default face-varying ID:
         void   SetDefaultFVarID(FVarID id) { _dfltFVarID = id; }
@@ -160,10 +159,6 @@ public:
         void MaxLevelSecondary( int n) { _maxLevelSecondary = n; }
         int  MaxLevelSecondary() const { return _maxLevelSecondary; }
 
-        //  WIP - obsolete and due to be removed
-        void UseStencilTables(bool on) { _useStencilTables = on; }
-        bool UseStencilTables()  const { return _useStencilTables; }
-
     private:
         //  Member variables:
         FVarID _dfltFVarID;
@@ -174,7 +169,6 @@ public:
         unsigned int _useDoublePrecision : 1;
         unsigned int _maxLevelPrimary    : 4;
         unsigned int _maxLevelSecondary  : 4;
-        unsigned int _useStencilTables   : 1;
     };
 
 public:
