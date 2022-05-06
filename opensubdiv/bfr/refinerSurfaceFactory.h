@@ -74,32 +74,32 @@ protected:
     //
     //  Virtual methods to satisfy topological requirements:
     //
-    bool isFaceHole( Index faceIndex) const;
-    int  getFaceSize(Index faceIndex) const;
+    virtual bool isFaceHole( Index faceIndex) const;
+    virtual int  getFaceSize(Index faceIndex) const;
 
-    int getFaceVertexIndices(   Index faceIndex,
-                                Index vertexIndices[]) const;
-    int getFaceFVarValueIndices(Index faceIndex, FVarID fvarID,
-                                Index fvarValueIndices[]) const;
+    virtual int getFaceVertexIndices(Index faceIndex,
+                                    Index vertexIndices[]) const;
+    virtual int getFaceFVarValueIndices(Index faceIndex, FVarID fvarID,
+                                        Index fvarValueIndices[]) const;
 
-    int populateFaceVertexDescriptor(Index faceIndex, int faceVertex,
+    virtual int populateFaceVertexDescriptor(Index faceIndex, int faceVertex,
                                      VertexDescriptor * vertexDescriptor) const;
 
-    int getFaceVertexIncidentFaceVertexIndices(
+    virtual int getFaceVertexIncidentFaceVertexIndices(
                             Index faceIndex, int faceVertex,
                             Index vertexIndices[]) const;
-    int getFaceVertexIncidentFaceFVarValueIndices(
+    virtual int getFaceVertexIncidentFaceFVarValueIndices(
                             Index faceIndex, int faceVertex, FVarID fvarID,
                             Index fvarValueIndices[]) const;
 
     //
     //  Optional overrides for accelerating regular patches:
     //
-    bool getFaceNeighborhoodVertexIndicesIfRegular(
+    virtual bool getFaceNeighborhoodVertexIndicesIfRegular(
                             Index faceIndex,
                             Index vertexIndices[]) const;
 
-    bool getFaceNeighborhoodFVarValueIndicesIfRegular(
+    virtual bool getFaceNeighborhoodFVarValueIndicesIfRegular(
                             Index faceIndex,
                             FVarID fvarID, Index fvarValueIndices[]) const;
 
@@ -137,10 +137,12 @@ public:
                                 Options options = Options()) :
             RefinerSurfaceFactoryBase(mesh, options),
             _localCache() { }
-    ~RefinerSurfaceFactoryCached() { }
+    virtual ~RefinerSurfaceFactoryCached() { }
 
 protected:
-    SurfaceFactoryCache * getInternalCache() const { return & _localCache; }
+    virtual SurfaceFactoryCache * getInternalCache() const {
+        return & _localCache;
+    }
 
 private:
     CACHE_TYPE mutable _localCache;

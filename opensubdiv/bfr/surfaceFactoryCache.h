@@ -132,18 +132,18 @@ private:
 //
 template <class MUTEX_TYPE, class READ_LOCK_GUARD_TYPE,
                             class WRITE_LOCK_GUARD_TYPE>
-class ThreadSafeSurfaceFactoryCache : public SurfaceFactoryCache {
+class SurfaceFactoryCacheThreaded : public SurfaceFactoryCache {
 public:
-    ThreadSafeSurfaceFactoryCache() : SurfaceFactoryCache() { }
-    ~ThreadSafeSurfaceFactoryCache() { }
+    SurfaceFactoryCacheThreaded() : SurfaceFactoryCache() { }
+    virtual ~SurfaceFactoryCacheThreaded() { }
 
 protected:
-    data_type const * Find(key_type const & key) const {
+    virtual data_type const * Find(key_type const & key) const {
         READ_LOCK_GUARD_TYPE lockGuard(_mutex);
         return find(key);
     }
 
-    data_type const * Add(key_type const & key, data_type const * data) {
+    virtual data_type const * Add(key_type const & key, data_type const * data){
         WRITE_LOCK_GUARD_TYPE lockGuard(_mutex);
         return add(key, data);
     }
