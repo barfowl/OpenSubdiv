@@ -54,7 +54,7 @@ public:
     //  quadrangulated N-sided polygon.  This is not intended for general
     //  use, but is made public for clients that do need to distinguish:
     //
-    enum Type { QUAD, TRI, QPOLY };
+    enum Type { QUAD, TRI, QUAD_SUBFACES };
 
 public:
     Parameterization() : _faceSize(0) { }
@@ -88,16 +88,17 @@ public:
     //  Methods to deal with discontinuous parameterizations, i.e. those
     //  partitioned into sub-faces:
     //
-    bool HasSubFaces() const { return (_type == QPOLY); }
+    bool HasSubFaces() const { return (_type == QUAD_SUBFACES); }
 
     template <typename REAL>
     int GetSubFace(REAL const uvCoord[2]) const;
 
     //
-    //  Conversion methods to/from sub-face coordinates:
+    //  Conversion methods to/from sub-face coordinates -- only for use
+    //  with instances partitioned into sub-faces:
     //
-    //  Note that sub-face coordinates that are normalized correspond to
-    //  coordinates for Ptex faces.
+    //  Note that sub-face coordinates that are normalized correspond
+    //  to coordinates for Ptex faces.
     //
     template <typename REAL>
     int ConvertCoordToSubFace(
@@ -135,20 +136,21 @@ inline
 Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) :
         _faceSize(faceSize), _scheme(scheme), _uDim(0) {
 
-    if (Sdc::SchemeTypeTraits::GetRegularFaceSize(scheme) == 3) {
-        _type = TRI;
-        //  Reset size as 0 for now for non-tris, possibly assert()
-        if (_faceSize != 3) _faceSize = 0;
-    } else if (_faceSize == 4) {
-        _type = QUAD;
-    } else {
-        _type = QPOLY;
+    int regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(scheme);
 
-        //  Use int sqrt to reduce accuracy loss tiling with large sizes
-        if (_faceSize < 10) {
-            _uDim = 2 + (_faceSize > 4);
+    _type = (regFaceSize == 4) ? QUAD : TRI;
+    if (_faceSize != regFaceSize) {
+        if (_faceSize < 3) {
+            //  Reset size to 0 (invalid) for degenerate faces of all schemes:
+            _faceSize = 0;
+        } else if (regFaceSize == 3) {
+            //  Reset size to 0 (invalid) for non-triangles of tri schemes:
+            _faceSize = 0;
         } else {
-            _uDim = 1 + (int) std::sqrt((float)(_faceSize - 1));
+            //  Quad sub-faces -- use int sqrt for udim to preserve accuracy:
+            _type = QUAD_SUBFACES;
+            _uDim = (_faceSize < 10) ?  (2 + (_faceSize > 4)) :
+                    (1 + (int) std::sqrt((float)(_faceSize - 1)));
         }
     }
 }
@@ -169,7 +171,7 @@ Parameterization::GetVertexCoord(int vertex, REAL uv[2]) const {
         uv[0] = (REAL) (vertex == 1);
         uv[1] = (REAL) (vertex == 2);
         break;
-    case QPOLY:
+    case QUAD_SUBFACES:
         uv[0] = (REAL) (vertex % _uDim);
         uv[1] = (REAL) (vertex / _uDim);
         break;
@@ -198,7 +200,7 @@ Parameterization::GetEdgeCoord(int edge, REAL t, REAL uv[2]) const {
         }
         break;
 
-    case QPOLY:
+    case QUAD_SUBFACES:
         if (t < 0.5f) {
             GetVertexCoord(edge, uv);
             uv[0] += t;

@@ -193,7 +193,7 @@ Surface::evalMultiLinearPatchBasis(REAL u, REAL v,
         REAL wP[4],   REAL wDu[4],  REAL wDv[4],
         REAL wDuu[4], REAL wDuv[4], REAL wDvv[4]) const {
 
-    assert(_param.GetType() == Parameterization::QPOLY);
+    assert(_param.GetType() == Parameterization::QUAD_SUBFACES);
 
     REAL uv[2] = { u, v };
     int subFace = _param.HasSubFaces() ?

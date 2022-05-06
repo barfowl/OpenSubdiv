@@ -634,7 +634,7 @@ namespace {
 //
 //  Utility functions to help assembly of tessellation patterns -- grouped
 //  into local structs/namespaces for each of the supported parameterization
-//  types:  quad, triangle (tri) or quadranglated N-sided polygon (qpoly):
+//  types:  quad, triangle (tri) or quadranglated sub-faces (qsub):
 //
 //  Given the similar structure to these -- the construction of patterns
 //  using concentric rings of Coords, rings of Facets between successive
@@ -739,7 +739,7 @@ private:
                                      FacetArray facets);
 };
 
-class qpoly {
+class qsub {
 public:
     //  Public methods for counting coords and facets:
     static int CountUniformFacets(int N, int edgeRes, bool triangulate);
@@ -1610,7 +1610,7 @@ tri::GetNonUniformFacets(int const outerRes[], int innerRes,
 //  reflect the differing topologies for the odd and even case:
 //
 inline int
-qpoly::CountUniformFacets(int N, int edgeRes, bool triangulate) {
+qsub::CountUniformFacets(int N, int edgeRes, bool triangulate) {
 
     bool resIsOdd = (edgeRes & 1);
 
@@ -1623,8 +1623,8 @@ qpoly::CountUniformFacets(int N, int edgeRes, bool triangulate) {
 }
 
 int
-qpoly::CountNonUniformFacets(int N, int const outerRes[], int innerRes,
-                             bool triangulate) {
+qsub::CountNonUniformFacets(int N, int const outerRes[], int innerRes,
+                            bool triangulate) {
 
     assert(innerRes > 1);
 
@@ -1660,7 +1660,7 @@ qpoly::CountNonUniformFacets(int N, int const outerRes[], int innerRes,
 }
 
 inline int
-qpoly::countUniformCoords(int N, int edgeRes) {
+qsub::countUniformCoords(int N, int edgeRes) {
 
     int H = edgeRes / 2;
     return (edgeRes & 1) ? (H+1)* (H+1) * N + ((N == 3) ? 0 : 1)
@@ -1668,7 +1668,7 @@ qpoly::countUniformCoords(int N, int edgeRes) {
 }
 
 inline int
-qpoly::CountInteriorCoords(int N, int edgeRes) {
+qsub::CountInteriorCoords(int N, int edgeRes) {
 
     assert(edgeRes > 1);
     return countUniformCoords(N, edgeRes - 2);
@@ -1676,7 +1676,7 @@ qpoly::CountInteriorCoords(int N, int edgeRes) {
 
 template <typename REAL>
 inline int
-qpoly::getCenterCoord(Coord2Array<REAL> coords) {
+qsub::getCenterCoord(Coord2Array<REAL> coords) {
 
     coords[0].Set(0.5f, 0.5f);
     return 1;
@@ -1684,10 +1684,10 @@ qpoly::getCenterCoord(Coord2Array<REAL> coords) {
 
 template <typename REAL>
 int
-qpoly::getRingEdgeCoords(Parameterization P, int edge, int edgeRes,
-                         bool incFirst, bool incLast,
-                         REAL tOrigin, REAL dt,
-                         Coord2Array<REAL> coords) {
+qsub::getRingEdgeCoords(Parameterization P, int edge, int edgeRes,
+                        bool incFirst, bool incLast,
+                        REAL tOrigin, REAL dt,
+                        Coord2Array<REAL> coords) {
 
     //
     //  Determine number of coords in each half, excluding the ends.  The
@@ -1732,8 +1732,8 @@ qpoly::getRingEdgeCoords(Parameterization P, int edge, int edgeRes,
 
 template <typename REAL>
 int
-qpoly::GetEdgeCoords(Parameterization P, int edge, int edgeRes,
-                     Coord2Array<REAL> coords) {
+qsub::GetEdgeCoords(Parameterization P, int edge, int edgeRes,
+                    Coord2Array<REAL> coords) {
 
     return getRingEdgeCoords<REAL>(P, edge, edgeRes, false, false,
                                    0.0f, 1.0f / (REAL)edgeRes,
@@ -1742,8 +1742,8 @@ qpoly::GetEdgeCoords(Parameterization P, int edge, int edgeRes,
 
 template <typename REAL>
 int
-qpoly::GetBoundaryCoords(Parameterization P, int const edgeRates[],
-                         Coord2Array<REAL> coords) {
+qsub::GetBoundaryCoords(Parameterization P, int const edgeRates[],
+                        Coord2Array<REAL> coords) {
 
 
     int N = P.GetFaceSize();
@@ -1759,9 +1759,9 @@ qpoly::GetBoundaryCoords(Parameterization P, int const edgeRates[],
 
 template <typename REAL>
 int
-qpoly::getInteriorRingCoords(Parameterization P, int edgeRes,
-                             REAL tOrigin, REAL dt,
-                             Coord2Array<REAL> coords) {
+qsub::getInteriorRingCoords(Parameterization P, int edgeRes,
+                            REAL tOrigin, REAL dt,
+                            Coord2Array<REAL> coords) {
     assert(edgeRes > 1);
 
     int N = P.GetFaceSize();
@@ -1777,8 +1777,8 @@ qpoly::getInteriorRingCoords(Parameterization P, int edgeRes,
 
 template <typename REAL>
 int
-qpoly::getCenterRingCoords(Parameterization P, REAL tOrigin,
-                           Coord2Array<REAL> coords) {
+qsub::getCenterRingCoords(Parameterization P, REAL tOrigin,
+                          Coord2Array<REAL> coords) {
 
     int N = P.GetFaceSize();
 
@@ -1793,8 +1793,8 @@ qpoly::getCenterRingCoords(Parameterization P, REAL tOrigin,
 
 template <typename REAL>
 int
-qpoly::GetInteriorCoords(Parameterization P, int edgeRes,
-                         Coord2Array<REAL> coords) {
+qsub::GetInteriorCoords(Parameterization P, int edgeRes,
+                        Coord2Array<REAL> coords) {
 
     int nIntRings = edgeRes / 2;
     if (nIntRings == 0) return 0;
@@ -1819,15 +1819,15 @@ qpoly::GetInteriorCoords(Parameterization P, int edgeRes,
 }
 
 int
-qpoly::getCenterFacets(int N, int coord0, FacetArray facets) {
+qsub::getCenterFacets(int N, int coord0, FacetArray facets) {
 
     return (N == 3) ? appendTri(facets, coord0, coord0+1, coord0+2)
                     : appendTriFan(facets, N, coord0);
 }
 
 int
-qpoly::getInteriorRingFacets(int N, int edgeRes, int coord0, bool triangulate,
-                             FacetArray facets) {
+qsub::getInteriorRingFacets(int N, int edgeRes, int coord0, bool triangulate,
+                            FacetArray facets) {
 
     //
     //  Deal with trivial cases with no inner vertices:
@@ -1878,9 +1878,9 @@ qpoly::getInteriorRingFacets(int N, int edgeRes, int coord0, bool triangulate,
 }
 
 int
-qpoly::getBoundaryRingFacets(int N, int const outerRes[], int innerRes,
-                             int nBoundaryEdges, bool triangulate,
-                             FacetArray facets) {
+qsub::getBoundaryRingFacets(int N, int const outerRes[], int innerRes,
+                            int nBoundaryEdges, bool triangulate,
+                            FacetArray facets) {
 
     int innerEdges = std::max(innerRes - 2, 0);
 
@@ -1936,8 +1936,8 @@ qpoly::getBoundaryRingFacets(int N, int const outerRes[], int innerRes,
 }
     
 int
-qpoly::GetUniformFacets(int N, int edgeRes, bool triangulate,
-                        FacetArray facets) {
+qsub::GetUniformFacets(int N, int edgeRes, bool triangulate,
+                       FacetArray facets) {
 
     //  The trivial (single facet) case should be handled externally:
     if (edgeRes == 1) {
@@ -1957,9 +1957,9 @@ qpoly::GetUniformFacets(int N, int edgeRes, bool triangulate,
 }
 
 int
-qpoly::GetNonUniformFacets(int N, int const outerRes[], int innerRes,
-                           int nBoundaryEdges, bool triangulate,
-                           FacetArray facets) {
+qsub::GetNonUniformFacets(int N, int const outerRes[], int innerRes,
+                          int nBoundaryEdges, bool triangulate,
+                          FacetArray facets) {
 
     //  First, generate the ring of boundary facets separately:
     int nFacets = getBoundaryRingFacets(N, outerRes, innerRes, nBoundaryEdges,
@@ -2047,7 +2047,7 @@ Tessellation::initialize(Parameterization const & p,
     case Parameterization::TRI:
         initializeInventoryForParamTri(sumOfOuterRates);
         break;
-    case Parameterization::QPOLY:
+    case Parameterization::QUAD_SUBFACES:
         initializeInventoryForParamQPoly(sumOfOuterRates);
         break;
     }
@@ -2244,8 +2244,8 @@ Tessellation::initializeInventoryForParamQPoly(int sumOfEdgeRates) {
 
     if (_isUniform) {
         if (res > 1) {
-            _numInteriorPoints = qpoly::CountInteriorCoords(N, res);
-            _numFacets = qpoly::CountUniformFacets(N, res, _triangulate);
+            _numInteriorPoints = qsub::CountInteriorCoords(N, res);
+            _numFacets = qsub::CountUniformFacets(N, res, _triangulate);
         } else if (N == 3) {
             _numInteriorPoints = 0;
             _numFacets = 1;
@@ -2257,8 +2257,8 @@ Tessellation::initializeInventoryForParamQPoly(int sumOfEdgeRates) {
         }
     } else {
         if (res > 1) {
-            _numInteriorPoints = qpoly::CountInteriorCoords(N, res);
-            _numFacets = qpoly::CountNonUniformFacets(N, _outerRates, res,
+            _numInteriorPoints = qsub::CountInteriorCoords(N, res);
+            _numFacets = qsub::CountNonUniformFacets(N, _outerRates, res,
                                                      _triangulate);
         } else {
             _numInteriorPoints = 1;
@@ -2309,8 +2309,8 @@ Tessellation::GetEdgeCoords(int edge, REAL coordBuffer[]) const {
         return quad::GetEdgeCoords(edge, edgeRes, coords);
     case Parameterization::TRI:
         return tri::GetEdgeCoords(edge, edgeRes, coords);
-    case Parameterization::QPOLY:
-        return qpoly::GetEdgeCoords(_param, edge, edgeRes, coords);
+    case Parameterization::QUAD_SUBFACES:
+        return qsub::GetEdgeCoords(_param, edge, edgeRes, coords);
     default:
         assert(0);
     }
@@ -2328,8 +2328,8 @@ Tessellation::GetBoundaryCoords(REAL coordBuffer[]) const {
         return quad::GetBoundaryCoords(_outerRates, coords);
     case Parameterization::TRI:
         return tri::GetBoundaryCoords(_outerRates, coords);
-    case Parameterization::QPOLY:
-        return qpoly::GetBoundaryCoords(_param, _outerRates, coords);
+    case Parameterization::QUAD_SUBFACES:
+        return qsub::GetBoundaryCoords(_param, _outerRates, coords);
     default:
         assert(0);
     }
@@ -2354,8 +2354,8 @@ Tessellation::GetInteriorCoords(REAL coordBuffer[]) const {
         return quad::GetInteriorCoords(_innerRates, coords);
     case Parameterization::TRI:
         return tri::GetInteriorCoords(_innerRates[0], coords);
-    case Parameterization::QPOLY:
-        return qpoly::GetInteriorCoords(_param, _innerRates[0], coords);
+    case Parameterization::QUAD_SUBFACES:
+        return qsub::GetInteriorCoords(_param, _innerRates[0], coords);
     default:
         assert(0);
     }
@@ -2405,12 +2405,12 @@ Tessellation::GetFacets(int facetIndices[]) const {
                                 _numBoundaryPoints, facets);
         }
         break;
-    case Parameterization::QPOLY:
+    case Parameterization::QUAD_SUBFACES:
         if (_isUniform) {
-            nFacets = qpoly::GetUniformFacets(N, _innerRates[0], _triangulate,
+            nFacets = qsub::GetUniformFacets(N, _innerRates[0], _triangulate,
                                 facets);
         } else {
-            nFacets = qpoly::GetNonUniformFacets(N, _outerRates, _innerRates[0],
+            nFacets = qsub::GetNonUniformFacets(N, _outerRates, _innerRates[0],
                                 _numBoundaryPoints, _triangulate, facets);
         }
         break;
