@@ -2154,7 +2154,7 @@ Tessellation::GetRates(int rates[]) const {
         rates[i] = _outerRates[i];
     }
     for (int i = 0; i < numInnerRates; ++i) {
-        rates[N + i] = _innerRates[std::max(1,i)];
+        rates[N + i] = _innerRates[i > 0];
     }
     return _numGivenRates;
 }
