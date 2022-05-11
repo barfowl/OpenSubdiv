@@ -21,41 +21,19 @@
 #   KIND, either express or implied. See the Apache License for the specific
 #   language governing permissions and limitations under the Apache License.
 #
-macro(osd_add_bfr_tutorial NAME)
 
-     osd_add_executable(${NAME} "tutorials/bfr"
-        ${ARGN}
-        $<TARGET_OBJECTS:sdc_obj>
-        $<TARGET_OBJECTS:vtr_obj>
-        $<TARGET_OBJECTS:far_obj>
-        $<TARGET_OBJECTS:bfr_obj>
-     )
-
-     install(TARGETS ${NAME} DESTINATION "${CMAKE_BINDIR_BASE}/tutorials")
-
-endmacro()
-
-
-set(TUTORIALS
-    tutorial_1_1
-    tutorial_1_2
-    tutorial_2_1
-    tutorial_3_1
+set(SOURCE_FILES
+    main.cpp
 )
 
-foreach(tutorial ${TUTORIALS})
-
-    add_subdirectory("${tutorial}")
-
-    list(APPEND TUTORIAL_TARGETS "bfr_${tutorial}")
-
-    add_test(bfr_${tutorial} ${EXECUTABLE_OUTPUT_PATH}/bfr_${tutorial})
-
-endforeach()
-
-add_custom_target(bfr_tutorials DEPENDS ${TUTORIAL_TARGETS})
-
-set_target_properties(bfr_tutorials
-    PROPERTIES 
-        FOLDER "tutorials/bfr"
+osd_add_executable(bfr_tutorial_3_1 "tutorials/bfr"
+    ${SOURCE_FILES}
+    $<TARGET_OBJECTS:sdc_obj>
+    $<TARGET_OBJECTS:vtr_obj>
+    $<TARGET_OBJECTS:far_obj>
+    $<TARGET_OBJECTS:bfr_obj>
+    $<TARGET_OBJECTS:regression_common_obj>
 )
+
+install(TARGETS bfr_tutorial_3_1 DESTINATION "${CMAKE_BINDIR_BASE}/tutorials")
+
