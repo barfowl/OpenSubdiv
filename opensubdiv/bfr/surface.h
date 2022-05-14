@@ -38,11 +38,8 @@
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
-namespace Far {
-    class PatchTree;
-}
-
 namespace Bfr {
+class PatchTree;
 
 //
 //  The Surface class encapsulates the limit surface of a face for any
@@ -199,7 +196,7 @@ private:
 private:
     //  Member variables -- try to avoid redundancy and/or wasted space
     //  here as some may choose to cache all Surfaces of a mesh:
-    typedef Far::PatchTree const *                    IrregPatchPtr;
+    typedef PatchTree const *                         IrregPatchPtr;
     typedef Vtr::internal::StackBuffer<Index,20,true> ControlPointArray;
 
     ControlPointArray _controlPoints;

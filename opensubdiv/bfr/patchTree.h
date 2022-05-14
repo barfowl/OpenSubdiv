@@ -22,14 +22,14 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#ifndef OPENSUBDIV3_FAR_PATCH_TREE_H
-#define OPENSUBDIV3_FAR_PATCH_TREE_H
+#ifndef OPENSUBDIV3_BFR_PATCH_TREE_H
+#define OPENSUBDIV3_BFR_PATCH_TREE_H
 
 #include "../version.h"
 
+#include "../bfr/types.h"
 #include "../far/patchDescriptor.h"
 #include "../far/patchParam.h"
-
 #include "../sdc/options.h"
 
 #include <vector>
@@ -38,28 +38,32 @@
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
-namespace Far {
+namespace Bfr {
 
 //
-//  WIP ...
-//
-//  A PatchTree is a hierarchical collection of sub-patches that form a
-//  piecewise representation of the limit surface for a single face of a
-//  mesh.  Using the same patch representations as other Far classes, it
-//  combines stripped down versions of the PatchTable, PatchMap and a
+//  A PatchTree is a hierarchical collection of parametric patches that
+//  form a piecewise representation of the limit surface for a single face
+//  of a mesh.  Using the patch representations from Far, it combines
+//  stripped down versions of the PatchTable and PatchMap from Far and a
 //  raw representation of stencils into a more compact representation
 //  suited to evaluating a single face. These are constructed based on
-//  adaptive refinement of a single face of a TopologyRefiner.
+//  adaptive refinement of a single face of a Far::TopologyRefiner.
 //
-//  Note that PatchTree is not publicly exposed. As with other Far classes
-//  that are for internal use but not publicly exposed, it is not added
-//  to the "internal" namespace.
+//  As the internal representation for the limit surface of a face with
+//  irregular topology, the PatchTree is not publicly exposed. As is the
+//  case with other internal Bfr classes whose headers are not exported,
+//  it is not further protected by the "internal" namespace.
 //
-//  The PatchTree was initially intended for internal use by other classes
-//  to provide a simpler interface to the limit surface for the base faces
-//  of a mesh.  It was kept in Far as previous use of other Far classes
-//  required protected access, but that is no longer the case -- so it may
-//  be moved elsewhere.
+//  PatchTree was initially developed as an internal class for Far, so
+//  some comments may still reflect that origin.
+//
+//  PatchTree also includes functionality beyond what is needed for Bfr
+//  for potential future use. Most notable is the ability for the tree
+//  to store a patch at interior nodes -- in addition to the leaf nodes.
+//  This allows the depth of evaluation to be varied, which takes place
+//  when searching a patch from the tree (specifying a maximum depth for
+//  the search). Construction options allow this functionality to be
+//  selectively enabled/disabled, and Bfr currently disables it.
 //
 class PatchTree {
 public:
@@ -88,7 +92,7 @@ public:
 
     int FindSubPatch(double u, double v, int subFace=0, int maxDep=-1) const;
 
-    PatchParam      GetSubPatchParam( int subPatch) const;
+    Far::PatchParam GetSubPatchParam( int subPatch) const;
     ConstIndexArray GetSubPatchPoints(int subPatch) const;
 
     //  Main evaluation methods - basis weights or limit stencils:
@@ -145,7 +149,7 @@ protected:
 
 private:
     //  Private members:
-    typedef PatchDescriptor::Type PatchType;
+    typedef Far::PatchDescriptor::Type PatchType;
 
     //  Simple configuration members:
     unsigned int _useDoublePrecision    : 1;
@@ -174,8 +178,8 @@ private:
     //  separate "patch arrays" or separated in other ways and manged with
     //  a bit more book-keeping.
     //
-    std::vector<Index>      _patchPoints;
-    std::vector<PatchParam> _patchParams;
+    std::vector<Index>           _patchPoints;
+    std::vector<Far::PatchParam> _patchParams;
 
     //  The quadtree organizing the patches:
     std::vector<TreeNode>  _treeNodes;
@@ -219,7 +223,7 @@ PatchTree::getStencilMatrix<double>() {
 //
 //  Inline methods:
 //
-inline PatchParam
+inline Far::PatchParam
 PatchTree::GetSubPatchParam(int subPatch) const {
     return _patchParams[subPatch];
 }
@@ -235,11 +239,11 @@ PatchTree::GetStencilMatrix() const {
     return &getStencilMatrix<REAL>()[0];
 }
 
-} // end namespace Far
+} // end namespace Bfr
 
 } // end namespace OPENSUBDIV_VERSION
 using namespace OPENSUBDIV_VERSION;
 
 } // end namespace OpenSubdiv
 
-#endif /* OPENSUBDIV3_FAR_PATCH_TREE */
+#endif /* OPENSUBDIV3_BFR_PATCH_TREE */

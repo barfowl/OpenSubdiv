@@ -22,28 +22,39 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#ifndef OPENSUBDIV3_FAR_PATCH_TREE_FACTORY_H
-#define OPENSUBDIV3_FAR_PATCH_TREE_FACTORY_H
+#ifndef OPENSUBDIV3_BFR_PATCH_TREE_FACTORY_H
+#define OPENSUBDIV3_BFR_PATCH_TREE_FACTORY_H
 
 #include "../version.h"
 
-#include "../far/patchTree.h"
+#include "../bfr/patchTree.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
 namespace Far {
+    class TopologyRefiner;
+}
 
-class TopologyRefiner;
+namespace Bfr {
 
+//
+//  WIP - this stateless Factory with static Create() methods reflects
+//        the origin of PatchTree within Far
+//      - this Factory class will be replaced with some kind of Builder
 //
 //  PatchTreeFactory with static method constructing PatchTrees:
 //
 class PatchTreeFactory {
 public:
 
-    //  Prefer to avoid -- or at least minimize -- the number of shape
-    //  approximating options here...
+    //
+    //  Minimize the number of shape approximating Options here (compared
+    //  to the Far classes):
+    //
+    //  Note that the "interior patches" capability of PatchTree is not
+    //  used in Bfr and so is never enabled. It is left available as a
+    //  reminder of that ability for future use.
     //
     struct Options {
         enum BasisType { REGULAR, GREGORY, LINEAR };
@@ -62,19 +73,18 @@ public:
     };
 
     //
-    //  Static method to create a PatchTree from a TopologyRefiner --
-    //  which is now limited to the first face of the TopologyRefiner
-    //  and which uses a non-const TopologyRefiner to be updated:
+    //  Create a PatchTree from the first face of a TopologyRefiner
+    //  representing a small local neighborhood of that face:
     //
-    static PatchTree * Create(TopologyRefiner & faceRefiner,
+    static PatchTree * Create(Far::TopologyRefiner & faceRefiner,
                               Options options = Options());
 };
 
-} // end namespace Far
+} // end namespace Bfr
 
 } // end namespace OPENSUBDIV_VERSION
 using namespace OPENSUBDIV_VERSION;
 
 } // end namespace OpenSubdiv
 
-#endif /* OPENSUBDIV3_FAR_PATCH_TREE_FACTORY_H */
+#endif /* OPENSUBDIV3_BFR_PATCH_TREE_FACTORY_H */

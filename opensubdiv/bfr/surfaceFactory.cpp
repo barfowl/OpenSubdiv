@@ -30,7 +30,7 @@
 #include "../bfr/faceSurface.h"
 #include "../bfr/regularPatchBuilder.h"
 #include "../bfr/irregularPatchBuilder.h"
-#include "../far/patchTree.h"
+#include "../bfr/patchTree.h"
 
 #include <map>
 #include <cstdio>

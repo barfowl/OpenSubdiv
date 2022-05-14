@@ -22,7 +22,7 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#include "../far/patchTree.h"
+#include "../bfr/patchTree.h"
 #include "../far/patchBasis.h"
 
 #include <algorithm>
@@ -30,8 +30,10 @@
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
+namespace Bfr {
 
-namespace Far {
+using Far::PatchDescriptor;
+using Far::PatchParam;
 
 
 //
@@ -121,7 +123,7 @@ PatchTree::EvalSubPatchBasis(int patchIndex, REAL u, REAL v,
 
     PatchParam const & param = _patchParams[patchIndex];
 
-    return internal::EvaluatePatchBasis(
+    return Far::internal::EvaluatePatchBasis(
             param.IsRegular() ? _regPatchType : _irregPatchType,
             param, u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
 }
@@ -140,7 +142,7 @@ PatchTree::EvalSubPatchStencils(int patchIndex, REAL u, REAL v,
 
     if ((param.GetDepth() == 0) && param.IsRegular() && !param.GetBoundary()) {
         assert(_regPatchSize == _numControlPoints);
-        return internal::EvaluatePatchBasis(
+        return Far::internal::EvaluatePatchBasis(
                 _regPatchType, param, u, v, sP, sDu, sDv, sDuu, sDuv, sDuv);
     }
 
@@ -207,7 +209,7 @@ PatchTree::evalSubPatchStencils(int patchIndex, REAL u, REAL v,
         wDvv = wDvvBuffer;
     }
 
-    internal::EvaluatePatchBasis(
+    Far::internal::EvaluatePatchBasis(
             param.IsRegular() ? _regPatchType : _irregPatchType,
             param, u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
 
@@ -323,7 +325,7 @@ inline PatchTree::TreeNode *
 PatchTree::assignLeafOrChildNode(TreeNode * node,
         bool isLeaf, int quadrant, int patchIndex) {
 
-    //  This is getting far enough away from Far::PatchMap's original
+    //  This is getting far enough away from PatchMap's original
     //  structure and implementation that it warrants a face lift...
 
     if (!node->children[quadrant].isSet) {
@@ -364,13 +366,10 @@ PatchTree::buildQuadtree() {
 
     int numPatches = (int) _patchParams.size();
 
-//printf("\nPatchTree::buildQuadtree():\n");
-
     _treeNodes.reserve(numPatches);
     _treeNodes.resize(_numSubFaces ? _numSubFaces : 1);
     _treeDepth = 0;
 
-//printf("Traversing %d patches...\n", numPatches);
     for (int patchIndex = 0; patchIndex < numPatches; ++patchIndex) {
 
         PatchParam const & param = _patchParams[patchIndex];
@@ -383,12 +382,8 @@ PatchTree::buildQuadtree() {
 
         _treeDepth = std::max(depth, _treeDepth);
 
-//printf("    patch %2d:  depth = %d, faceId = %d\n",
-//            patchIndex, depth, subFace);
-
         if (depth == rootDepth) {
             node->patchIndex = patchIndex;
-//printf("        assigning to node[%d]\n", subFace);
             continue;
         }
             
@@ -424,20 +419,6 @@ PatchTree::buildQuadtree() {
             }
         }
     }
-/*
-printf("Resulting %d tree nodes...\n", (int)_treeNodes.size());
-for (int i = 0; i < (int)_treeNodes.size(); ++i) {
-    TreeNode const & node = _treeNodes[i];
-    printf("    node %d:  patch index = %d\n", i, node.patchIndex);
-    for (int j = 0; j < 4; ++j) {
-        TreeNode::Child const & child = node.children[j];
-        printf("        child %d:  leaf = %d, set = %d, %s = %d\n", j,
-            child.isLeaf, child.isSet,
-            child.isLeaf ? "patch" : "node ",
-            child.isSet ? child.index : -1);
-    }
-}
-*/
 }
 
 int
@@ -514,7 +495,7 @@ template int PatchTree::EvalSubPatchStencils<double>(int patchIndex,
                 double sP[], double sDu[], double sDv[],
                 double sDuu[], double sDuv[], double sDvv[]) const;
 
-} // end namespace Far
+} // end namespace Bfr
 
 } // end namespace OPENSUBDIV_VERSION
 } // end namespace OpenSubdiv

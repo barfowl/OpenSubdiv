@@ -25,8 +25,8 @@
 #include "../bfr/irregularPatchBuilder.h"
 #include "../far/topologyDescriptor.h"
 #include "../far/topologyRefiner.h"
-#include "../far/patchTree.h"
-#include "../far/patchTreeFactory.h"
+#include "../bfr/patchTree.h"
+#include "../bfr/patchTreeFactory.h"
 
 #include <cstring>
 
@@ -691,7 +691,7 @@ IrregularPatchBuilder::IrregPatchType const *
 IrregularPatchBuilder::Build() {
 
     //
-    //  The purpose here is to build a Far::PatchTree -- whose factory
+    //  The purpose here is to build a PatchTree -- whose factory
     //  requires a Far::TopologyRefiner.
     //
     //  For now, the quickest way to a Far::TopologyRefiner is via a
@@ -762,20 +762,21 @@ IrregularPatchBuilder::Build() {
     RefinerFactory::Options refinerOptions;
     refinerOptions.schemeType    = _surface.GetSdcScheme();
     refinerOptions.schemeOptions = _surface.GetSdcOptionsInEffect();
-    refinerOptions.validateFullTopology = true;  // WIP - remove when stable
+    // WIP - enable for debugging
+    //refinerOptions.validateFullTopology = true;
 
     Far::TopologyRefiner * refiner =
             RefinerFactory::Create(topDescriptor, refinerOptions);
 
     //  Create the PatchTree:
-    Far::PatchTreeFactory::Options patchTreeOptions;
+    PatchTreeFactory::Options patchTreeOptions;
     patchTreeOptions.includeInteriorPatches = false;
     patchTreeOptions.maxPatchDepthSharp  = _options.sharpLevel;
     patchTreeOptions.maxPatchDepthSmooth = _options.smoothLevel;
     patchTreeOptions.useDoublePrecision  = _options.doublePrecision;
 
-    Far::PatchTree const * patchTree =
-            Far::PatchTreeFactory::Create(*refiner, patchTreeOptions);
+    PatchTree const * patchTree =
+            PatchTreeFactory::Create(*refiner, patchTreeOptions);
 
     assert(patchTree->GetNumControlPoints() == _numControlVerts);
 

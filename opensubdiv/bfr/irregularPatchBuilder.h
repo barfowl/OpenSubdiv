@@ -33,11 +33,8 @@
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
-namespace Far {
-    class PatchTree;
-}
-
 namespace Bfr {
+class PatchTree;
 
 //
 //  IrregularPatchBuilder takes a FaceSurface (that has been flagged as not
@@ -49,8 +46,8 @@ namespace Bfr {
 //  should have minimal impact on its clients (ideally none).
 //
 //  WIP - the nature of the approximating options needs more work...
-//      - we need some way of specifying the options of Far::PatchTree in
-//        a way that's more in line with the Factory's public interface
+//      - we need some way of specifying the options of PatchTree in a
+//        way that's more in line with the Factory's public interface
 //
 class IrregularPatchBuilder {
 public:
@@ -79,7 +76,7 @@ public:
 
 public:
     //  Methods to build irregular patches:
-    typedef Far::PatchTree IrregPatchType;
+    typedef PatchTree IrregPatchType;
 
     IrregPatchType const * Build();
 

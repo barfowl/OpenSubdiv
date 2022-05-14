@@ -35,8 +35,6 @@ set(SOURCE_FILES
     patchMap.cpp
     patchTable.cpp
     patchTableFactory.cpp
-    patchTree.cpp
-    patchTreeFactory.cpp
     ptexIndices.cpp
     stencilTable.cpp
     stencilTableFactory.cpp
@@ -52,8 +50,6 @@ set(PRIVATE_HEADER_FILES
     loopPatchBuilder.h
     patchBasis.h
     patchBuilder.h
-    patchTree.h
-    patchTreeFactory.h
     sparseMatrix.h
     stencilBuilder.h
 )

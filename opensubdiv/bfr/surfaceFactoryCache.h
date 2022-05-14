@@ -35,11 +35,8 @@
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
-namespace Far {
-class PatchTree;
-}
-
 namespace Bfr {
+class PatchTree;
 
 //
 //  SurfaceFactoryCache is a container for storing/caching instances of the
@@ -68,8 +65,8 @@ protected:
     class Key;
 
     //  WIP - use of STL-style type names for containers is questionable
-    typedef Key            key_type;
-    typedef Far::PatchTree data_type;
+    typedef Key       key_type;
+    typedef PatchTree data_type;
 
 protected:
     //

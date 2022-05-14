@@ -23,7 +23,7 @@
 //
 
 #include "../bfr/surfaceFactoryCache.h"
-#include "../far/patchTree.h"
+#include "../bfr/patchTree.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {

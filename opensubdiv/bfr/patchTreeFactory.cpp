@@ -22,10 +22,10 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
+#include "../bfr/patchTreeFactory.h"
 #include "../far/primvarRefiner.h"
 #include "../far/topologyRefiner.h"
 #include "../far/topologyDescriptor.h"
-#include "../far/patchTreeFactory.h"
 #include "../far/patchBuilder.h"
 #include "../far/sparseMatrix.h"
 #include "../vtr/stackBuffer.h"
@@ -34,12 +34,23 @@
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
-namespace Far {
+namespace Bfr {
 
 using Vtr::internal::Level;
 using Vtr::internal::StackBuffer;
 
+using Far::TopologyRefiner;
+using Far::SparseMatrix;
+using Far::PatchDescriptor;
+using Far::PatchParam;
+using Far::PatchBuilder;
+using Far::PtexIndices;
 
+
+//
+//  WIP - this Builder class now serves as a more suitable internal class
+//        for constructing PatchTrees
+//      - consider exposing this internally to replace PatchTreeFactory
 //
 //  Simple PatchTreeBuilder class to maintain the state and a few methods
 //  needed to assemble the PatchTree:
@@ -338,7 +349,7 @@ namespace {
     //  other levels will accumulate StencilRows as weighted combinations
     //  of other StencilRows.
     //
-    //  WIP - consider combining StencilRows to exploit SSE/AVZ vectorization
+    //  WIP - consider combining StencilRows to exploit SSE/AVX vectorization
     //      - we can (in future) easily guarantee both are 4-word aligned
     //      - we can also pad the rows to a multiple of 4
     //      - prefer writing the combination in a portable way that makes
@@ -555,7 +566,7 @@ PatchTreeFactory::Create(TopologyRefiner & faceRefiner,
     return result;
 }
 
-} // end namespace Far
+} // end namespace Bfr
 
 } // end namespace OPENSUBDIV_VERSION
 } // end namespace OpenSubdiv

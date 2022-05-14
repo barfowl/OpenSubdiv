@@ -23,8 +23,8 @@
 //
 
 #include "../bfr/surface.h"
+#include "../bfr/patchTree.h"
 #include "../far/patchBasis.h"
-#include "../far/patchTree.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -97,7 +97,7 @@ Surface::evalRegularPatchStencils(REAL u, REAL v,
 }
 
 //
-//  Evaluation methods accessing the Far::PatchTree for irregular patches:
+//  Evaluation methods accessing the PatchTree for irregular patches:
 //
 int
 Surface::getNumIrregPatchPoints() const {

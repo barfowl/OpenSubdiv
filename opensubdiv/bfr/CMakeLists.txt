@@ -32,6 +32,8 @@ set(SOURCE_FILES
      faceVertex.cpp
      hash.cpp
      irregularPatchBuilder.cpp
+     patchTree.cpp
+     patchTreeFactory.cpp
      refinerSurfaceFactory.cpp
      regularPatchBuilder.cpp
      surface.cpp
@@ -48,6 +50,8 @@ set(PRIVATE_HEADER_FILES
      faceVertexSubset.h
      hash.h
      irregularPatchBuilder.h
+     patchTree.h
+     patchTreeFactory.h
      regularPatchBuilder.h
      vertexTag.h
 )
