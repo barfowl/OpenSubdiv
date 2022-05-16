@@ -40,7 +40,10 @@ namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
 //
-//  DEBUG - some static variables to keep track of a few things...
+//  DEBUG - static variables to keep track of constructed Surfaces
+//        - note that these global variables have extrememly limited use:
+//            - they are initialized once per process
+//            - reported and reset on destruction of a SurfaceFactory
 //
 //#define _BFR_DEBUG_TOP_TYPE_STATS
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
@@ -148,10 +151,10 @@ SurfaceFactory::SurfaceFactory(
 inline SurfaceFactoryCache *
 SurfaceFactory::getAssignedCache() const {
 
-    if (_limitOptions.DisableTopologyCache()) {
+    if (!_limitOptions.EnableInternalCache()) {
         return 0;
-    } else if (_limitOptions.SharedTopologyCache()) {
-        return _limitOptions.SharedTopologyCache();
+    } else if (_limitOptions.GetSharedCache()) {
+        return _limitOptions.GetSharedCache();
     } else {
         return getInternalCache();
     }

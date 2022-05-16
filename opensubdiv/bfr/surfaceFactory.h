@@ -128,31 +128,30 @@ public:
     //  rate is under consideration to control local refinement depth, but
     //  may limit the effectiveness of caching across multiple meshes.
     //
-    //  WIP - nesting this inhibits forward-declaration, reconsider...
-    //
     class Options {
     public:
         Options() : _dfltFVarID(-1), _sharedCache(0),
-                    _disableCache(false), _useDoublePrecision(false),
+                    _enableCache(true), _useDoublePrecision(false),
                     _maxLevelPrimary(6), _maxLevelSecondary(2) { }
 
         //  Assign the default face-varying ID:
         void   SetDefaultFVarID(FVarID id) { _dfltFVarID = id; }
         FVarID GetDefaultFVarID()    const { return _dfltFVarID; }
 
-        //  Alternatives to the default internal topology cache:
-        void DisableTopologyCache(bool on) { _disableCache = on; }
-        bool DisableTopologyCache()  const { return _disableCache; }
+        //  Enable the internal cache (dflt true) or assign a shared cache:
+        //  WIP - use of "internal", "shared", etc. warrant final review
+        void EnableInternalCache(bool on) { _enableCache = on; }
+        bool EnableInternalCache()  const { return _enableCache; }
 
-        void SharedTopologyCache(SurfaceFactoryCache * c) { _sharedCache = c; }
-        SurfaceFactoryCache * SharedTopologyCache() const {return _sharedCache;}
+        void SetSharedCache(SurfaceFactoryCache * c) { _sharedCache = c; }
+        SurfaceFactoryCache * GetSharedCache() const { return _sharedCache; }
 
         //  Assign precision of internal surface representations:
         template <typename REAL> void SetSurfacePrecision();
         template <typename REAL> bool IsSurfacePrecision() const;
 
-        //  WIP - approximation options are currently in development
-        //      - these are not yet recommended for public use
+        //  WIP - these approximating options are for development use only
+        //      - public options are under consideration (see comment above)
         void MaxLevelPrimary( int n) { _maxLevelPrimary = n; }
         int  MaxLevelPrimary() const { return _maxLevelPrimary; }
 
@@ -165,7 +164,7 @@ public:
 
         SurfaceFactoryCache * _sharedCache;
 
-        unsigned int _disableCache       : 1;
+        unsigned int _enableCache        : 1;
         unsigned int _useDoublePrecision : 1;
         unsigned int _maxLevelPrimary    : 4;
         unsigned int _maxLevelSecondary  : 4;
