@@ -129,16 +129,8 @@ SurfaceFactory does no work until a Surface is requested for a particular
 face -- at which point the factory inspects the mesh topology around that
 face to assemble the Surface.
 
-+---------------------------------------------------------------------+
-| .. image::  images/construction.png                                 |
-|    :align:  center                                                  |
-|    :width:  30%                                                     |
-|    :target: images/construction.png                                 |
-|                                                                     |
-| (Place holder for architectural figure:  SurfaceFactory and its     |
-| subclass for a mesh and their interaction with client mesh topology |
-| and data.)                                                          |
-+---------------------------------------------------------------------+
+.. image::  images/bfr_eval_surfacefactory.png
+   :align:  center
 
 SurfaceFactory is actually a base class that is inherited to provide a
 consistent construction interface for Surfaces. Subclasses are derived
@@ -214,16 +206,8 @@ array, while control vertices are indexed from mesh buffers) but also
 because these points do ultimately represent the control points of
 the one or more patches that comprise the Surface:
 
-+---------------------------------------------------------------------+
-| .. image::  images/construction.png                                 |
-|    :align:  center                                                  |
-|    :width:  30%                                                     |
-|    :target: images/construction.png                                 |
-|                                                                     |
-| (Place holder for architectural figure:  illustrate Surface access  |
-| to mesh data, preparation of patch points and their use in          |
-| evaluation.)                                                        |
-+---------------------------------------------------------------------+
+.. image::  images/bfr_eval_surface.png
+   :align:  center
 
 Once the patch points for a Surface are prepared, they can be passed to
 the main evaluation methods with the desired parameteric coordinates.
@@ -594,7 +578,8 @@ offset of 1 is warranted when comparing the two.
 |    :width:  100%                               |    :width:  100%                               |
 |    :target: images/bfr_tess_diff_edges_osd.png |    :target: images/bfr_tess_diff_edges_gpu.png |
 +------------------------------------------------+------------------------------------------------+
-| Outer rates of [1, 3, 5, 7] applied to a quad with *Bfr* (left) and GPU tessellation (right).   |
+| Outer edge tessellation rates of {1,3,5,7} applied to a quad with *Bfr* (left) and GPU          |
+| tessellation (right).                                                                           |
 +-------------------------------------------------------------------------------------------------+
 
 For the uniform tessellation of triangles, its well known that the needs of
