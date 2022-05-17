@@ -33,7 +33,7 @@ set(SOURCE_FILES
      hash.cpp
      irregularPatchBuilder.cpp
      patchTree.cpp
-     patchTreeFactory.cpp
+     patchTreeBuilder.cpp
      refinerSurfaceFactory.cpp
      regularPatchBuilder.cpp
      surface.cpp
@@ -51,7 +51,7 @@ set(PRIVATE_HEADER_FILES
      hash.h
      irregularPatchBuilder.h
      patchTree.h
-     patchTreeFactory.h
+     patchTreeBuilder.h
      regularPatchBuilder.h
      vertexTag.h
 )

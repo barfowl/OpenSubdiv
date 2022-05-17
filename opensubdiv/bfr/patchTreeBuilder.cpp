@@ -22,12 +22,13 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#include "../bfr/patchTreeFactory.h"
+#include "../bfr/patchTreeBuilder.h"
 #include "../far/primvarRefiner.h"
 #include "../far/topologyRefiner.h"
 #include "../far/topologyDescriptor.h"
 #include "../far/patchBuilder.h"
 #include "../far/sparseMatrix.h"
+#include "../far/ptexIndices.h"
 #include "../vtr/stackBuffer.h"
 
 #include <cstdio>
@@ -41,85 +42,20 @@ using Vtr::internal::StackBuffer;
 
 using Far::TopologyRefiner;
 using Far::SparseMatrix;
+using Far::PatchBuilder;
 using Far::PatchDescriptor;
 using Far::PatchParam;
-using Far::PatchBuilder;
-using Far::PtexIndices;
-
 
 //
-//  WIP - this Builder class now serves as a more suitable internal class
-//        for constructing PatchTrees
-//      - consider exposing this internally to replace PatchTreeFactory
+//  Construction initializes some of the main components of the
+//  build process (e.g. the Far::PatchBuilder) but defers most of
+//  the work to other methods:
 //
-//  Simple PatchTreeBuilder class to maintain the state and a few methods
-//  needed to assemble the PatchTree:
-//
-class PatchTreeBuilder {
-public:
-    //
-    //  Public interface intended for use by the PatchTreeFactory -- all
-    //  else is solely for internal use:
-    //
-    typedef PatchTreeFactory::Options Options;
-
-    PatchTreeBuilder(TopologyRefiner & refiner, Options options);
-    ~PatchTreeBuilder();
-
-    void IdentifyPatches();
-    void InitializePatches();
-    void InitializeStencilMatrix();
-    void InitializeQuadTree();
-
-    PatchTree * GetPatchTree() const { return _patchTree; }
-
-private:
-    struct PatchFace {
-        PatchFace(int levelArg, int faceArg, bool isReg = true) :
-                face(faceArg), level(levelArg), isRegular(isReg) { }
-
-        int   face;
-        short level;
-        short isRegular;
-    };
-
-    //
-    //  Internal helper functions to assign a full matrix of stencils
-    //  converting points of irregular patches from source points in
-    //  the refined levels:
-    //
-    template <typename REAL>
-    void initializeStencilMatrix();
-
-    template <typename REAL>
-    void getIrregularPatchConversion(PatchFace const & patchFace,
-                                     SparseMatrix<REAL> & convMatrix,
-                                     std::vector<Index> & srcPoints);
-
-    template <typename REAL>
-    void appendConversionStencilsToMatrix(int stencilIndexBase,
-                                          SparseMatrix<REAL> const & convMatrix,
-                                          std::vector<Index> const & srcPoints);
-
-private:
-    //  The PatchTree instance being assembled:
-    PatchTree * _patchTree;
-
-    //  Member variables supporting its assembly:
-    TopologyRefiner &         _faceRefiner;
-    Index                     _faceAtRoot;
-    std::vector<int>          _levelOffsets;
-    PtexIndices               _ptexIndices;
-    std::vector<PatchFace>    _patchFaces;
-    PatchBuilder *            _patchBuilder;
-};
-
 PatchTreeBuilder::PatchTreeBuilder(TopologyRefiner & faceRefiner,
                                    Options options) :
     _patchTree(new PatchTree),
     _faceRefiner(faceRefiner),
     _faceAtRoot(0),
-    _ptexIndices(faceRefiner),
     _patchBuilder(0) {
 
     //
@@ -222,8 +158,23 @@ PatchTreeBuilder::~PatchTreeBuilder() {
     delete _patchBuilder;
 }
 
+const PatchTree *
+PatchTreeBuilder::Build() {
+
+    identifyPatches();
+    initializePatches();
+    if (_patchTree->_useDoublePrecision) {
+        initializeStencilMatrix<double>();
+    } else {
+        initializeStencilMatrix<float>();
+    }
+    initializeQuadTree();
+
+    return _patchTree;
+}
+
 void
-PatchTreeBuilder::IdentifyPatches() {
+PatchTreeBuilder::identifyPatches() {
 
     //
     //  Take inventory of the patches.  Only one face exists at the base
@@ -275,11 +226,13 @@ PatchTreeBuilder::IdentifyPatches() {
 }
 
 void
-PatchTreeBuilder::InitializePatches() {
+PatchTreeBuilder::initializePatches() {
 
     //  Keep track of the growing index of local points in irregular patches:
     int irregPointIndexBase = _patchTree->_numControlPoints +
                               _patchTree->_numRefinedPoints;
+
+    Far::PtexIndices ptexIndices(_faceRefiner);
 
     for (size_t i = 0; i < _patchFaces.size(); ++i) {
         PatchFace const & pf = _patchFaces[i];
@@ -293,7 +246,7 @@ PatchTreeBuilder::InitializePatches() {
                 _patchBuilder->GetRegularPatchBoundaryMask(pf.level, pf.face);
 
             _patchTree->_patchParams[i] = _patchBuilder->ComputePatchParam(
-                pf.level, pf.face, _ptexIndices, true, boundaryMask, true);
+                pf.level, pf.face, ptexIndices, true, boundaryMask, true);
 
             //  Gather the points of the patch -- since they are assigned
             //  directly into the PatchTree's buffer by the PatchBuilder
@@ -308,7 +261,7 @@ PatchTreeBuilder::InitializePatches() {
             //  Compute/assign the PatchParam for an irregular patch:
             _patchTree->_patchParams[i] =
                 _patchBuilder->ComputePatchParam(pf.level, pf.face,
-                    _ptexIndices, false /*irreg*/, 0 /*mask*/, false);
+                    ptexIndices, false /*irreg*/, 0 /*mask*/, false);
 
             //  Assign indices of new/local points for this irregular patch:
             for (int i = 0; i < _patchTree->_irregPatchSize; ++i) {
@@ -492,17 +445,7 @@ PatchTreeBuilder::appendConversionStencilsToMatrix(
 }
 
 void
-PatchTreeBuilder::InitializeStencilMatrix() {
-
-    if (_patchTree->_useDoublePrecision) {
-        initializeStencilMatrix<double>();
-    } else {
-        initializeStencilMatrix<float>();
-    }
-}
-
-void
-PatchTreeBuilder::InitializeQuadTree() {
+PatchTreeBuilder::initializeQuadTree() {
 
     _patchTree->buildQuadtree();
 }
@@ -541,29 +484,6 @@ PatchTreeBuilder::getIrregularPatchConversion(PatchFace const & pf,
     for (int i = 0; i < numSourcePoints; ++i) {
         sourcePoints[i] += sourceIndexOffset;
     }
-}
-
-//
-//  Public PatchTreeFactory method to create a PatchTree from a local
-//  topology descriptor:
-//
-PatchTree *
-PatchTreeFactory::Create(TopologyRefiner & faceRefiner,
-                         Options options) {
-
-    if (faceRefiner.GetNumLevels() > 1) faceRefiner.Unrefine();
-
-    PatchTreeBuilder builder(faceRefiner, options);
-
-    builder.IdentifyPatches();
-    builder.InitializePatches();
-    builder.InitializeStencilMatrix();
-    builder.InitializeQuadTree();
-
-    PatchTree * result = builder.GetPatchTree();
-
-    faceRefiner.Unrefine();
-    return result;
 }
 
 } // end namespace Bfr

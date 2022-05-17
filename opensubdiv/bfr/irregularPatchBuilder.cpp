@@ -23,10 +23,10 @@
 //
 
 #include "../bfr/irregularPatchBuilder.h"
+#include "../bfr/patchTreeBuilder.h"
+#include "../bfr/patchTree.h"
 #include "../far/topologyDescriptor.h"
 #include "../far/topologyRefiner.h"
-#include "../bfr/patchTree.h"
-#include "../bfr/patchTreeFactory.h"
 
 #include <cstring>
 
@@ -768,15 +768,16 @@ IrregularPatchBuilder::Build() {
     Far::TopologyRefiner * refiner =
             RefinerFactory::Create(topDescriptor, refinerOptions);
 
-    //  Create the PatchTree:
-    PatchTreeFactory::Options patchTreeOptions;
+    //  Create the PatchTree from the TopologyRefiner:
+    PatchTreeBuilder::Options patchTreeOptions;
     patchTreeOptions.includeInteriorPatches = false;
     patchTreeOptions.maxPatchDepthSharp  = _options.sharpLevel;
     patchTreeOptions.maxPatchDepthSmooth = _options.smoothLevel;
     patchTreeOptions.useDoublePrecision  = _options.doublePrecision;
 
-    PatchTree const * patchTree =
-            PatchTreeFactory::Create(*refiner, patchTreeOptions);
+    PatchTreeBuilder patchTreeBuilder(*refiner, patchTreeOptions);
+
+    PatchTree const * patchTree = patchTreeBuilder.Build();
 
     assert(patchTree->GetNumControlPoints() == _numControlVerts);
 
