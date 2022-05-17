@@ -33,20 +33,20 @@ Base Face Representation (Bfr)
 ==============================
 
 *Bfr* is an alternate API layer that treats a subdivision mesh provided
-by a client as a piecewise parameteric surface primitive (see docs).
+by a client as a piecewise parametric surface primitive (see docs).
 
 The name *Bfr* derives from the fact that the concepts and classes of
 this interface all relate to the "base faces" of a mesh.  Concepts such
-as parameterization, evaluation and tessellation all refer to and are
-embodied by classes that deal with a specific face of the original
+as *parameterization*, *evaluation* and *tessellation* all refer to and
+are embodied by classes that deal with a specific face of the original
 unrefined mesh.
 
 The *Bfr* interfaces allow the limit surface for a single face to be
 identified and evaluated independently of all other faces without any
 global pre-processing. While concepts and utilities from the *Far*
-interface are used internally, their complexity is hidden.  There is no
-need to coordinate adaptive refinement with tables of patches, stencils,
-Ptex indices, patch maps, etc.
+interface are used internally, the details of their usage hidden.
+There is no need to coordinate adaptive refinement with tables of
+patches, stencils, Ptex indices, patch maps, etc.
 
 The resulting evaluation interface is much simpler, more flexible and
 more scalable than those assembled with the *Far* classes -- providing
@@ -60,10 +60,10 @@ The main classes in *Bfr* include:
 |                  | in the form of Surfaces.                                 |
 +------------------+----------------------------------------------------------+
 | Surface          | A class encapsulating the limit surface of a face with   |
-|                  | methods for complete parameteric evaluation.             |
+|                  | methods for complete parametric evaluation.              |
 +------------------+----------------------------------------------------------+
 | Parameterization | A simple class defining the available parameterizations  |
-|                  | of faces and identifying that of a particular face.      |
+|                  | of faces and for identifying that of a particular face.  |
 +------------------+----------------------------------------------------------+
 | Tessellation     | A simple class providing information about a specified   |
 |                  | tessellation pattern for a given Parameterization.       |
@@ -73,16 +73,16 @@ The main classes in *Bfr* include:
 dynamically determined or iterative (Newton, gradient descent, etc).
 It is not intended to replace the cases for which *Far* has been designed
 (i.e. repeated evaluation of a fixed set of points) but is intended to
-complement them.  However, while simplicity and flexibility were its major
-goals, the resulting interface often outperforms the table-based interface
-of *Far* in many common cases -- both in terms of execution time and
-memory use.
+complement them.  While simplicity, flexibility and reasonable performance
+were the main goals of *Bfr*, its current implementation often outperforms
+the table-based solutions of *Far* for many common use cases -- both in terms
+of execution time and memory use.
 
 An area that *Bfr* does not address, and where *Far* remains more suited,
-is capturing a specific representation of the limit surface for other uses.
-*Bfr* intentionally keeps internal implementation details private to allow
-future improvements or extensions. Those representation details may be
-publicly exposed in future releases, but until then, use of *Far* is
+is capturing a specific representation of the limit surface for external
+use.  *Bfr* intentionally keeps internal implementation details private to
+allow future improvements or extensions. Those representation details may
+be publicly exposed in future releases, but until then, use of *Far* is
 required for such purposes.
 
 ----
@@ -90,20 +90,19 @@ required for such purposes.
 Evaluation
 ==========
 
-Since subdivision surfaces are piecewise parameteric surfaces, the main
-operation of interest of a surface primitive is evaluation.
+Since subdivision surfaces are piecewise parametric surfaces, the main
+operation of interest is evaluation.
 
-*Bfr* deals with the limit surface of a mesh by identifying pieces of
-the entire surface associated with each face of the mesh.  These pieces
-of surface are referred to in *Bfr* as simply "surfaces" and represented
-by Bfr::Surface.
+*Bfr* deals with the limit surface of a mesh as a whole by associating
+pieces of surface with each face of the mesh.  These pieces of surface
+are referred to in the context of *Bfr* simply as "surfaces" and
+represented by Bfr::Surface.
 
-Each face of the mesh has an implicit local 2D parameterization that is
-used to evaluate its corresponding Surface. In general, 3- and 4-sided
-faces use the same parameterizations for quad and triangular patches used
-elsewhere in OpenSubdiv while those for other faces are more complex
-(details on parameterizations to follow in the next section). So Surfaces
-for all faces can be evaluated given 2D parameteric coordinate of its face.
+Each face of the mesh has an implicit local 2D parameterization and
+individual coordinates of that parameterization are used to evaluate it's
+corresponding Surface. In general, 3- and 4-sided faces use the same
+parameterizations for quad and triangular patches used elsewhere in
+OpenSubdiv:
 
 +--------------------------------------+--------------------------------------+
 | .. image:: images/param_uv.png       | .. image:: images/param_uv2xyz.png   |
@@ -111,9 +110,13 @@ for all faces can be evaluated given 2D parameteric coordinate of its face.
 |    :target: images/param_uv.png      |    :target: images/param_uv2xyz.png  |
 +--------------------------------------+--------------------------------------+
 
+Parameterizations are defined for other faces (more details to follow), so
+Surfaces for all faces can be evaluated given any 2D parametric coordinate
+of its face.
+
 Given an instance of a mesh, usage first requires the creation of a
 Bfr::SurfaceFactory corresponding to that mesh -- from which Surfaces
-will be created for evaluation. Construction of the SurfaceFactory
+can then be created for evaluation. Construction of the SurfaceFactory
 involves no pre-processing and Surfaces can be created and discarded
 as needed.  The processes of constructing and evaluating Surfaces are
 described in more detail below.
@@ -141,19 +144,23 @@ SurfaceFactory, but defining such a subclass is not. That more complex
 use case of SurfaceFactory will be described in detail later with other
 more advanced topics.
 
-But defining a subclass of SurfaceFactory is not necessary in many cases,
-as the tutorials for *Bfr* illustrate.  If already using OpenSubdiv for
-other reasons, a Far::TopologyRefiner will have been constructed to
-represent the initial base mesh before refinement. *Bfr* provides a
-subclass of SurfaceFactory using Far::TopologyRefiner as the base mesh
-(ignoring any levels of refinement). And when dealing with raw,
-unconnected mesh data, the Far::TopologyRefiner provides a reasonably
-efficient connected representation that can be constructed (see the
-*Far* tutorials) for subsequent use with its SurfaceFactory subclass.
+In many cases, is not necessary to explicitly define a subclass of
+SurfaceFactory is not necessary, as the tutorials for *Bfr* illustrate.
+If already using OpenSubdiv for other reasons, a Far::TopologyRefiner
+will have been constructed to represent the initial base mesh before
+refinement. *Bfr* provides a subclass of SurfaceFactory using
+Far::TopologyRefiner as the base mesh (ignoring any levels of
+refinement) for immediate use in such cases.
+
+For those cases when no connected mesh representation is available at
+all (i.e. only raw, unconnected mesh data exists) construction of a
+Far::TopologyRefiner provides a reasonably efficient connected mesh
+representation (see the *Far* tutorials for construction details),
+whose provided subclass for SurfaceFactory is then readily available.
 
 Given the different interpolation types for mesh data (i.e. "vertex",
 "varying" and "face-varying"), the common interface for SurfaceFactory
-provides methods to construct Surfaces for the different data types.
+provides methods to construct Surfaces explicitly for all data types.
 So for positions, the methods for "vertex" data must be used to obtain
 the desired Surface, while for texture coordinates the methods for
 "face-varying" data must be used, e.g.:
@@ -172,16 +179,17 @@ bicubic in some variation (given separate face-varying interpolation
 rules).
 
 While the internal representations of the Surfaces constructed for
-different data interpolation types may differ, they are all Surfaces
-and so the interface to evaluate them does not.
+different data interpolation types may differ, since they are all
+constructed as Surfaces, the functionality use to evaluate them is
+identical.
 
 Bfr::Surface
 ************
 
-The Surface class encapsulates the piece of limit surface for a
-particular face of the mesh. The term "surface" is used rather than
-"patch" to emphasize that the Surface itself may be composed of more
-than one patch (potentially a complex set of patches).
+The Surface class encapsulates the piece of limit surface associated
+with a particular face of the mesh. The term "surface" is used rather
+than "patch" to emphasize that the Surface itself may be composed of
+more than one patch (potentially a complex set of patches).
 
 Once created, there are two steps required to evaluate a Surface:
 
@@ -190,27 +198,30 @@ Once created, there are two steps required to evaluate a Surface:
 
 The latter is straight-forward, but the former warrants explanation.
 
-The shape of a Surface is influenced by a set of control vertices for
-the face and others in its neighborhood, and those vertices are
-identified as part of its construction (and are publicly available
-for inspection).  Those control vertices may be sufficient to define
-the Surface when it is regular, but any irregularity (extra-ordinary
-vertex, crease, etc.) requires additional points to be computed from
-those control vertices in order to evaluate it efficiently.
+The shape of the Surface for a face is influenced by the set of control
+vertices for the face itself and others in its immediate neighborhood.
+These control vertices are identified as part of Surface construction
+(and are publicly available for inspection if desired).  These control
+vertices are sufficient to define the Surface if the face and its
+neighborhood are regular, but any irregularity (an extra-ordinary
+vertex, crease, etc.) usually requires additional, intermediate points
+to be computed from those control vertices in order to evaluate the
+Surface efficiently.
 
 Having previously avoided use of the term "patch" in favor of "surface",
 the points gathered or computed from the control vertices are referred
-to as "patch points". In part this is to distinguish them from the
-control vertices of the mesh (patch points are assembled in a local
-array, while control vertices are indexed from mesh buffers) but also
-because these points do ultimately represent the control points of
-the one or more patches that comprise the Surface:
+to as "patch points". In part, this is to distinguish them from the
+control vertices of the mesh, but also because these points do ultimately
+represent the control points of the one or more patches that comprise
+the Surface. Patch points are assembled in a local array for direct
+use by a single Surface, while control vertices are indexed from
+buffers associated with the entire mesh:
 
 .. image::  images/bfr_eval_surface.png
    :align:  center
 
 Once the patch points for a Surface are prepared, they can be passed to
-the main evaluation methods with the desired parameteric coordinates.
+the main evaluation methods with the desired parametric coordinates.
 Methods exist for evaluating 0th, 1st and/or 2nd derivatives and all are
 defined as templates to support evaluation in single or double precision,
 e.g.:
@@ -228,19 +239,20 @@ e.g.:
                                                            U * Du,
                                                            U * Dv) const;
 
-Depending on the complexity of the limit surface (presence of one or more
-extra-ordinary vertices, creasing, etc.) this preparation of patch points
-can be costly -- especially if only evaluating the Surface once or twice.
-In such cases, it is worth considering evaluating "limit stencils", i.e.
-sets of coefficients that combine the original control vertices of the
-mesh without requiring the computation of intermediate values. The cost
-of evaluating stencils is considerably higher than direct evaluation, but
-in cases of sparse evaluation it can be worth it.
+Depending on the complexity of the limit surface, this preparation of
+patch points can be costly -- especially if only evaluating the Surface
+once or twice.  In such cases, it is worth considering evaluating
+"limit stencils", i.e. sets of coefficients that combine the original
+control vertices of the mesh without requiring the computation of
+intermediate values (*WIP - an additional figure here is useful)*.
+The cost of evaluating stencils is considerably higher than direct
+evaluation, but that added overhead is often offset by avoiding the
+use of patch points.
 
 Surfaces should be considered a class for transient use.  They are
 non-copyable and retaining them for longer term usage reduces their
-benefits. But the initialization cost of irregular Surfaces can be a
-deterrent and motive their retention despite increased memory costs.
+benefits. The initialization cost of irregular Surfaces can be a
+deterrent and motivate their retention despite increased memory costs.
 Retaining all Surfaces of a mesh for random sampling is a situation
 that should be undertaken with caution and will be discussed in more
 detail later with other advanced topics.
@@ -250,12 +262,12 @@ detail later with other advanced topics.
 Parameterization
 ================
 
-Each face of a mesh has an implicit local 2D parameterization, and that
-parameterization is used to evaluate the Surface for that face.
+Each face of a mesh has an implicit local 2D parameterization whose 2D
+coordinates are used to evaluate the Surface for that face.
 
-As a starting point, *Bfr* adopts the parameterizations defined elsewhere
-in OpenSubdiv for quadrilateral and triangular patches, for use with 4-
-and 3-sided faces in most cases:
+*Bfr* adopts the parameterizations defined elsewhere in OpenSubdiv for
+quadrilateral and triangular patches, for use quadrilateral and
+triangular faces:
 
 +----------------------------------------------+----------------------------------------------+
 | .. image:: images/bfr_param_patch_quad.png   | .. image:: images/bfr_param_patch_tri.png    |
@@ -270,7 +282,7 @@ scheme applied to it.
 Subdivision schemes that divide faces into quads are ultimately represented
 by quadrilateral patches.  So a face that is a quad can be parameterized as
 a single quad, but other non-quad faces are parameterized as a set of quad
-"sub-faces" (faces resulting from subdivision).
+"sub-faces", i.e. faces resulting from subdivision:
 
 +-------------------------------------------+
 | .. image:: images/bfr_param_subfaces.png  |
@@ -282,7 +294,7 @@ a single quad, but other non-quad faces are parameterized as a set of quad
 A triangle subdivided with a quad-based scheme (e.g. Catmull-Clark) will
 therefore not have the parameterization of the triangular patch indicated
 previously, but another defined by its quad sub-faces illustrated above
-(to be desribed below).
+(to desribed in more detail below).
 
 Subdivision schemes that divide faces into triangles are currently restricted
 to triangles only, so all faces are parameterized as single triangles. (If
@@ -291,7 +303,7 @@ involving triangular sub-faces will be necessary.)
 
 Note that triangles are often parameterized elsewhere in terms of barycentric
 coordinates (u,v,w) where *w = 1 - u - v*. As is the case elsewhere in
-OpenSubdiv, *Bfr* considers parameteric coordinates as 2D (u,v) pairs for all
+OpenSubdiv, *Bfr* considers parametric coordinates as 2D (u,v) pairs for all
 purposes.  All faces have an implicit 2D local parameterization and all
 interfaces requiring parametric coordinates consider only the (u,v) pair.
 If interaction with some other toolset requiring barycentric coordinates
@@ -304,21 +316,22 @@ Bfr::Parameterization
 Bfr::Parameterization is a simple class that fully defines the parameterization
 for a particular face.
 
-A Parameterization is fully defined (on construction) given the "size" of a
-face and the subdivision scheme applied to it (where the face "size" is its
-number of vertices/edges). Since any parameterization of *N*-sided faces
-requires *N* in some form, the face size is stored as a member and made
-publicly available.
+An instance of Parameterization is fully defined on construction given the
+"size" of a face and the subdivision scheme applied to it (where the face
+"size" is its number of vertices/edges). Since any parameterization of
+*N*-sided faces requires *N* in some form, the face size is stored as a member
+and made publicly available.
 
 Each Surface has the Parameterization of its face assigned internally as part
 of its construction, and that is used internally by the Surface in many of its
 methods. The need to deal directly with the explicit details of the
-Paramaterization class is not always necessary, but is unavoidable in some
-cases. Often it is sufficient to retrieve the Parameterization from a Surface
-for use in some other context (e.g. passed to Bfr::Tessellation).
+Paramaterization class is not generally necessary.  . Often it is sufficient
+to retrieve the Parameterization from a Surface for use in some other context
+(e.g. passed to Bfr::Tessellation).
 
-The enumerated type Parameterization::Type currently supports three kinds of
-parameterizations:
+The enumerated type Parameterization::Type currently defines three kinds of
+parameterizations -- one of which is assigned to each instance on construction
+according to the properties of the face:
 
 +---------------+--------------------------------------------------------------+
 | QUAD          | Applied to quadrilateral faces with a quad-based             |
@@ -333,21 +346,28 @@ parameterizations:
 
 Parameterizations that involve subdivision into sub-faces, e.g. QUAD_SUBFACES,
 may warrant some care as they are not continuous. Depending on how they are
-defined, the sub-faces may be disjoint or overlap in parametric space.
-To help these situations, methods to detect and determine sub-faces are
-available.
+defined, the sub-faces may be disjoint (e.g. *Bfr*) or overlap in parametric
+space (e.g. Ptex).  To help these situations, methods to detect the presence
+of sub-faces and deal with their local parameterizations are made available.
+
+Discontinuous Parameterizations
+*******************************
+
+When a face does not have a regular parameterization, the division of the
+parameterization into sub-faces can create complications -- as noted and
+addressed elsewhere in OpenSubdiv.
 
 Bfr::Parameterization defines a quadrangulated sub-face parameterization
-differently from the *Far* and *Osd* interfaces in OpenSubdiv.  For an
-*N*-sided face, *Far* uses a parameterization adopted by Ptex. In this
-case, all quad sub-faces are parameterized over the unit square and
-require an additional index of the sub-face to identify them. So Ptex
-coordinates require three values:  the index and (u,v) of the sub-face.
+differently from the *Far* and *Osd* interfaces.  For an *N*-sided face,
+*Far* uses a parameterization adopted by Ptex. In this case, all quad
+sub-faces are parameterized over the unit square and require an additional
+index of the sub-face to identify them. So Ptex coordinates require three
+values:  the index and (u,v) of the sub-face.
 
 To embed sub-face coordinates in a single (u,v) pair, *Bfr* tiles the
 sub-faces in disjoint regions in parameter space. This tiling is similar
 to the Udim convention for textures, where a UDim on the order of *sqrt(N)*
-is used to to preserve accuracy for increasing *N*:
+is used to preserve accuracy for increasing *N*:
 
 +---------------------------------------------+------------------------------------------------------------+
 | .. image:: images/bfr_param_subfaces_5.png  | .. image:: images/bfr_param_subfaces_5_uv.png              |
@@ -358,18 +378,38 @@ is used to to preserve accuracy for increasing *N*:
 
 |
 
-+---------------------------------------------+------------------------------------------------------------+
-| .. image:: images/bfr_param_subfaces_3.png  | .. image:: images/bfr_param_subfaces_3_uv.png              |
-|    :align:  center                          |    :align:  center                                         |
-|    :width:  100%                            |    :width:  100%                                           |
-|    :target: images/bfr_param_subfaces_3.png |    :target: images/bfr_param_subfaces_3_uv.png             |
-+---------------------------------------------+------------------------------------------------------------+
++--------------------------------------------------+--------------------------------------------------+
+| .. image:: images/bfr_param_subfaces_3.png       | .. image:: images/bfr_param_subfaces_3_uv.png    |
+|    :align:  center                               |    :align:  center                               |
+|    :width:  100%                                 |    :width:  100%                                 |
+|    :target: images/bfr_param_subfaces_3.png      |    :target: images/bfr_param_subfaces_3_uv.png   |
++--------------------------------------------------+--------------------------------------------------+
 
-Note also that the edges of each sub-face are of parameteric length 0.5,
-which results in a total parameteric length of 1.0 for all base edges.
+Note also that the edges of each sub-face are of parametric length 0.5,
+which results in a total parametric length of 1.0 for all base edges.
 This differs again from Ptex, which parameterizes sub-faces with edge
-lengths of 1.0, and so can lead to inconsistencies in parameteric scale
+lengths of 1.0, and so can lead to inconsistencies in parametric scale
 (typically with derivatives) across edges of the mesh if not careful.
+
+As previously mentioned, care may be necessary when dealing with the
+discontinuities that exist in parameterizations with subfaces. This is
+particularly true if evaluating data at sampled locations of the face
+and needing to evaluate at other locations interpolated from these.
+
++--------------------------------------------------+--------------------------------------------------+
+| .. image:: images/bfr_param_subfaces_abc.png     | .. image:: images/bfr_param_subfaces_abc_uv.png  |
+|    :align:  center                               |    :align:  center                               |
+|    :width:  100%                                 |    :width:  100%                                 |
+|    :target: images/bfr_param_subfaces_abc.png    |    :target: images/bfr_param_subfaces_abc_uv.png |
++--------------------------------------------------+--------------------------------------------------+
+| Interpolation between parametric locations, e.g. A, B and C, should be avoided when discontinuous.  |
++-----------------------------------------------------------------------------------------------------+
+
+In many cases, dealing directly with coordinates of the sub-faces
+is unavoidable, e.g. interpolating Ptex coordinates for sampling of
+textures assigned explicitly to the sub-faces. Methods are provided
+to convert from *Bfr*'s tiled parameterization to and from other
+representations that use a local parameterization for each sub-face.
 
 ----
 
@@ -379,40 +419,41 @@ Tessellation
 Once a Surface can be evaluated it can be tessellated.  Given a 2D
 pararameterization, a tessellation consists of two parts:
 
-    * a set of parameteric coordinates sampling the Parameterization
+    * a set of parametric coordinates sampling the Parameterization
     * a set of faces connecting these coordinates that covers the
       entire Parameterization
 
-Once evaluated, the set of resulting sample points and the faces
+Once evaluated, the resulting set of sample points and the faces
 connecting them effectively define a mesh for that parameterization.
 
-For the sake brevity, the parameteric coordinates or sample points are
-referred to simply as "coords" or "Coords" in the documentation and
-interface respectively -- avoiding the term "points" which is already
+For the sake of brevity both here and in the programming interface,
+the parametric coordinates or sample points are referred to simply as
+"coords" or "Coords" -- avoiding the term "points", which is already
 a heavily overloaded term.  Similarly the faces connecting the coords
 are referred to as "facets" or "Facets" -- avoiding the term "face" to
-avoid confusion with the face of the mesh that is being tessellated.
+avoid confusion with the base face of the mesh being tessellated.
 
 *Bfr* provides a simple class to support a variety of tesselltion patterns
-for the different Paremeterization types and methods for retrieving its
-assocated coords and facets. In many cases the patterns they define are
+for the different Parameterization types and methods for retrieving its
+associated coords and facets. In many cases the patterns they define are
 similar to those of GPU hardware tessellation -- which may be more familiar
-to many -- but they differ in several ways, as noted below.
+to many -- but they do differ in several ways, as noted below.
 
 Bfr::Tessellation
 *****************
 
-In *Bfr* a Tessellation is a simple class defined by a given Paremeterization
-and a set of tessellation rates (and a few additional options). These two
+In *Bfr* a Tessellation is a simple class defined by a Parameterization and
+a given set of tessellation rates (and a few additional options). These two
 elements define a specific tessellation pattern for all faces sharing that
 Parameterization. An instance of Tessellation can then be inspected to
 identify all or subsets of its coords or facets.
 
-Note that facets do not have to be triangles, as expected of tessellation
-in other contexts. While producing triangular facets is the default, options
-are available to have Tessellations produce patterns for parameterizations
-associated with quad-based subdivision schemes that are similar in topology
-to subdivision:
+The process of tessellation in other contexts usually generates triangular
+facets, but that is not the case with *Bfr*.  While producing triangular
+facets is the default, options are available to have Tessellation include
+quads in patterns for parameterizations associated with quad-based
+subdivision schemes. For simple uniform patterns, these produce patterns
+that are similar in topology to those resulting from subdivision:
 
 +--------------------------------------------+--------------------------------------------+
 | .. image:: images/bfr_tess_quad_quads.png  | .. image:: images/bfr_tess_quad_tris.png   |
@@ -437,10 +478,10 @@ construction, after which an instance is immutable.  So it does not maintain
 any additional state between queries.
 
 In order to provide flexibility when dealing with tessellations of adjacent
-faces, the coords arising from a Bfr::Tessellation are ordered and are
-retrievable in ways to help associate points along edges that may be shared
-between the two faces.  The coords of a Tessellation are generated in
-concentric rings, beginning with the outer ring and starting with the first
+faces, the coords arising from an instance of Tessellation are ordered and
+are retrievable in ways to help identify points along edges that may be
+shared between two or more faces.  The coords of a Tessellation are generated
+in concentric rings, beginning with the outer ring and starting with the first
 vertex:
 
 +---------------------------------------------+---------------------------------------------+
@@ -452,18 +493,19 @@ vertex:
 | Ordering of coords around boundary for quad and tri parameterizations.                    |
 +-------------------------------------------------------------------------------------------+
 
-Tessellation methods allow the coords associated with specific vertices or
-edges to be identified, as well as providing the coords for the entire ring
-around the boundary separately from those of the interior if desired. While
-the ordering of coords in the interior is not guaranteed, the ordering of
-the boundary coords is specifically fixed to support the correllation of
-potentially shared coords between faces.
+Methods of the Tessellation class allow the coords associated with specific
+vertices or edges to be identified, as well as providing the coords for the
+entire ring around the boundary separately from those of the interior if
+desired. While the ordering of coords in the interior is not defined (and
+so not to be relied upon), the ordering of the boundary coords is
+specifically fixed to support the correllation of potentially shared coords
+between faces.
 
-It's worth noting that the Tessellation class is completely independent
-of the Surface class.  Tessellation simply takes a Parameterization and
-tessellation rates and provides the coords and facets that define its
-pattern. So Tessellation can be used in any other evaluation context where
-the Parameterizations are appropriate.
+The Tessellation class is completely independent of the Surface class.
+Tessellation simply takes a Parameterization and tessellation rates and
+provides the coords and facets that define its pattern. So Tessellation can
+be used in any other evaluation context where the Parameterizations are
+appropriate.
 
 Tessellation Rates
 ******************
