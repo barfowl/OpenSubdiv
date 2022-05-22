@@ -30,6 +30,8 @@
 #include "../bfr/faceSurface.h"
 #include "../vtr/stackBuffer.h"
 
+#include <map>
+
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
@@ -82,31 +84,38 @@ public:
 
 private:
     //  Private methods to assemble the control hull:
-    //
+
     //  A simple struct keeps track of the contribution of each corner to
     //  the collective control hull. These are first initialized and then
     //  used by methods to gather the various topological data that define
-    //  the hull. Given these gathering methods are now used only once
-    //  each -- as part of the construction method to build the underlying
-    //  representation -- combining them into a single iteration is worth
-    //  considering.
+    //  the hull.
+    //
+    //  Note that vertices of the base face and the base face itself are
+    //  not included as part of this inventory for each corner, e.g. the
+    //  number of control vertices or control faces may be zero if the
+    //  corner has no incident faces.
     //  
-    struct CornerControl {
+    struct CornerHull {
         void Clear() { std::memset(this, 0, sizeof(*this)); }
 
-        int   numVerts;
-        short numFaces;
-        unsigned short singleCommonVert : 1;
-        unsigned short singleCommonFace : 1;
-        int nextPerimeterVert;
-        int nextSrcFaceIndex;
+        int          numControlFaces;
+        int          numControlVerts;
+        unsigned int nextControlVert  : 30;
+        unsigned int singleSharedVert :  1;
+        unsigned int singleSharedFace :  1;
+        int          surfaceIndicesOffset;
     };
 
     void initializeControlHullInventory();
 
+    //  Methods to access the control vertex indices:
+    Index const * getSurfaceIndices() const;
+    Index const * getBaseFaceIndices() const;
+    Index const * getCornerIndices(int corner) const;
+    Index const * getCornerFaceIndices(int corner, int face) const;
+
     //  Methods to gather topology defining the control hull:
-    int gatherControlFaceSizes(   int faceSizes[]) const;
-    int gatherControlFaceVertices(int faceVertices[]) const;
+    int gatherControlFaces(int faceSizes[], int faceVertices[]) const;
 
     int gatherControlVertexSharpness(int indices[], float sharpness[]) const;
     int gatherControlEdgeSharpness(  int indices[], float sharpness[]) const;
@@ -116,7 +125,22 @@ private:
                                 int  corner,      int nextPerimeterVert) const;
     void getControlFaceVertices(int  faceVerts[], int numFaceVerts,
                                 int  corner,      int nextPerimeterVert,
-                                bool lastFace,    int val2IntOverlap = 0) const;
+                                bool lastFace) const;
+    void getControlFaceVertices(int  faceVerts[], int numFaceVerts,
+                                int  corner,      int const srcVerts[]) const;
+
+    //  Methods for dealing with the control vertex map:
+    void initializeControlVertexMap();
+
+    void addMeshControlVertex(int faceVertIndex);
+    void addMeshControlVertices(int const faceVertIndices[], int faceSize);
+
+    int getLocalControlVertex(int meshVertexIndex) const;
+    int getMeshControlVertex(int localVertexIndex) const;
+
+    bool mayHaveDuplicateControlFaces() const;
+    void removeDuplicateControlFaces(int faceSizes[], int faceVerts[],
+                                     int * numFaces, int * numFaceVerts) const;
 
 private:
     //  Private members:
@@ -125,14 +149,17 @@ private:
 
     //  Members defining the control hull of the surface -- some storing
     //  contributions to the control hull for each corner:
-    typedef Vtr::internal::StackBuffer<CornerControl,8,true> CornerControlArray;
+    typedef Vtr::internal::StackBuffer<CornerHull,8,true> CornerHullArray;
 
     int  _numControlVerts;
     int  _numControlFaces;
     int  _numControlFaceVerts;
-    bool _hasVal2IntCorners;
+    bool _useControlVertMap;
 
-    CornerControlArray _cornerControlInfo;
+    CornerHullArray _cornerHullInfo;
+
+    std::map<int,int> _controlVertMap;
+    std::vector<int>  _controlVerts;
 };
 
 } // end namespace Bfr
