@@ -23,7 +23,7 @@
 //
 
 #include "vec3.h"
-#include "types.h"
+#include "results.h"
 #include "deltas.h"
 
 #include "bfrSurfaceEvaluator.h"
@@ -40,9 +40,6 @@
 #include <cassert>
 #include <cstdio>
 
-//
-// Regression testing for Far stencil tables...
-//
 using namespace OpenSubdiv;
 using namespace OpenSubdiv::OPENSUBDIV_VERSION;
 
@@ -77,8 +74,7 @@ public:
     //  options affecting configuration and execution:
     unsigned int evalByStencils : 1;
     unsigned int doublePrecision : 1;
-    unsigned int noTopCacheFlag : 1;
-    unsigned int noTagsFlag : 1;
+    unsigned int noCacheFlag : 1;
 
     //  options affecting the shape of the limit surface:
     int  depthSharp;
@@ -118,8 +114,7 @@ public:
         ptexConvert(false),
         evalByStencils(false),
         doublePrecision(false),
-        noTopCacheFlag(false),
-        noTagsFlag(false),
+        noCacheFlag(false),
         depthSharp(-1),
         depthSmooth(-1),
         bndInterp(-1),
@@ -164,7 +159,9 @@ public:
             } else if (!strcmp(argv[i], "-uvint")) {
                 if (++i < argc) uvInterp = atoi(argv[i]);
 
-            //  Options affecting what gets evaluated and how:
+            //  Options affecting what gets evaluated:
+            } else if (!strcmp(arg, "-res")) {
+                if (++i < argc) uniformRes = atoi(argv[i]);
             } else if (!strcmp(arg, "-pos")) {
                 posEvaluate = true;
             } else if (!strcmp(arg, "-nopos")) {
@@ -181,14 +178,10 @@ public:
                 uvEvaluate = true;
             } else if (!strcmp(arg, "-nouv")) {
                 uvEvaluate = false;
-            } else if (!strcmp(arg, "-stencils")) {
-                evalByStencils = true;
             } else if (!strcmp(arg, "-ptex")) {
                 ptexConvert = true;
             } else if (!strcmp(arg, "-noptex")) {
                 ptexConvert = false;
-            } else if (!strcmp(arg, "-res")) {
-                if (++i < argc) uniformRes = atoi(argv[i]);
 
             //  Options affecting what gets compared and reported:
             } else if (!strcmp(arg, "-skippos")) {
@@ -204,19 +197,19 @@ public:
 
             //  Options affecting comparison tolerances:
             } else if (!strcmp(argv[i], "-reltol")) {
-                if (++i < argc) relTolerance = atof(argv[i]);
+                if (++i < argc) relTolerance = (float)atof(argv[i]);
             } else if (!strcmp(argv[i], "-abstol")) {
-                if (++i < argc) absTolerance = atof(argv[i]);
+                if (++i < argc) absTolerance = (float)atof(argv[i]);
             } else if (!strcmp(argv[i], "-uvtol")) {
-                if (++i < argc) uvTolerance = atof(argv[i]);
+                if (++i < argc) uvTolerance = (float)atof(argv[i]);
 
             //  Options controlling other internal processing:
-            } else if (!strcmp(arg, "-notags")) {
-                noTagsFlag = true;
-            } else if (!strcmp(arg, "-notcache")) {
-                noTopCacheFlag = true;
+            } else if (!strcmp(arg, "-stencils")) {
+                evalByStencils = true;
             } else if (!strcmp(arg, "-double")) {
                 doublePrecision = true;
+            } else if (!strcmp(arg, "-nocache")) {
+                noCacheFlag = true;
 
             //  Options affecting the shapes to be included:
             } else if (!strcmp(arg, "-bilinear")) {
@@ -250,6 +243,11 @@ public:
             } else if (!strcmp(arg, "-nosum")) {
                 printSummary = false;
             } else if (!strcmp(arg, "-quiet")) {
+                printWarnings = false;
+            } else if (!strcmp(arg, "-silent")) {
+                printArgs     = false;
+                printProgress = false;
+                printSummary  = false;
                 printWarnings = false;
 
             //  Unrecognized...
@@ -341,9 +339,6 @@ public:
 
         printf("\n");
         printf("Shape options:\n");
-        if (noTagsFlag) {
-            printf("  - include OBJ tags = NO, OBJ TAGS IGNORED\n");
-        }
         if (depthSharp > 0) {
             printf("  - depth primary    = %d\n",  depthSharp);
         } else {
@@ -356,19 +351,13 @@ public:
             printf("  - depth secondary  = %d (dflt)\n",
                 (Bfr::SurfaceFactory::Options()).MaxLevelSecondary());
         }
-        if ((bndInterp < 0) && noTagsFlag) {
-            //  Make sure this index matches the chosen default elsewhere
-            printf("  - boundary interp  = %s (dflt)\n", bIntStrings[2]);
-        } else if (bndInterp < 0) {
+        if (bndInterp < 0) {
             printf("  - boundary interp  = (as assigned)\n");
         } else {
             printf("  - boundary interp  = %s\n", bIntStrings[bndInterp]);
         }
         if (uvEvaluate) {
-            if ((uvInterp < 0) && noTagsFlag) {
-                //  Make sure this index matches the chosen default elsewhere
-                printf("  - UV linear interp = %s (dflt)\n", fvIntStrings[1]);
-            } else if (uvInterp < 0) {
+            if (uvInterp < 0) {
                 printf("  - UV linear interp = (as assigned)\n");
             } else {
                 printf("  - UV linear interp = %s\n", fvIntStrings[uvInterp]);
@@ -464,13 +453,6 @@ createTopologyRefiner(ShapeDesc const           & shapeDesc,
         }
     }
 
-    if (args.noTagsFlag) {
-        for (int i = 0; i < (int)shape->tags.size(); ++i) {
-            delete shape->tags[i];
-        }
-        shape->tags.clear();
-    }
-
     //
     //  Create a TopologyRefiner and load position and UVs:
     //
@@ -486,12 +468,6 @@ createTopologyRefiner(ShapeDesc const           & shapeDesc,
     }
 
     Sdc::Options sdcOptions = GetSdcOptions(*shape);
-    if (args.noTagsFlag) {
-        sdcOptions.SetVtxBoundaryInterpolation(
-                                Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
-        sdcOptions.SetFVarLinearInterpolation(
-                                Sdc::Options::FVAR_LINEAR_CORNERS_ONLY);
-    }
     if (args.bndInterp >= 0) {
         sdcOptions.SetVtxBoundaryInterpolation(
             (Sdc::Options::VtxBoundaryInterpolation) args.bndInterp);
@@ -572,9 +548,9 @@ GetRelativeTolerance(std::vector< Vec3<REAL> > const & p, REAL fraction) {
 
 
 //
-//  An independent test from evaluation -- comparing the conversion
-//  of a parametric (u.v) coordinate from Bfr::Parameterization to Ptex
-//  and back -- subject to a given tolerance:
+//  An independent test from limit surface evaluation:  comparing the
+//  conversion of (u,v) coordinates for Bfr::Parameterization to Ptex
+//  and back (subject to a given tolerance):
 //
 template <typename REAL>
 void
@@ -593,9 +569,24 @@ ValidatePtexConversion(Bfr::Parameterization const & param,
     int ptexFace = param.ConvertCoordToNormalizedSubFace(givenCoord, ptexCoord);
     param.ConvertNormalizedSubFaceToCoord(ptexFace, ptexCoord, finalCoord);
 
-    assert(ptexFace == param.GetSubFace(givenCoord));
-    assert(std::abs(finalCoord[0] - givenCoord[0]) < tol);
-    assert(std::abs(finalCoord[1] - givenCoord[1]) < tol);
+    bool subFaceDiff = (ptexFace != param.GetSubFace(givenCoord));
+    bool uCoordDiff  = (std::abs(finalCoord[0] - givenCoord[0]) > tol);
+    bool vCoordDiff  = (std::abs(finalCoord[1] - givenCoord[1]) > tol);
+
+    if (subFaceDiff || uCoordDiff || vCoordDiff) {
+        fprintf(stderr,
+                "Warning: Mismatch in sub-face Parameterization conversion:\n");
+        if (subFaceDiff ) {
+            fprintf(stderr,
+                "    converted sub-face (%d) != original (%d)\n",
+                ptexFace, param.GetSubFace(givenCoord));
+        }
+        if (uCoordDiff || vCoordDiff) {
+            fprintf(stderr,
+                "    converted coord (%f,%f) != original (%f,%f)\n",
+                finalCoord[0], finalCoord[1], givenCoord[0], givenCoord[1]);
+        }
+    }
 }
 
 
@@ -662,7 +653,7 @@ testMesh(Far::TopologyRefiner      const & mesh,
     }
     surfaceOptions.SetDefaultFVarID(0);
     surfaceOptions.SetSurfacePrecision<REAL>();
-    surfaceOptions.EnableInternalCache(!args.noTopCacheFlag);
+    surfaceOptions.EnableInternalCache(!args.noCacheFlag);
 
     BfrSurfaceEvaluator<REAL> bfrEval(mesh, meshPos, meshUVs, surfaceOptions);
     FarPatchEvaluator<REAL>   farEval(mesh, meshPos, meshUVs, surfaceOptions);
@@ -892,7 +883,7 @@ main(int argc, char **argv) {
         }
     }
 
-    int shapesToTest  = shapeList.size();
+    int shapesToTest  = (int) shapeList.size();
     int shapesIgnored = 0;
     if ((args.shapeCount > 0) && (args.shapeCount < shapesToTest)) {
         shapesIgnored = shapesToTest - args.shapeCount;
@@ -941,8 +932,5 @@ main(int argc, char **argv) {
             printf("Total failures: %d of %d shapes\n", failedShapes,
                                                         shapesToTest);
         }
-    }
-    if (args.noTagsFlag) {
-        printf("All Obj tags ignored.\n");
     }
 }

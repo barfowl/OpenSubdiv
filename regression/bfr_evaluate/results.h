@@ -21,8 +21,8 @@
 //   KIND, either express or implied. See the Apache License for the specific
 //   language governing permissions and limitations under the Apache License.
 //
-#ifndef OPENSUBDIV3_REGRESSION_BFR_EVALUATE_TYPES_H
-#define OPENSUBDIV3_REGRESSION_BFR_EVALUATE_TYPES_H
+#ifndef OPENSUBDIV3_REGRESSION_BFR_EVALUATE_RESULTS_H
+#define OPENSUBDIV3_REGRESSION_BFR_EVALUATE_RESULTS_H
 
 #include "vec3.h"
 
@@ -55,7 +55,7 @@ struct EvalResults {
 
     std::vector< Vec3<REAL> > uv;
 
-    void Resize(size_t size) {
+    void Resize(int size) {
        if (evalPosition) {
             p.resize(size);
             if (eval1stDeriv) {
@@ -74,4 +74,4 @@ struct EvalResults {
     }
 };
 
-#endif /* OPENSUBDIV3_REGRESSION_BFR_EVALUATE_TYPES_H */
+#endif /* OPENSUBDIV3_REGRESSION_BFR_EVALUATE_RESULTS_H */

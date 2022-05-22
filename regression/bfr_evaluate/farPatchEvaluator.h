@@ -23,7 +23,7 @@
 //
 
 #include "vec3.h"
-#include "types.h"
+#include "results.h"
 
 #include <opensubdiv/far/topologyRefiner.h>
 #include <opensubdiv/far/patchTable.h>
