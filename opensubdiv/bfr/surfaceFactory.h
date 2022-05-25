@@ -132,17 +132,17 @@ public:
     public:
         Options() : _dfltFVarID(-1), _sharedCache(0),
                     _enableCache(true), _useDoublePrecision(false),
-                    _maxLevelPrimary(6), _maxLevelSecondary(2) { }
+                    _approxLevelSmooth(2), _approxLevelSharp(6) { }
 
-        //  Assign the default face-varying ID:
+        //  Assign the default face-varying ID (no valid default):
         void   SetDefaultFVarID(FVarID id) { _dfltFVarID = id; }
         FVarID GetDefaultFVarID()    const { return _dfltFVarID; }
 
-        //  Enable the internal cache (dflt true) or assign a shared cache:
-        //  WIP - use of "internal", "shared", etc. warrant final review
-        void EnableInternalCache(bool on) { _enableCache = on; }
-        bool EnableInternalCache()  const { return _enableCache; }
+        //  Enable the internal cache (default is true):
+        void EnableInternalCache(bool on)   { _enableCache = on; }
+        bool IsInternalCacheEnabled() const { return _enableCache; }
 
+        //  Assign a shared cache between multiple Factories:
         void SetSharedCache(SurfaceFactoryCache * c) { _sharedCache = c; }
         SurfaceFactoryCache * GetSharedCache() const { return _sharedCache; }
 
@@ -150,13 +150,13 @@ public:
         template <typename REAL> void SetSurfacePrecision();
         template <typename REAL> bool IsSurfacePrecision() const;
 
-        //  WIP - these approximating options are for development use only
-        //      - public options are under consideration (see comment above)
-        void MaxLevelPrimary( int n) { _maxLevelPrimary = n; }
-        int  MaxLevelPrimary() const { return _maxLevelPrimary; }
+        //  Set refinement levels used to approximate the limit surface
+        //  for smooth and sharp features (reasonable defaults assigned):
+        void SetApproxLevelSmooth(int level) { _approxLevelSmooth = level; }
+        int  GetApproxLevelSmooth() const    { return _approxLevelSmooth; }
 
-        void MaxLevelSecondary( int n) { _maxLevelSecondary = n; }
-        int  MaxLevelSecondary() const { return _maxLevelSecondary; }
+        void SetApproxLevelSharp(int level) { _approxLevelSharp = level; }
+        int  GetApproxLevelSharp() const    { return _approxLevelSharp; }
 
     private:
         //  Member variables:
@@ -166,8 +166,8 @@ public:
 
         unsigned int _enableCache        : 1;
         unsigned int _useDoublePrecision : 1;
-        unsigned int _maxLevelPrimary    : 4;
-        unsigned int _maxLevelSecondary  : 4;
+        unsigned int _approxLevelSmooth  : 4;
+        unsigned int _approxLevelSharp   : 4;
     };
 
 public:

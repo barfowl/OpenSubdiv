@@ -51,8 +51,8 @@ FarPatchEvaluator<REAL>::FarPatchEvaluator(
     //
     FactoryOptions bfrSurfaceOptions = factoryOptions;
 
-    int primaryLevel   = bfrSurfaceOptions.MaxLevelPrimary();
-    int secondaryLevel = bfrSurfaceOptions.MaxLevelSecondary();
+    int primaryLevel   = bfrSurfaceOptions.GetApproxLevelSharp();
+    int secondaryLevel = bfrSurfaceOptions.GetApproxLevelSmooth();
 
     Far::PatchTableFactory::Options patchOptions(primaryLevel);
     patchOptions.SetPatchPrecision<REAL>();

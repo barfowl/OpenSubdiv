@@ -151,8 +151,14 @@ public:
 
             //  Options affecting the limit surface shapes:
             } else if (!strcmp(arg, "-l")) {
+                if (++i < argc) {
+                    int maxLevel = atoi(argv[i]);
+                    depthSharp  = maxLevel;
+                    depthSmooth = maxLevel;
+                }
+            } else if (!strcmp(arg, "-lsharp")) {
                 if (++i < argc) depthSharp = atoi(argv[i]);
-            } else if (!strcmp(arg, "-l2")) {
+            } else if (!strcmp(arg, "-lsmooth")) {
                 if (++i < argc) depthSmooth = atoi(argv[i]);
             } else if (!strcmp(argv[i], "-bint")) {
                 if (++i < argc) bndInterp = atoi(argv[i]);
@@ -340,16 +346,16 @@ public:
         printf("\n");
         printf("Shape options:\n");
         if (depthSharp > 0) {
-            printf("  - depth primary    = %d\n",  depthSharp);
+            printf("  - max level sharp  = %d\n",  depthSharp);
         } else {
-            printf("  - depth primary    = %d (dflt)\n",
-                (Bfr::SurfaceFactory::Options()).MaxLevelPrimary());
+            printf("  - max level sharp  = %d (dflt)\n",
+                (Bfr::SurfaceFactory::Options()).GetApproxLevelSharp());
         }
         if (depthSmooth > 0) {
-            printf("  - depth secondary  = %d\n",  depthSmooth);
+            printf("  - max level smooth = %d\n",  depthSmooth);
         } else {
-            printf("  - depth secondary  = %d (dflt)\n",
-                (Bfr::SurfaceFactory::Options()).MaxLevelSecondary());
+            printf("  - max level smooth = %d (dflt)\n",
+                (Bfr::SurfaceFactory::Options()).GetApproxLevelSmooth());
         }
         if (bndInterp < 0) {
             printf("  - boundary interp  = (as assigned)\n");
@@ -646,10 +652,10 @@ testMesh(Far::TopologyRefiner      const & mesh,
 
     //  Leave approximation defaults in place unless explicitly overridden:
     if (args.depthSharp > 0) {
-        surfaceOptions.MaxLevelPrimary(args.depthSharp);
+        surfaceOptions.SetApproxLevelSharp(args.depthSharp);
     }
     if (args.depthSmooth > 0) {
-        surfaceOptions.MaxLevelSecondary(args.depthSmooth);
+        surfaceOptions.SetApproxLevelSmooth(args.depthSmooth);
     }
     surfaceOptions.SetDefaultFVarID(0);
     surfaceOptions.SetSurfacePrecision<REAL>();

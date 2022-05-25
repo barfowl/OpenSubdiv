@@ -151,7 +151,7 @@ SurfaceFactory::SurfaceFactory(
 inline SurfaceFactoryCache *
 SurfaceFactory::getAssignedCache() const {
 
-    if (!_limitOptions.EnableInternalCache()) {
+    if (!_limitOptions.IsInternalCacheEnabled()) {
         return 0;
     } else if (_limitOptions.GetSharedCache()) {
         return _limitOptions.GetSharedCache();
@@ -439,8 +439,8 @@ namespace {
         KeyBits keyBits;
 
         keyBits.subdScheme  = surface.GetSdcScheme();
-        keyBits.sharpLevel  = options.MaxLevelPrimary();
-        keyBits.smoothLevel = options.MaxLevelSecondary();
+        keyBits.sharpLevel  = options.GetApproxLevelSharp();
+        keyBits.smoothLevel = options.GetApproxLevelSmooth();
         keyBits.usesDouble  = options.IsSurfacePrecision<double>();
 
         keyBits.v0Valence        = subsets[0]._numFacesTotal;
@@ -567,8 +567,8 @@ namespace {
         sHeader.subdScheme    = surface.GetSdcScheme();
         sHeader.subdCreasing  = subdOptions.GetCreasingMethod();
         sHeader.subdTriSmooth = subdOptions.GetTriangleSubdivision();
-        sHeader.sharpLevel    = options.MaxLevelPrimary();
-        sHeader.smoothLevel   = options.MaxLevelSecondary();
+        sHeader.sharpLevel    = options.GetApproxLevelSharp();
+        sHeader.smoothLevel   = options.GetApproxLevelSmooth();
         sHeader.usesDouble    = options.IsSurfacePrecision<double>();
 
         std::memcpy(hashBuffer, &sHeader, sizeof(sHeader));
@@ -786,8 +786,8 @@ SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
     typedef IrregularPatchBuilder::IrregPatchType PatchType;
 
     IrregularPatchBuilder::Options buildOptions;
-    buildOptions.sharpLevel      = _limitOptions.MaxLevelPrimary();
-    buildOptions.smoothLevel     = _limitOptions.MaxLevelSecondary();
+    buildOptions.sharpLevel      = _limitOptions.GetApproxLevelSharp();
+    buildOptions.smoothLevel     = _limitOptions.GetApproxLevelSmooth();
     buildOptions.doublePrecision = _limitOptions.IsSurfacePrecision<double>();
 
     IrregularPatchBuilder builder(descriptor, buildOptions);

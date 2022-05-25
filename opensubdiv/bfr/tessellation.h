@@ -53,8 +53,7 @@ public:
     //
     class Options {
     public:
-        Options() : _preserveQuads(false),
-                    _use3dCoords(0), _use4dFacets(0),
+        Options() : _preserveQuads(false), _use4dFacets(0),
                     _coordStride(0), _facetStride(0) { }
 
         //  Choice of triangulation (default) or preservation of quads
@@ -62,22 +61,27 @@ public:
         void PreserveQuads(bool on) { _preserveQuads = on; }
         bool PreserveQuads() const  { return _preserveQuads; }
 
-        //  Options assigning the number of integer indices per facet
-        //  (dflt 3) and a stride for indices part of a larger set:
+        //  Option assigning the number of integer indices per facet that
+        //  are initialized when retrieved (default of 3):
+        //  WIP - still seeking an alternative to the "use 4d facets" term
+        //      - open to suggestions, but be careful using "quads"
+        //      - use of SetFacetSize(int) questionable given only 3 or 4
         void Use4dFacets(bool on) { _use4dFacets = on; }
-        int  Use4dFacets() const  { return _use4dFacets; }
-        int  GetFacetSize() const { return 3 + _use4dFacets; }
+        bool Use4dFacets() const  { return _use4dFacets; }
 
+        //  Size of each facet according to options above:
+        int  GetFacetSize() const { return 3 + (int)_use4dFacets; }
+
+        //  Option for stride between facets within a larger set:
         void SetFacetStride(int numInts) { _facetStride = numInts; }
         int  GetFacetStride() const      { return _facetStride; }
 
-        //  Option for stride of (u,v) pairs part of a larger set:
+        //  Option for stride between (u,v) pairs within a larger set:
         void SetCoordStride(int numFloats) { _coordStride = numFloats; }
         int  GetCoordStride() const        { return _coordStride; }
 
     private:
         unsigned int _preserveQuads : 1;
-        unsigned int _use3dCoords   : 1;
         unsigned int _use4dFacets   : 1;
         unsigned int _coordStride   : 8;
         unsigned int _facetStride   : 8;
