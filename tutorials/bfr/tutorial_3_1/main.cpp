@@ -381,7 +381,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     int const FacetSize = 3 + args.tessQuadsFlag;
 
     Bfr::Tessellation::Options tessOptions;
-    tessOptions.Use4dFacets(args.tessQuadsFlag);
+    tessOptions.SetFacetSize(FacetSize);
     tessOptions.PreserveQuads(args.tessQuadsFlag);
 
     std::vector<float> tessCoordPairs;

@@ -53,7 +53,7 @@ public:
     //
     class Options {
     public:
-        Options() : _preserveQuads(false), _use4dFacets(0),
+        Options() : _preserveQuads(false), _facetSize4(false),
                     _coordStride(0), _facetStride(0) { }
 
         //  Choice of triangulation (default) or preservation of quads
@@ -61,16 +61,11 @@ public:
         void PreserveQuads(bool on) { _preserveQuads = on; }
         bool PreserveQuads() const  { return _preserveQuads; }
 
-        //  Option assigning the number of integer indices per facet that
-        //  are initialized when retrieved (default of 3):
-        //  WIP - still seeking an alternative to the "use 4d facets" term
-        //      - open to suggestions, but be careful using "quads"
-        //      - use of SetFacetSize(int) questionable given only 3 or 4
-        void Use4dFacets(bool on) { _use4dFacets = on; }
-        bool Use4dFacets() const  { return _use4dFacets; }
-
-        //  Size of each facet according to options above:
-        int  GetFacetSize() const { return 3 + (int)_use4dFacets; }
+        //  Option for the number of indices associated with each facet
+        //  (i.e. the number of indices set by the Tessellation) which can
+        //  be 3 or 4 (default is 3 and remains so unless 4 specified):
+        void SetFacetSize(int numIndices) { _facetSize4 = (numIndices == 4); }
+        int  GetFacetSize() const         { return 3 + (int)_facetSize4; }
 
         //  Option for stride between facets within a larger set:
         void SetFacetStride(int numInts) { _facetStride = numInts; }
@@ -82,7 +77,7 @@ public:
 
     private:
         unsigned int _preserveQuads : 1;
-        unsigned int _use4dFacets   : 1;
+        unsigned int _facetSize4    : 1;
         unsigned int _coordStride   : 8;
         unsigned int _facetStride   : 8;
     };
