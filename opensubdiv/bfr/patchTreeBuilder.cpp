@@ -254,8 +254,8 @@ PatchTreeBuilder::initializePatches() {
             _patchBuilder->GetRegularPatchPoints(pf.level, pf.face,
                 boundaryMask, patchPoints);
 
-            for (int i = 0; i < _patchTree->_regPatchSize; ++i) {
-                patchPoints[i] += _levelOffsets[pf.level];
+            for (int j = 0; j < _patchTree->_regPatchSize; ++j) {
+                patchPoints[j] += _levelOffsets[pf.level];
             }
         } else {
             //  Compute/assign the PatchParam for an irregular patch:
@@ -264,8 +264,8 @@ PatchTreeBuilder::initializePatches() {
                     ptexIndices, false /*irreg*/, 0 /*mask*/, false);
 
             //  Assign indices of new/local points for this irregular patch:
-            for (int i = 0; i < _patchTree->_irregPatchSize; ++i) {
-                patchPoints[i] = irregPointIndexBase ++;
+            for (int j = 0; j < _patchTree->_irregPatchSize; ++j) {
+                patchPoints[j] = irregPointIndexBase ++;
             }
         }
     }

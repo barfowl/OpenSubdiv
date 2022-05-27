@@ -479,19 +479,21 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  needed) and evaluate the sample points of the Tessellation:
         //
         //  Evaluate positions first -- as in the previous tutorial:
-        surfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
+        {
+            surfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
 
-        posSurface.PreparePatchPointValues(baseMeshVertexXYZs,
-                                           surfaceXYZPoints);
+            posSurface.PreparePatchPointValues(baseMeshVertexXYZs,
+                                               surfaceXYZPoints);
 
-        tessXYZ.resize(numTessCoords);
-        tessDu.resize(numTessCoords);
-        tessDv.resize(numTessCoords);
+            tessXYZ.resize(numTessCoords);
+            tessDu.resize(numTessCoords);
+            tessDv.resize(numTessCoords);
 
-        float const * coordPair = &tessCoordPairs[0];
-        for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
-            posSurface.Evaluate(coordPair, surfaceXYZPoints,
-                                &tessXYZ[i], &tessDu[i], &tessDv[i]);
+            float const * coordPair = &tessCoordPairs[0];
+            for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
+                posSurface.Evaluate(coordPair, surfaceXYZPoints,
+                                    &tessXYZ[i], &tessDu[i], &tessDv[i]);
+            }
         }
 
         //  Evaluate UVs when present:

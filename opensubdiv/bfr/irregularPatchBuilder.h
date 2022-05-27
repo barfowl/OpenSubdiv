@@ -100,10 +100,10 @@ private:
 
         int          numControlFaces;
         int          numControlVerts;
-        unsigned int nextControlVert  : 30;
-        unsigned int singleSharedVert :  1;
-        unsigned int singleSharedFace :  1;
+        int          nextControlVert;
         int          surfaceIndicesOffset;
+        unsigned int singleSharedVert : 1;
+        unsigned int singleSharedFace : 1;
     };
 
     void initializeControlHullInventory();

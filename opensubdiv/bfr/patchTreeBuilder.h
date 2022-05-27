@@ -63,17 +63,17 @@ public:
     struct Options {
         enum BasisType { REGULAR, GREGORY, LINEAR };
 
-        Options(int depth = 4) : irregularBasis(GREGORY),
-                                 maxPatchDepthSharp(depth),
+        Options(int depth = 4) : irregularBasis((unsigned char) GREGORY),
+                                 maxPatchDepthSharp((unsigned char) depth),
                                  maxPatchDepthSmooth(15),
                                  includeInteriorPatches(false),
                                  useDoublePrecision(false) { }
 
-        unsigned int irregularBasis         : 4;
-        unsigned int maxPatchDepthSharp     : 4;
-        unsigned int maxPatchDepthSmooth    : 4;
-        unsigned int includeInteriorPatches : 1;
-        unsigned int useDoublePrecision     : 1;
+        unsigned char irregularBasis;
+        unsigned char maxPatchDepthSharp;
+        unsigned char maxPatchDepthSmooth;
+        unsigned char includeInteriorPatches : 1;
+        unsigned char useDoublePrecision     : 1;
     };
 
 public:
@@ -92,7 +92,7 @@ private:
     //  Internal struct for a patch in the refinement hierarchy:
     struct PatchFace {
         PatchFace(int levelArg, int faceArg, bool isReg = true) :
-                face(faceArg), level(levelArg), isRegular(isReg) { }
+                face(faceArg), level((short)levelArg), isRegular(isReg) { }
 
         int   face;
         short level;

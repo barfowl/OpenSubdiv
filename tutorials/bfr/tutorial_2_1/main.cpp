@@ -250,12 +250,11 @@ private:
 
     int _numVertices;
     int _numNormals;
-    int _numUVs;
     int _numFaces;
 };
 
 ObjWriter::ObjWriter(std::string const &filename) :
-        _fptr(0), _numVertices(0), _numNormals(0), _numUVs(0), _numFaces(0) {
+        _fptr(0), _numVertices(0), _numNormals(0), _numFaces(0) {
 
     if (filename != std::string()) {
         _fptr = fopen(filename.c_str(), "w");

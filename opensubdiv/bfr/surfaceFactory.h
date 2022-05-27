@@ -152,11 +152,11 @@ public:
 
         //  Set refinement levels used to approximate the limit surface
         //  for smooth and sharp features (reasonable defaults assigned):
-        void SetApproxLevelSmooth(int level) { _approxLevelSmooth = level; }
-        int  GetApproxLevelSmooth() const    { return _approxLevelSmooth; }
+        void SetApproxLevelSmooth(int level);
+        int  GetApproxLevelSmooth() const { return _approxLevelSmooth; }
 
-        void SetApproxLevelSharp(int level) { _approxLevelSharp = level; }
-        int  GetApproxLevelSharp() const    { return _approxLevelSharp; }
+        void SetApproxLevelSharp(int level);
+        int  GetApproxLevelSharp() const { return _approxLevelSharp; }
 
     private:
         //  Member variables:
@@ -164,10 +164,10 @@ public:
 
         SurfaceFactoryCache * _sharedCache;
 
-        unsigned int _enableCache        : 1;
-        unsigned int _useDoublePrecision : 1;
-        unsigned int _approxLevelSmooth  : 4;
-        unsigned int _approxLevelSharp   : 4;
+        unsigned char _enableCache        : 1;
+        unsigned char _useDoublePrecision : 1;
+        unsigned char _approxLevelSmooth;
+        unsigned char _approxLevelSharp;
     };
 
 public:
@@ -406,7 +406,7 @@ private:
     bool faceHasLimitNeighborhood(Index faceIndex) const;
     bool faceHasLimitNeighborhood(FaceTopology const & faceTopology) const;
 
-    struct SurfaceSet;
+    class SurfaceSet;
 
     bool populateAllSurfaces(      Index faceIndex, SurfaceSet * sSetPtr) const;
     bool populateLinearSurfaces(   Index faceIndex, SurfaceSet * sSetPtr) const;
@@ -468,8 +468,17 @@ private:
 };
 
 //
-//  Template specializations:
+//  Inline Options and its template specializations:
 //
+inline void
+SurfaceFactory::Options::SetApproxLevelSmooth(int level) {
+    _approxLevelSmooth = (unsigned char) level;
+}
+inline void
+SurfaceFactory::Options::SetApproxLevelSharp(int level) {
+    _approxLevelSharp = (unsigned char) level;
+}
+
 template <>
 inline void
 SurfaceFactory::Options::SetSurfacePrecision<float>() {

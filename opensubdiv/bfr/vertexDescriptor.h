@@ -306,13 +306,13 @@ VertexDescriptor::SetManifoldEdgeSharpness(int edgeIndex, float sharpness) {
 }
 inline void
 VertexDescriptor::SetIncidentFaceEdgeSharpness(int   faceIndex,
-                                             float leadingEdgeSharpness,
-                                             float trailingEdgeSharpness) {
+                                               float leadingEdgeSharpness,
+                                               float trailingEdgeSharpness) {
 
-//  assert(IsManifold());
     if (!_hasEdgeSharpness) {
         _faceEdgeSharpness.SetSize(_numFaces * 2);
-        std::fill(&_faceEdgeSharpness[0], &_faceEdgeSharpness[_numFaces*2], 0);
+        std::fill(&_faceEdgeSharpness[0],
+                  &_faceEdgeSharpness[_numFaces*2], 0.0f);
         _hasEdgeSharpness = true;
     }
 

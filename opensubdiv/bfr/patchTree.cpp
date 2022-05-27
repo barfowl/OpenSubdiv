@@ -64,7 +64,7 @@ PatchTree::TreeNode::SetChildren(int index) {
     for (int i=0; i<4; ++i) {
         children[i].isSet  = true;
         children[i].isLeaf = true;
-        children[i].index  = index;
+        children[i].SetIndex(index);
     }
 }
 
@@ -75,7 +75,7 @@ PatchTree::TreeNode::SetChild(int quadrant, int index, bool isLeaf) {
     assert(!children[quadrant].isSet);
     children[quadrant].isSet  = true;
     children[quadrant].isLeaf = isLeaf;
-    children[quadrant].index  = index;
+    children[quadrant].SetIndex(index);
 }
 
 
@@ -166,9 +166,10 @@ namespace {
         //        so anything here to make use of SSE/AVX will be worth it
         //      - prefer something portable to ensure auto-vectorization
         //      - we can also pad the matrix so "n" is a multiple of 4...
+        //      - note will need to specialize when cast required
 
         for (int i = 0; i < n; ++i) {
-            dst[i] += w * src[i];
+            dst[i] += (REAL_DST) (w * src[i]);
         }
     }
 }
@@ -349,7 +350,7 @@ PatchTree::assignLeafOrChildNode(TreeNode * node,
         //  Move existing patch index from child to new child node:
         newNode->patchIndex = node->children[quadrant].index;
 
-        node->children[quadrant].index  = newNodeIndex;
+        node->children[quadrant].SetIndex(newNodeIndex);
         node->children[quadrant].isLeaf = false;
         if (isLeaf) {
             newNode->SetChild(quadrant, patchIndex, true);

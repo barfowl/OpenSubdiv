@@ -536,7 +536,7 @@ namespace {
         //  high valence vertices, heavy use of creasing) will make
         //  make the overhead here insignificant.
         //
-        int hashBufferSize = sizeof(SurfaceHeader);
+        size_t hashBufferSize = sizeof(SurfaceHeader);
 
         int faceSize = surface.GetFaceSize();
         for (int i = 0; i < faceSize; ++i) {
@@ -555,7 +555,7 @@ namespace {
 
             hashBufferSize += useCornerDelimiter ? sizeof(delimiter) : 0;
         }
-        hashBuffer.SetSize(hashBufferSize);
+        hashBuffer.SetSize((int)hashBufferSize);
 
         //
         //  Start populating the buffer with the surface header:
@@ -578,13 +578,13 @@ namespace {
         //
         char * bufferPtr = hashBuffer + sizeof(sHeader);
 
-        for (int i = 0; i < faceSize; ++i) {
-            FaceVertex       const & cTop = surface.GetCornerTopology(i);
-            FaceVertexSubset const & cSub = surface.GetCornerSubset(i);
+        for (int corner = 0; corner < faceSize; ++corner) {
+            FaceVertex       const & cTop = surface.GetCornerTopology(corner);
+            FaceVertexSubset const & cSub = surface.GetCornerSubset(corner);
 
             //  Assign the corner header:
             CornerHeader cHeader;
-            cHeader.numFaces       = cSub.GetNumFaces();
+            cHeader.numFaces       = (short) cSub.GetNumFaces();
             cHeader.faceInBoundary = cSub._numFacesBefore;
             cHeader.isBoundary     = cSub.IsBoundary();
             cHeader.isInfSharp     = cSub.IsSharp();
@@ -607,7 +607,7 @@ namespace {
                 shortBuffer.SetSize(n);
                 for (int i = 0, f = cTop.GetFaceFirst(cSub); i < n;
                                 f = cTop.GetFaceNext(f), ++i) {
-                    shortBuffer[i] = cTop.GetFaceSize(f);
+                    shortBuffer[i] = (short) cTop.GetFaceSize(f);
                 }
                 std::memcpy(bufferPtr, shortBuffer, n * sizeof(short));
                 bufferPtr += n * sizeof(short);
@@ -628,7 +628,7 @@ namespace {
                 bufferPtr += sizeof(delimiter);
             }
         }
-        assert((bufferPtr - hashBuffer) == hashBufferSize);
+        assert((bufferPtr - hashBuffer) == (int)hashBufferSize);
 
         *keyValue = internal::Hash64(hashBuffer, hashBufferSize);
 

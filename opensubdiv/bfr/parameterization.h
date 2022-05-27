@@ -123,10 +123,9 @@ private:
                 REAL const subFaceCoord[2], REAL uvCoord[2]) const;
 
 private:
-    unsigned int _faceSize : 16;
-    unsigned int _type     :  4;
-    unsigned int _scheme   :  4;
-    unsigned int _uDim     :  8;
+    unsigned char  _type;
+    unsigned char  _uDim;
+    unsigned short _faceSize;
 };
 
 //
@@ -134,11 +133,11 @@ private:
 //
 inline
 Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) :
-        _faceSize(faceSize), _scheme(scheme), _uDim(0) {
+        _uDim(0), _faceSize((unsigned short) faceSize) {
 
     int regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(scheme);
 
-    _type = (regFaceSize == 4) ? QUAD : TRI;
+    _type = (unsigned char) ((regFaceSize == 4) ? QUAD : TRI);
     if (_faceSize != regFaceSize) {
         if (_faceSize < 3) {
             //  Reset size to 0 (invalid) for degenerate faces of all schemes:
@@ -149,8 +148,9 @@ Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) :
         } else {
             //  Quad sub-faces -- use int sqrt for udim to preserve accuracy:
             _type = QUAD_SUBFACES;
-            _uDim = (_faceSize < 10) ?  (2 + (_faceSize > 4)) :
-                    (1 + (int) std::sqrt((float)(_faceSize - 1)));
+            _uDim = (_faceSize < 10) ?
+                    (unsigned char)(2 + (_faceSize > 4)) :
+                    (unsigned char)(1 + (int) std::sqrt((float)(_faceSize-1)));
         }
     }
 }
@@ -174,6 +174,10 @@ Parameterization::GetVertexCoord(int vertex, REAL uv[2]) const {
     case QUAD_SUBFACES:
         uv[0] = (REAL) (vertex % _uDim);
         uv[1] = (REAL) (vertex / _uDim);
+        break;
+    default:
+        uv[0] = -1.0f;
+        uv[1] = -1.0f;
         break;
     }
 }
@@ -208,6 +212,10 @@ Parameterization::GetEdgeCoord(int edge, REAL t, REAL uv[2]) const {
             GetVertexCoord((edge + 1) % _faceSize, uv);
             uv[1] += 1.0f - t;
         }
+        break;
+    default:
+        uv[0] = -1.0f;
+        uv[1] = -1.0f;
         break;
     }
 }
@@ -248,11 +256,11 @@ Parameterization::convertCoordToSubFace(
     int vTile = (int) uvCoord[1];
 
     if (NORMALIZED) {
-        subCoord[0] = (uvCoord[0] - uTile) * 2.0f;
-        subCoord[1] = (uvCoord[1] - vTile) * 2.0f;
+        subCoord[0] = (uvCoord[0] - (REAL) uTile) * 2.0f;
+        subCoord[1] = (uvCoord[1] - (REAL) vTile) * 2.0f;
     } else {
-        subCoord[0] = (uvCoord[0] - uTile);
-        subCoord[1] = (uvCoord[1] - vTile);
+        subCoord[0] = (uvCoord[0] - (REAL) uTile);
+        subCoord[1] = (uvCoord[1] - (REAL) vTile);
     }
     return _uDim * vTile + uTile;
 }

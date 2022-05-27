@@ -209,11 +209,11 @@ private:
     short _faceInRing;
     short _commonFaceSize;
 
-    unsigned short _regFaceSize    :  4;
-    unsigned short _isExpInfSharp  :  1;
-    unsigned short _isExpSemiSharp :  1;
-    unsigned short _isImpInfSharp  :  1;
-    unsigned short _isImpSemiSharp :  1;
+    unsigned char _regFaceSize;
+    unsigned char _isExpInfSharp  :  1;
+    unsigned char _isExpSemiSharp :  1;
+    unsigned char _isImpInfSharp  :  1;
+    unsigned char _isImpSemiSharp :  1;
 
     int _numFaceVerts;
 

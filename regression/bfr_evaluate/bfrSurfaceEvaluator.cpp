@@ -52,7 +52,7 @@ BfrSurfaceEvaluator<REAL>::Evaluate(Bfr::Index                baseFace,
                                     EvalResults<REAL>       & results) const {
 
     //  Allocate vectors for the properties to be evaluated:
-    int numCoords = tessCoords.size() / 2;
+    int numCoords = (int) tessCoords.size() / 2;
 
     results.Resize(numCoords);
 

@@ -70,7 +70,7 @@ public:
 
 protected:
     friend class FaceVertex;
-    friend class FaceVertexSubset;
+    friend struct FaceVertexSubset;
 
     IntType _boundaryVerts      : 1;
     IntType _infSharpVerts      : 1;

@@ -41,8 +41,8 @@ namespace Bfr {
 void
 FaceVertex::Initialize(int faceSize, int regFaceSize) {
 
-    _commonFaceSize = faceSize;
-    _regFaceSize    = regFaceSize;
+    _commonFaceSize = (short) faceSize;
+    _regFaceSize    = (unsigned char) regFaceSize;
     _numFaceVerts   = 0;
 
     _isExpInfSharp  = false;
@@ -58,7 +58,7 @@ FaceVertex::Finalize(int faceInVertex) {
 
     assert(_vTop._isFinalized);
 
-    _faceInRing = faceInVertex;
+    _faceInRing = (short) faceInVertex;
 
     //
     //  Initialize members from the VertexDescriptor:
@@ -205,22 +205,24 @@ FaceVertex::initCompleteSubset(Subset * subsetPtr) const {
     //
     //  Initialize with tags and assign the extent:
     //
+    int numFaces = GetNumFaces();
+
     subset.Initialize(GetTag());
 
-    subset._numFacesTotal = GetNumFaces();
+    subset._numFacesTotal = (short) numFaces;
     if (isInterior()) {
         subset._numFacesBefore = 0;
-        subset._numFacesAfter  = GetNumFaces() - 1;
+        subset._numFacesAfter  = (short)(numFaces - 1);
     } else if (isOrdered()) {
         subset._numFacesBefore = _faceInRing;
-        subset._numFacesAfter  = GetNumFaces() - 1 - subset._numFacesBefore;
+        subset._numFacesAfter  = (short)(numFaces - 1 - subset._numFacesBefore);
     } else {
         //  Unordered faces -- boundary needs to identify its orientation:
         subset._numFacesAfter = 0;
         for (int f = GetFaceNext(_faceInRing); f >= 0; f = GetFaceNext(f)) {
             ++ subset._numFacesAfter;
         }
-        subset._numFacesBefore = GetNumFaces() - 1 - subset._numFacesAfter;
+        subset._numFacesBefore = (short)(numFaces - 1 - subset._numFacesAfter);
     }
     return subset._numFacesTotal;
 }
@@ -706,7 +708,7 @@ FaceVertex::createUnOrderedEdges(Edge        edges[],
             edges[eIndex].SetDegenerate();
         }
         assert(eIndex >= 0);
-        feEdges[feIndex] = eIndex;
+        feEdges[feIndex] = (short) eIndex;
     }
     return numEdges;
 }
@@ -851,7 +853,7 @@ FaceVertex::finalizeUnOrderedTags(Edge const edges[], int numEdges) {
         }
     } else {
         //  Mismatch between number of incident faces and edges:
-        isNonManifold = ((numEdges - GetNumFaces()) != hasBoundaryEdges);
+        isNonManifold = ((numEdges - GetNumFaces()) != (int)hasBoundaryEdges);
 
         if (!isNonManifold) {
             //  If all faces are not connected, the set is non-manifold:

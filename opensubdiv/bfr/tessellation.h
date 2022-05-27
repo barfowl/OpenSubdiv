@@ -68,18 +68,19 @@ public:
         int  GetFacetSize() const         { return 3 + (int)_facetSize4; }
 
         //  Option for stride between facets within a larger set:
-        void SetFacetStride(int numInts) { _facetStride = numInts; }
+        void SetFacetStride(int stride)  { _facetStride = (short) stride; }
         int  GetFacetStride() const      { return _facetStride; }
 
         //  Option for stride between (u,v) pairs within a larger set:
-        void SetCoordStride(int numFloats) { _coordStride = numFloats; }
-        int  GetCoordStride() const        { return _coordStride; }
+        void SetCoordStride(int stride) { _coordStride = (short) stride; }
+        int  GetCoordStride() const     { return _coordStride; }
 
     private:
         unsigned int _preserveQuads : 1;
         unsigned int _facetSize4    : 1;
-        unsigned int _coordStride   : 8;
-        unsigned int _facetStride   : 8;
+
+        short _coordStride;
+        short _facetStride;
     };
 
 public:
@@ -204,17 +205,17 @@ private:
     //  Private members:
     Parameterization _param;
 
-    unsigned int _isValid       :  1;
-    unsigned int _isUniform     :  1;
-    unsigned int _triangulate   :  1;
-    unsigned int _singleFace    :  1;
-    unsigned int _segmentedFace :  1;
-    unsigned int _triangleFan   :  1;
-    unsigned int _splitQuad     :  1;
+    unsigned short _isValid       :  1;
+    unsigned short _isUniform     :  1;
+    unsigned short _triangulate   :  1;
+    unsigned short _singleFace    :  1;
+    unsigned short _segmentedFace :  1;
+    unsigned short _triangleFan   :  1;
+    unsigned short _splitQuad     :  1;
 
-    unsigned int _facetSize     :  3;
-    unsigned int _facetStride   :  8;
-    unsigned int _coordStride   :  8;
+    short _facetSize;
+    int   _facetStride;
+    int   _coordStride;
 
     int _numGivenRates;
     int _numBoundaryPoints;

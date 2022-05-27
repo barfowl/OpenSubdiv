@@ -86,10 +86,10 @@ private:
     //  Private members:
     FaceSurface const & _surface;
 
-    unsigned short _isQuad       : 1;
-    unsigned short _isBoundary   : 1;
-    unsigned short _boundaryMask : 6;
-    short          _patchSize;
+    unsigned int _isQuad     : 1;
+    unsigned int _isBoundary : 1;
+    int          _boundaryMask;
+    int          _patchSize;
 
     Far::PatchDescriptor::Type _patchType;
 };

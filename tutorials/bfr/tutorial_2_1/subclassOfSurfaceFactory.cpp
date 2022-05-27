@@ -212,6 +212,7 @@ SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
             }
         }
         assert("Cannot identify face-vertex around non-manifold vertex." == 0);
+        return -1;
     }
 }
 

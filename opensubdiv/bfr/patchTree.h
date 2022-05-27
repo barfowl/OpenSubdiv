@@ -127,7 +127,9 @@ protected:
         struct Child {
             unsigned int isSet  :  1;
             unsigned int isLeaf :  1;
-            unsigned int index  : 30;
+            unsigned int index  : 28;
+
+            void SetIndex(int indexArg) { index = indexArg & 0xfffffff; }
         };
 
         TreeNode() : patchIndex(-1) {

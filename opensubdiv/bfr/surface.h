@@ -203,15 +203,15 @@ private:
 
     Parameterization _param;
 
-    unsigned int _isValid   : 1;
-    unsigned int _isRegular : 1;
-    unsigned int _isLinear  : 1;
-    unsigned int _useDouble : 1;
+    unsigned char _isValid   : 1;
+    unsigned char _isRegular : 1;
+    unsigned char _isLinear  : 1;
+    unsigned char _useDouble : 1;
 
-    unsigned int _regPatchType : 8;
-    unsigned int _regPatchMask : 8;
+    unsigned char _regPatchType;
+    unsigned char _regPatchMask;
 
-    unsigned int _irregOwner : 1;
+    unsigned char _irregOwner;
     IrregPatchPtr _irregPatch;
 };
 

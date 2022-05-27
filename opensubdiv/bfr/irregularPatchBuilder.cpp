@@ -859,8 +859,8 @@ IrregularPatchBuilder::Build() {
     //  Create the PatchTree from the TopologyRefiner:
     PatchTreeBuilder::Options patchTreeOptions;
     patchTreeOptions.includeInteriorPatches = false;
-    patchTreeOptions.maxPatchDepthSharp  = _options.sharpLevel;
-    patchTreeOptions.maxPatchDepthSmooth = _options.smoothLevel;
+    patchTreeOptions.maxPatchDepthSharp  = (unsigned char)_options.sharpLevel;
+    patchTreeOptions.maxPatchDepthSmooth = (unsigned char)_options.smoothLevel;
     patchTreeOptions.useDoublePrecision  = _options.doublePrecision;
 
     PatchTreeBuilder patchTreeBuilder(*refiner, patchTreeOptions);

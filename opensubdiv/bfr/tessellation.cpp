@@ -325,7 +325,7 @@ namespace {
             int inDelta = innerReversed ? -1 : 1;
 
             for (int i = 1; i <= innerEdges; ++i, ++outI, inI += inDelta) {
-                if (i > (innerEdges / 2)) triSign = - quadTriangulate;
+                if (i > (innerEdges / 2)) triSign = - (int)quadTriangulate;
 
                 int outJ = outI + 1;
                 int inJ  = (i < innerEdges) ? (inI + inDelta) : innerLast;
@@ -343,7 +343,7 @@ namespace {
             nFacets += appendTri(facets + nFacets, outI, outN, inN);
         } else if (includeLastFace) {
             nFacets += appendQuad(facets + nFacets,
-                             outI, outN, outN+1, inN, -quadTriangulate);
+                             outI, outN, outN+1, inN, - (int)quadTriangulate);
         }
         return nFacets;
     }
@@ -800,7 +800,7 @@ private:
 //
 inline int
 quad::CountUniformFacets(int edgeRes, bool triangulate) {
-    return (edgeRes * edgeRes) << triangulate;
+    return (edgeRes * edgeRes) << (int) triangulate;
 }
 
 inline int
@@ -808,7 +808,7 @@ quad::CountSegmentedFacets(int const uvRes[], bool triangulate) {
 
     //  WIP - may extend later to handle different opposing outer rates
     assert((uvRes[0] == 1) || (uvRes[1] == 1));
-    return (uvRes[0] * uvRes[1]) << triangulate;
+    return (uvRes[0] * uvRes[1]) << (int) triangulate;
 }
 
 int
@@ -908,7 +908,7 @@ template <typename REAL>
 int
 quad::GetEdgeCoords(int edge, int edgeRes, Coord2Array<REAL> coords) {
 
-    REAL dt = 1.0 / (REAL)edgeRes;
+    REAL dt = 1.0f / (REAL)edgeRes;
 
     REAL t0 = dt;
     REAL t1 = 1.0f - dt;
@@ -1348,7 +1348,7 @@ template <typename REAL>
 int
 tri::GetEdgeCoords(int edge, int edgeRes, Coord2Array<REAL> coords) {
 
-    REAL dt = 1.0 / (REAL)edgeRes;
+    REAL dt = 1.0f / (REAL)edgeRes;
 
     REAL t0 = dt;
     REAL t1 = 1.0f - dt;
@@ -1619,7 +1619,7 @@ qsub::CountUniformFacets(int N, int edgeRes, bool triangulate) {
     int nQuads  = (H + resIsOdd) * H * N;
     int nCenter = resIsOdd ? ((N == 3) ? 1 : N) : 0;
 
-    return (nQuads << triangulate) + nCenter;
+    return (nQuads << (int)triangulate) + nCenter;
 }
 
 int
@@ -2028,8 +2028,8 @@ Tessellation::initialize(Parameterization const & p,
 
     _param = p;
 
-    _facetSize   = options.GetFacetSize();
-    _facetStride = options.GetFacetStride() ? 
+    _facetSize   = (short) options.GetFacetSize();
+    _facetStride = options.GetFacetStride() ?
                    options.GetFacetStride() : options.GetFacetSize();
 
     _coordStride = options.GetCoordStride() ? options.GetCoordStride() : 2;
@@ -2116,7 +2116,7 @@ Tessellation::initializeRates(int numGivenRates, int const givenRates[]) {
         _isUniform = true;
         for (int i = 0; i < N; ++i) {
             _outerRates[i] = std::min(givenRates[i], MaxRate);
-            _isUniform &= (_outerRates[i] == _outerRates[0]);
+            _isUniform = _isUniform && (_outerRates[i] == _outerRates[0]);
             totalEdgeRate += _outerRates[i];
         }
 
@@ -2127,8 +2127,8 @@ Tessellation::initializeRates(int numGivenRates, int const givenRates[]) {
             _innerRates[1] = ((numGivenRates == 6) && isQuad)
                            ? std::min(givenRates[5], MaxRate) : _innerRates[0];
 
-            _isUniform &= (_innerRates[0] == _outerRates[0]);
-            _isUniform &= (_innerRates[1] == _outerRates[0]);
+            _isUniform = _isUniform && (_innerRates[0] == _outerRates[0]);
+            _isUniform = _isUniform && (_innerRates[1] == _outerRates[0]);
         } else if (isQuad) {
             //  Infer two inner rates for quads (avg of opposite edges):
             _innerRates[0] = (_outerRates[0] + _outerRates[2]) / 2;
@@ -2426,7 +2426,7 @@ Tessellation::TransformFacetIndices(int facetIndices[],
                                     int commonOffset) {
 
     for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
-        for (int j = 0; j < _facetSize; ++j) {
+        for (int j = 0; j < (int)_facetSize; ++j) {
             int & index = facetIndices[j];
             if (index >= 0) {
                 index += commonOffset;
@@ -2440,7 +2440,7 @@ Tessellation::TransformFacetIndices(int facetIndices[],
                                     int boundaryOffset, int interiorOffset) {
 
     for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
-        for (int j = 0; j < _facetSize; ++j) {
+        for (int j = 0; j < (int)_facetSize; ++j) {
             int & index = facetIndices[j];
             if (index >= 0) {
                 index += (index < _numBoundaryPoints)
@@ -2457,7 +2457,7 @@ Tessellation::TransformFacetIndices(int facetIndices[],
                                     int interiorOffset) {
 
     for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
-        for (int j = 0; j < _facetSize; ++j) {
+        for (int j = 0; j < (int)_facetSize; ++j) {
             int & index = facetIndices[j];
             if (index >= 0) {
                 index = (index < _numBoundaryPoints)
@@ -2474,7 +2474,7 @@ Tessellation::TransformFacetIndices(int facetIndices[],
                                     int const interiorIndices[]) {
 
     for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
-        for (int j = 0; j < _facetSize; ++j) {
+        for (int j = 0; j < (int)_facetSize; ++j) {
             int & index = facetIndices[j];
             if (index >= 0) {
                 index = (index < _numBoundaryPoints)
