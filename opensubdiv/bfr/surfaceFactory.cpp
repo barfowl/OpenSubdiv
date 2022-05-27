@@ -699,8 +699,8 @@ SurfaceFactory::assignRegularSurface(Surface * surfacePtr,
     //  Assemble the regular patch:
     //
     surface._regPatchType = RegularPatchBuilder::GetPatchType(_regFaceSize);
-    surface._regPatchMask = RegularPatchBuilder::GetBoundaryMask(_regFaceSize,
-                                                                 patchPoints);
+    surface._regPatchMask = (unsigned char)
+            RegularPatchBuilder::GetBoundaryMask(_regFaceSize, patchPoints);
 
     //
     //  Copy the patch control points from the given indices:
@@ -751,7 +751,7 @@ SurfaceFactory::assignRegularSurface(Surface * surfacePtr,
     RegularPatchBuilder builder(descriptor);
 
     surface._regPatchType = builder.GetPatchType();
-    surface._regPatchMask = builder.GetPatchParamBoundaryMask();
+    surface._regPatchMask = (unsigned char) builder.GetPatchParamBoundaryMask();
 
     //
     //  Gather the patch control points from the given indices:
