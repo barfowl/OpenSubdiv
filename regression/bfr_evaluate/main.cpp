@@ -658,7 +658,6 @@ testMesh(Far::TopologyRefiner      const & mesh,
         surfaceOptions.SetApproxLevelSmooth(args.depthSmooth);
     }
     surfaceOptions.SetDefaultFVarID(0);
-    surfaceOptions.SetSurfacePrecision<REAL>();
     surfaceOptions.EnableInternalCache(!args.noCacheFlag);
 
     BfrSurfaceEvaluator<REAL> bfrEval(mesh, meshPos, meshUVs, surfaceOptions);

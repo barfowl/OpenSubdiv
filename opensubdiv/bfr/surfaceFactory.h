@@ -114,7 +114,6 @@ public:
     //
     //      - a default identifier to use for face-varying surfaces
     //      - caching of intermediate topological results
-    //      - precision of internal surface representations (float, double)
     //      - parameters for approximating the limit surface
     //  
     //  Choices for caching behavior include disabling all caching, the
@@ -130,8 +129,7 @@ public:
     //
     class Options {
     public:
-        Options() : _dfltFVarID(-1), _sharedCache(0),
-                    _enableCache(true), _useDoublePrecision(false),
+        Options() : _dfltFVarID(-1), _sharedCache(0), _enableCache(true),
                     _approxLevelSmooth(2), _approxLevelSharp(6) { }
 
         //  Assign the default face-varying ID (no valid default):
@@ -145,10 +143,6 @@ public:
         //  Assign a shared cache between multiple Factories:
         void SetSharedCache(SurfaceFactoryCache * c) { _sharedCache = c; }
         SurfaceFactoryCache * GetSharedCache() const { return _sharedCache; }
-
-        //  Assign precision of internal surface representations:
-        template <typename REAL> void SetSurfacePrecision();
-        template <typename REAL> bool IsSurfacePrecision() const;
 
         //  Set refinement levels used to approximate the limit surface
         //  for smooth and sharp features (reasonable defaults assigned):
@@ -164,8 +158,7 @@ public:
 
         SurfaceFactoryCache * _sharedCache;
 
-        unsigned char _enableCache        : 1;
-        unsigned char _useDoublePrecision : 1;
+        unsigned char _enableCache : 1;
         unsigned char _approxLevelSmooth;
         unsigned char _approxLevelSharp;
     };
@@ -223,16 +216,24 @@ public:
     //  First, methods to create or initialize instances of a Surface for
     //  eac of the three different data interpolation types:
     //
-    Surface * CreateVertexSurface(     Index faceIndex) const;
-    Surface * CreateVaryingSurface(    Index faceIndex) const;
-    Surface * CreateFaceVaryingSurface(Index faceIndex) const;
-    Surface * CreateFaceVaryingSurface(Index faceIndex, FVarID fvarID) const;
+    template <typename REAL>
+    Surface<REAL> * CreateVertexSurface(     Index faceIndex) const;
+    template <typename REAL>
+    Surface<REAL> * CreateVaryingSurface(    Index faceIndex) const;
+    template <typename REAL>
+    Surface<REAL> * CreateFaceVaryingSurface(Index faceIndex) const;
+    template <typename REAL>
+    Surface<REAL> * CreateFaceVaryingSurface(Index faceIndex, FVarID id) const;
 
-    bool InitVertexSurface(     Index faceIndex, Surface * vtxSurface) const;
-    bool InitVaryingSurface(    Index faceIndex, Surface * varSurface) const;
-    bool InitFaceVaryingSurface(Index faceIndex, Surface * fvarSurface) const;
-    bool InitFaceVaryingSurface(Index faceIndex, Surface * fvarSurface,
-                                                 FVarID    fvarID) const;
+    template <typename REAL>
+    bool InitVertexSurface(     Index faceIndex, Surface<REAL> * surface) const;
+    template <typename REAL>
+    bool InitVaryingSurface(    Index faceIndex, Surface<REAL> * surface) const;
+    template <typename REAL>
+    bool InitFaceVaryingSurface(Index faceIndex, Surface<REAL> * surface) const;
+    template <typename REAL>
+    bool InitFaceVaryingSurface(Index faceIndex, Surface<REAL> * surface,
+                                                 FVarID          fvarID) const;
 
     //
     //  Second, a single general method to initialize several Surfaces at
@@ -251,15 +252,17 @@ public:
     //
     //  WIP - overloads and alternative interfaces are under consideration
     //
-    bool InitSurfaces(Index faceIndex, Surface * vtxSurface,
-                                       Surface * varSurface,
-                                       Surface * fvarSurface) const;
+    template <typename REAL>
+    bool InitSurfaces(Index faceIndex, Surface<REAL> * vtxSurface,
+                                       Surface<REAL> * varSurface,
+                                       Surface<REAL> * fvarSurface) const;
 
-    bool InitSurfaces(Index faceIndex, Surface    * vtxSurface,
-                                       Surface    * varSurface,
-                                       Surface    * fvarSurfaces,
-                                       int          fvarCount,
-                                       FVarID const fvarIDs[] = 0) const;
+    template <typename REAL>
+    bool InitSurfaces(Index faceIndex, Surface<REAL> * vtxSurface,
+                                       Surface<REAL> * varSurface,
+                                       Surface<REAL> * fvarSurfaces,
+                                       int             fvarCount,
+                                       FVarID const    fvarIDs[] = 0) const;
 
 protected:
     //
@@ -429,21 +432,23 @@ private:
                                       Index                indices[]) const;
 
     //  Methods to assemble Surfaces for the different categories of patch:
-    void assignLinearSurface(Surface *      surfacePtr,
+    typedef internal::SurfaceData SurfaceType;
+
+    void assignLinearSurface(SurfaceType  * surfacePtr,
                              Index          faceIndex,
                              FVarID const * fvarPtrOrVtx) const;
 
-    void assignRegularSurface(Surface     * surfacePtr,
+    void assignRegularSurface(SurfaceType * surfacePtr,
                               Index const   surfacePatchPoints[]) const;
 
-    void assignRegularSurface(Surface           * surfacePtr,
+    void assignRegularSurface(SurfaceType       * surfacePtr,
                               FaceSurface const & surfaceDescription) const;
 
-    void assignIrregularSurface(Surface           * surfacePtr,
+    void assignIrregularSurface(SurfaceType       * surfacePtr,
                                 FaceSurface const & surfaceDescription) const;
 
-    void copyNonLinearSurface(Surface           * surfacePtr,
-                              Surface const     & surfaceSource,
+    void copyNonLinearSurface(SurfaceType       * surfacePtr,
+                              SurfaceType const & surfaceSource,
                               FaceSurface const & surfaceDescription) const;
 
     //  Methods for dealing with optional cache:
@@ -479,49 +484,54 @@ SurfaceFactory::Options::SetApproxLevelSharp(int level) {
     _approxLevelSharp = (unsigned char) level;
 }
 
-template <>
-inline void
-SurfaceFactory::Options::SetSurfacePrecision<float>() {
-    _useDoublePrecision = false;
-}
-template <>
-inline void
-SurfaceFactory::Options::SetSurfacePrecision<double>() {
-    _useDoublePrecision = true;
-}
-
-template <>
-inline bool
-SurfaceFactory::Options::IsSurfacePrecision<float>() const {
-    return !_useDoublePrecision;
-}
-template <>
-inline bool
-SurfaceFactory::Options::IsSurfacePrecision<double>() const {
-    return _useDoublePrecision;
-}
-
 //
 //  Inline methods:
 //
-inline Surface *
+template <typename REAL>
+inline bool
+SurfaceFactory::InitFaceVaryingSurface(Index face, Surface<REAL> * s) const {
+    FVarID dfltID = _limitOptions.GetDefaultFVarID();
+    return InitFaceVaryingSurface<REAL>(face, s, dfltID);
+}
+
+template <typename REAL>
+inline Surface<REAL> *
+SurfaceFactory::CreateVertexSurface(Index faceIndex) const {
+    Surface<REAL> * s = new Surface<REAL>();
+    if (InitVertexSurface<REAL>(faceIndex, s)) return s;
+    delete s;
+    return 0;
+}
+template <typename REAL>
+inline Surface<REAL> *
+SurfaceFactory::CreateVaryingSurface(Index faceIndex) const {
+    Surface<REAL> * s = new Surface<REAL>();
+    if (InitVaryingSurface<REAL>(faceIndex, s)) return s;
+    delete s;
+    return 0;
+}
+template <typename REAL>
+inline Surface<REAL> *
+SurfaceFactory::CreateFaceVaryingSurface(Index faceIndex, FVarID fvarID) const {
+    Surface<REAL> * s = new Surface<REAL>();
+    if (InitFaceVaryingSurface<REAL>(faceIndex, s, fvarID)) return s;
+    delete s;
+    return 0;
+}
+template <typename REAL>
+inline Surface<REAL> *
 SurfaceFactory::CreateFaceVaryingSurface(Index face) const {
-    return CreateFaceVaryingSurface(face, _limitOptions.GetDefaultFVarID());
+    FVarID dfltID = _limitOptions.GetDefaultFVarID();
+    return CreateFaceVaryingSurface<REAL>(face, dfltID);
 }
 
+template <typename REAL>
 inline bool
-SurfaceFactory::InitFaceVaryingSurface(Index face, Surface * s) const {
-    return InitFaceVaryingSurface(face, s, _limitOptions.GetDefaultFVarID());
-}
-
-inline bool
-SurfaceFactory::InitSurfaces(Index face, Surface * vtxSurface,
-                                         Surface * varSurface,
-                                         Surface * fvarSurface) const {
-
-    FVarID fvarID = _limitOptions.GetDefaultFVarID();
-
-    return InitSurfaces(face, vtxSurface, varSurface, fvarSurface, 1, &fvarID);
+SurfaceFactory::InitSurfaces(Index face, Surface<REAL> * vtxSurface,
+                                         Surface<REAL> * varSurface,
+                                         Surface<REAL> * fvarSurface) const {
+    FVarID dfltID = _limitOptions.GetDefaultFVarID();
+    return InitSurfaces(face, vtxSurface, varSurface, fvarSurface, 1, &dfltID);
 }
 
 } // end namespace Bfr

@@ -75,10 +75,12 @@ public:
     int numSurfs;
     int numFVarSurfs;
 
-    Surface  * vtxSurf;
-    Surface  * varSurf;
-    Surface  * fvarSurfs;
-    Surface ** fvarSurfPtrs;
+    typedef internal::SurfaceData SurfaceType;
+
+    SurfaceType  * vtxSurf;
+    SurfaceType  * varSurf;
+    SurfaceType  * fvarSurfs;
+    SurfaceType ** fvarSurfPtrs;
 
     FVarID const * fvarIDs;
 
@@ -95,20 +97,22 @@ public:
     //  which may require a little more logic than expected:
     int GetNumSurfaces() const { return numSurfs; }
 
-    bool      HasVertexSurface() const { return (vtxSurf != 0); }
-    Surface * GetVertexSurface() const { return vtxSurf; }
+    bool          HasVertexSurface() const { return (vtxSurf != 0); }
+    SurfaceType * GetVertexSurface() const { return vtxSurf; }
 
-    bool      HasVaryingSurface() const { return (varSurf != 0); }
-    Surface * GetVaryingSurface() const { return varSurf; }
+    bool          HasVaryingSurface() const { return (varSurf != 0); }
+    SurfaceType * GetVaryingSurface() const { return varSurf; }
 
-    bool      HasFVarSurfaces()    const { return numFVarSurfs > 0; }
-    int       GetNumFVarSurfaces() const { return numFVarSurfs; }
+    //  More than one FVar surface may be present, and each may have
+    //  a unique ID:
+    bool HasFVarSurfaces()    const { return numFVarSurfs > 0; }
+    int  GetNumFVarSurfaces() const { return numFVarSurfs; }
 
     FVarID GetFVarSurfaceID(int i) const {
         return fvarIDs ? fvarIDs[i] : FVarID(i);
     }
 
-    Surface * GetFVarSurface(int i)   const {
+    SurfaceType * GetFVarSurface(int i)   const {
         //  Note that FVar Surfaces may be specified either as an
         //  array of Surfaces or an array of Surface pointers:
         return fvarSurfs ? (fvarSurfs + i) : fvarSurfPtrs[i];
@@ -335,7 +339,7 @@ namespace {
     //
     bool
     packTopologyKey(FaceSurface const & surface,
-                    SurfaceFactory::Options options,
+                    IrregularPatchBuilder::Options options,
                     KeyIntType * keyValue) {
         //
         //  Keep the bitfield struct local in scope unless needed elsewhere:
@@ -439,9 +443,9 @@ namespace {
         KeyBits keyBits;
 
         keyBits.subdScheme  = surface.GetSdcScheme();
-        keyBits.sharpLevel  = options.GetApproxLevelSharp();
-        keyBits.smoothLevel = options.GetApproxLevelSmooth();
-        keyBits.usesDouble  = options.IsSurfacePrecision<double>();
+        keyBits.sharpLevel  = options.sharpLevel;
+        keyBits.smoothLevel = options.smoothLevel;
+        keyBits.usesDouble  = options.doublePrecision;
 
         keyBits.v0Valence        = subsets[0]._numFacesTotal;
         keyBits.v0IsSharp        = subsets[0].IsSharp();
@@ -476,7 +480,7 @@ namespace {
     //
     bool
     hashTopologyKey(FaceSurface const & surface,
-                    SurfaceFactory::Options options,
+                    IrregularPatchBuilder::Options options,
                     KeyIntType * keyValue) {
 
         //
@@ -567,9 +571,9 @@ namespace {
         sHeader.subdScheme    = surface.GetSdcScheme();
         sHeader.subdCreasing  = subdOptions.GetCreasingMethod();
         sHeader.subdTriSmooth = subdOptions.GetTriangleSubdivision();
-        sHeader.sharpLevel    = options.GetApproxLevelSharp();
-        sHeader.smoothLevel   = options.GetApproxLevelSmooth();
-        sHeader.usesDouble    = options.IsSurfacePrecision<double>();
+        sHeader.sharpLevel    = options.sharpLevel;
+        sHeader.smoothLevel   = options.smoothLevel;
+        sHeader.usesDouble    = options.doublePrecision;
 
         std::memcpy(hashBuffer, &sHeader, sizeof(sHeader));
 
@@ -640,80 +644,77 @@ namespace {
 //  Methods supporting construction of linear, regular and irregular patches:
 //
 void
-SurfaceFactory::assignLinearSurface(Surface * surfacePtr,
+SurfaceFactory::assignLinearSurface(SurfaceType * surfacePtr,
         Index faceIndex, FVarID const * fvarPtrOrVtx) const {
 
-    Surface & surface = *surfacePtr;
+    SurfaceType & surface = *surfacePtr;
 
     //  Initialize instance members from the associated irregular patch:
     int faceSize  = getFaceSize(faceIndex);
 
-    surface._param = Parameterization(_schemeType, faceSize);
+    surface.setParam(Parameterization(_schemeType, faceSize));
 
-    surface._isRegular = (faceSize == _regFaceSize);
-    surface._isLinear  = true;
-    surface._useDouble = _limitOptions.IsSurfacePrecision<double>();
+    surface.setRegular(faceSize == _regFaceSize);
+    surface.setLinear(true);
 
-    surface._regPatchMask = 0;
-    surface._regPatchType = (_regFaceSize == 4)
-                       ?  Far::PatchDescriptor::QUADS
-                       :  Far::PatchDescriptor::TRIANGLES;
+    surface.setRegPatchMask(0);
+    if (_regFaceSize == 4) {
+        surface.setRegPatchType(Far::PatchDescriptor::QUADS);
+    } else {
+        surface.setRegPatchType(Far::PatchDescriptor::TRIANGLES);
+    }
 
     //
     //  Finally, gather patch control points from the appropriate indices:
     //
-    surface._controlPoints.SetSize(faceSize);
+    Index * surfaceCVs = surface.resizeCVs(faceSize);
 
     int count = 0;
     if (fvarPtrOrVtx == 0) {
-        count = getFaceVertexIndices(faceIndex, &surface._controlPoints[0]);
+        count = getFaceVertexIndices(faceIndex, surfaceCVs);
     } else {
-        count = getFaceFVarValueIndices(faceIndex, *fvarPtrOrVtx,
-                                        &surface._controlPoints[0]);
+        count = getFaceFVarValueIndices(faceIndex, *fvarPtrOrVtx, surfaceCVs);
     }
     //  If subclass fails to get indices, Surface will remain invalid
     if (count < faceSize) return;
 
-    surface._isValid = true;
+    surface.setValid(true);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numLinearPatches ++;
 #endif
 }
 
 void
-SurfaceFactory::assignRegularSurface(Surface * surfacePtr,
+SurfaceFactory::assignRegularSurface(SurfaceType * surfacePtr,
         Index const patchPoints[]) const {
 
-    Surface & surface = *surfacePtr;
+    SurfaceType & surface = *surfacePtr;
 
     //
     //  Assign the parameterization and discriminants first:
     //
-    surface._param = Parameterization(_schemeType, _regFaceSize);
+    surface.setParam(Parameterization(_schemeType, _regFaceSize));
 
-    surface._isRegular = true;
-    surface._isLinear  = false;
-    surface._useDouble = _limitOptions.IsSurfacePrecision<double>();
+    surface.setRegular(true);
+    surface.setLinear(false);
 
     //
     //  Assemble the regular patch:
     //
-    surface._regPatchType = RegularPatchBuilder::GetPatchType(_regFaceSize);
-    surface._regPatchMask = (unsigned char)
-            RegularPatchBuilder::GetBoundaryMask(_regFaceSize, patchPoints);
+    surface.setRegPatchType(RegularPatchBuilder::GetPatchType(_regFaceSize));
+    surface.setRegPatchMask(RegularPatchBuilder::GetBoundaryMask(_regFaceSize,
+                                                                  patchPoints));
 
     //
     //  Copy the patch control points from the given indices:
     //
     int patchSize = RegularPatchBuilder::GetPatchSize(_regFaceSize);
 
-    surface._controlPoints.SetSize(patchSize);
-
     Index const * pSrc = patchPoints;
-    Index       * pDst = &surface._controlPoints[0];
+    Index       * pDst = surface.resizeCVs(patchSize);
 
     //  Remember to replace negative indices in boundary patches:
-    if (surface._regPatchMask == 0) {
+    if (surface.getRegPatchMask() == 0) {
         std::memcpy(pDst, pSrc, patchSize * sizeof(Index));
     } else {
         //  Consider delegating this task to the RegularPatchBuilder:
@@ -724,61 +725,59 @@ SurfaceFactory::assignRegularSurface(Surface * surfacePtr,
         }
     }
 
-    surface._isValid = true;
+    surface.setValid(true);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numExpRegularPatches ++;
 #endif
 }
 
 void
-SurfaceFactory::assignRegularSurface(Surface * surfacePtr,
+SurfaceFactory::assignRegularSurface(SurfaceType * surfacePtr,
         FaceSurface const & descriptor) const {
 
-    Surface & surface = *surfacePtr;
+    SurfaceType & surface = *surfacePtr;
 
     //
     //  Assign the parameterization and discriminants first:
     //
-    surface._param = Parameterization(_schemeType, _regFaceSize);
+    surface.setParam(Parameterization(_schemeType, _regFaceSize));
 
-    surface._isRegular = true;
-    surface._isLinear  = false;
-    surface._useDouble = _limitOptions.IsSurfacePrecision<double>();
+    surface.setRegular(true);
+    surface.setLinear(false);
 
     //
     //  Assemble the regular patch:
     //
     RegularPatchBuilder builder(descriptor);
 
-    surface._regPatchType = builder.GetPatchType();
-    surface._regPatchMask = (unsigned char) builder.GetPatchParamBoundaryMask();
+    surface.setRegPatchType(builder.GetPatchType());
+    surface.setRegPatchMask(builder.GetPatchParamBoundaryMask());
 
     //
     //  Gather the patch control points from the given indices:
     //
-    surface._controlPoints.SetSize(builder.GetNumControlVertices());
-    builder.GatherControlVertexIndices(&surface._controlPoints[0]);
+    builder.GatherControlVertexIndices(
+            surface.resizeCVs(builder.GetNumControlVertices()));
 
-    surface._isValid = true;
+    surface.setValid(true);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numRegularPatches ++;
 #endif
 }
 
 void
-SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
+SurfaceFactory::assignIrregularSurface(SurfaceType * surfacePtr,
         FaceSurface const & descriptor) const {
 
-    Surface & surface = *surfacePtr;
+    SurfaceType & surface = *surfacePtr;
 
     //
     //  Assign the parameterization and discriminants first:
     //
-    surface._param = Parameterization(_schemeType, descriptor.GetFaceSize());
+    surface.setParam(Parameterization(_schemeType, descriptor.GetFaceSize()));
 
-    surface._isRegular = false;
-    surface._isLinear  = false;
-    surface._useDouble = _limitOptions.IsSurfacePrecision<double>();
+    surface.setRegular(false);
+    surface.setLinear(false);
 
     //
     //  Construct a new irregular patch or identify one from the cache:
@@ -788,12 +787,12 @@ SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
     IrregularPatchBuilder::Options buildOptions;
     buildOptions.sharpLevel      = _limitOptions.GetApproxLevelSharp();
     buildOptions.smoothLevel     = _limitOptions.GetApproxLevelSmooth();
-    buildOptions.doublePrecision = _limitOptions.IsSurfacePrecision<double>();
+    buildOptions.doublePrecision = surface.isDouble();
 
     IrregularPatchBuilder builder(descriptor, buildOptions);
 
     //  Retrieve an irregular patch representation from cache if possible:
-    surface._irregPatch = 0;
+    surface.setIrregPatch(0);
 
     SurfaceFactoryCache * cache = getAssignedCache();
     if (cache) {
@@ -801,10 +800,10 @@ SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
         SurfaceFactoryCache::Key key;
         SurfaceFactoryCache::Key::IntType keyValue = 0;
 
-        if (packTopologyKey(descriptor, _limitOptions, &keyValue)) {
+        if (packTopologyKey(descriptor, buildOptions, &keyValue)) {
             key.SetFormat(SurfaceFactoryCache::Key::BITFIELDS);
             key.SetValue(keyValue);
-        } else if (hashTopologyKey(descriptor, _limitOptions, &keyValue)) {
+        } else if (hashTopologyKey(descriptor, buildOptions, &keyValue)) {
             key.SetFormat(SurfaceFactoryCache::Key::HASHED);
             key.SetValue(keyValue);
         }
@@ -813,7 +812,7 @@ SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
         if (key.IsValid()) {
             PatchType const * patchFound = cache->Find(key);
             if (patchFound) {
-                surface._irregPatch = patchFound;
+                surface.setIrregPatch(patchFound);
             } else {
                 //  Add a new patch to the cache. Beware that another thread
                 //  may have added the same patch while it was being built.
@@ -821,85 +820,82 @@ SurfaceFactory::assignIrregularSurface(Surface * surfacePtr,
                 PatchType const * patchCreated = builder.Build();
                 PatchType const * patchAdded   = cache->Add(key, patchCreated);
 
-                surface._irregPatch = patchAdded;
+                surface.setIrregPatch(patchAdded);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numIrregularInCache += (patchAdded == patchCreated);
 #endif
                 if (patchAdded != patchCreated) delete patchCreated;
             }
-            surface._irregOwner = false;
+            surface.setIrregPatchOwner(false);
         }
     }
 
     //  If no patch found in or created for the cache, create it now:
-    if (surface._irregPatch == 0) {
-        surface._irregPatch = builder.Build();
-        surface._irregOwner = true;
+    if (!surface.hasIrregPatch()) {
+        surface.setIrregPatch(builder.Build());
+        surface.setIrregPatchOwner(true);
     }
 
     //  Gather the patch control points from the given indices:
-    surface._controlPoints.SetSize(surface._irregPatch->GetNumControlPoints());
-    builder.GatherControlVertexIndices(&surface._controlPoints[0]);
+    builder.GatherControlVertexIndices(
+            surface.resizeCVs(surface.getIrregPatch()->GetNumControlPoints()));
 
-    surface._isValid = true;
+    surface.setValid(true);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numIrregularPatches  ++;
-__numIrregularUncached += surface._irregOwner;
+__numIrregularUncached += surface.ownsIrregPatch();
 #endif
 }
 
 void
 SurfaceFactory::copyNonLinearSurface(
-        Surface           * surfaceDstPtr,
-        Surface const     & surfaceSrc,
+        SurfaceType       * surfaceDstPtr,
+        SurfaceType const & surfaceSrc,
         FaceSurface const & descriptor) const {
 
-    Surface & surfaceDst = *surfaceDstPtr;
+    SurfaceType & surfaceDst = *surfaceDstPtr;
 
     //  Should be creating a linear patch directly rather than copying:
-    assert(!surfaceSrc._isLinear);
+    assert(!surfaceSrc.isLinear());
 
     //
     //  Assign the topological fields of the patch first:
     //
-    surfaceDst._param = surfaceSrc._param;
+    surfaceDst.setParam(surfaceSrc.getParam());
 
-    surfaceDst._isLinear  = false;
-    surfaceDst._isRegular = surfaceSrc._isRegular;
-    surfaceDst._useDouble = surfaceSrc._useDouble;
+    surfaceDst.setLinear(surfaceSrc.isLinear());
+    surfaceDst.setRegular(surfaceSrc.isRegular());
 
-    surfaceDst._controlPoints.SetSize(surfaceSrc._controlPoints.GetSize());
+    surfaceDst.resizeCVs(surfaceSrc.getNumCVs());
 
     //
     //  Assign regular/irregular fields and gather control points:
     //
-    if (surfaceDst._isRegular) {
-        surfaceDst._regPatchType = surfaceSrc._regPatchType;
-        surfaceDst._regPatchMask = surfaceSrc._regPatchMask;
+    if (surfaceDst.isRegular()) {
+        surfaceDst.setRegPatchType(surfaceSrc.getRegPatchType());
+        surfaceDst.setRegPatchMask(surfaceSrc.getRegPatchMask());
 
         RegularPatchBuilder builder(descriptor);
-        assert(builder.GetNumControlVertices() ==
-                surfaceDst.GetNumControlVertices());
+        assert(builder.GetNumControlVertices() == surfaceDst.getNumCVs());
 
-        builder.GatherControlVertexIndices(&surfaceDst._controlPoints[0]);
+        builder.GatherControlVertexIndices(surfaceDst.getCVIndices());
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numRegularPatches ++;
 #endif
     } else {
-        surfaceDst._irregPatch = surfaceSrc._irregPatch;
-        surfaceDst._irregOwner = false;
+        surfaceDst.setIrregPatch(surfaceSrc.getIrregPatch());
+        surfaceDst.setIrregPatchOwner(false);
 
         IrregularPatchBuilder builder(descriptor);
-        assert(builder.GetNumControlVertices() ==
-                surfaceDst.GetNumControlVertices());
+        assert(builder.GetNumControlVertices() == surfaceDst.getNumCVs());
 
-        builder.GatherControlVertexIndices(&surfaceDst._controlPoints[0]);
+        builder.GatherControlVertexIndices(surfaceDst.getCVIndices());
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numIrregularPatches  ++;
 #endif
     }
 
-    surfaceDst._isValid = true;
+    surfaceDst.setValid(true);
 }
 
 
@@ -1165,7 +1161,7 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
     //
     bool vtxSurfIsValid = false;
     if (vtxIsNonLinear) {
-        Surface & vtxSurf = *surfaces.GetVertexSurface();
+        SurfaceType & vtxSurf = *surfaces.GetVertexSurface();
 
         if (vtxIsExplicitlyRegular) {
             assignRegularSurface(&vtxSurf, vtxIndices);
@@ -1174,7 +1170,7 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
         } else {
             assignIrregularSurface(&vtxSurf, vtxSurfDesc);
         }
-        vtxSurfIsValid = vtxSurf.IsValid();
+        vtxSurfIsValid = vtxSurf.isValid();
     }
 
     //
@@ -1197,8 +1193,8 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
 
         int numFVarSurfaces = surfaces.GetNumFVarSurfaces();
         for (int i = 0; i < numFVarSurfaces; ++i) {
-            Surface & fvarSurf = *surfaces.GetFVarSurface(i);
-            FVarID    fvarID   =  surfaces.GetFVarSurfaceID(i);
+            SurfaceType & fvarSurf = *surfaces.GetFVarSurface(i);
+            FVarID        fvarID   =  surfaces.GetFVarSurfaceID(i);
 
             //  First check if trivially regular, quickly assign and continue:
             bool fvarIsExplicitlyRegular = vtxIsExplicitlyRegular &&
@@ -1244,9 +1240,10 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
 //
 //  Public creation methods for instances of Surface:
 //
+template <typename REAL>
 bool
 SurfaceFactory::InitVertexSurface(Index faceIndex,
-        Surface * vtxSurface) const {
+        Surface<REAL> * vtxSurface) const {
 
     assert(vtxSurface);
     //
@@ -1254,15 +1251,16 @@ SurfaceFactory::InitVertexSurface(Index faceIndex,
     //
     SurfaceSet surfaces;
 
-    surfaces.vtxSurf  = vtxSurface;
+    surfaces.vtxSurf  = &vtxSurface->getSurfaceData();
     surfaces.numSurfs = 1;
 
     return populateAllSurfaces(faceIndex, &surfaces);
 }
 
+template <typename REAL>
 bool
 SurfaceFactory::InitVaryingSurface(Index faceIndex,
-        Surface * varSurface) const {
+        Surface<REAL> * varSurface) const {
 
     assert(varSurface);
     //
@@ -1270,15 +1268,16 @@ SurfaceFactory::InitVaryingSurface(Index faceIndex,
     //
     SurfaceSet surfaces;
 
-    surfaces.varSurf  = varSurface;
+    surfaces.varSurf  = &varSurface->getSurfaceData();
     surfaces.numSurfs = 1;
 
     return populateAllSurfaces(faceIndex, &surfaces);
 }
 
+template <typename REAL>
 bool
 SurfaceFactory::InitFaceVaryingSurface(Index faceIndex,
-        Surface * fvarSurface, FVarID fvarID) const {
+        Surface<REAL> * fvarSurface, FVarID fvarID) const {
 
     assert(fvarSurface);
     //
@@ -1286,7 +1285,7 @@ SurfaceFactory::InitFaceVaryingSurface(Index faceIndex,
     //
     SurfaceSet surfaces;
 
-    surfaces.fvarSurfs    =  fvarSurface;
+    surfaces.fvarSurfs    = &fvarSurface->getSurfaceData();
     surfaces.fvarIDs      = &fvarID;
     surfaces.numSurfs     = 1;
     surfaces.numFVarSurfs = 1;
@@ -1294,19 +1293,26 @@ SurfaceFactory::InitFaceVaryingSurface(Index faceIndex,
     return populateAllSurfaces(faceIndex, &surfaces);
 }
 
+template <typename REAL>
 bool
 SurfaceFactory::InitSurfaces(Index faceIndex,
-        Surface    * vtxSurface,
-        Surface    * varSurface,
-        Surface    * fvarSurfaces,
-        int          fvarCount,
-        FVarID const fvarIDs[]) const {
+        Surface<REAL> * vtxSurface,
+        Surface<REAL> * varSurface,
+        Surface<REAL> * fvarSurfaces,
+        int             fvarCount,
+        FVarID const    fvarIDs[]) const {
 
     SurfaceSet surfaces;
 
-    surfaces.vtxSurf   = vtxSurface;
-    surfaces.varSurf   = varSurface;
-    surfaces.fvarSurfs = fvarSurfaces;
+    surfaces.vtxSurf = &vtxSurface->getSurfaceData();
+    surfaces.varSurf = &varSurface->getSurfaceData();
+
+    //  Note the SurfaceData for the first FVar Surface<REAL> is assumed to
+    //  be the head of an array of SurfaceData, which will not be true if
+    //  additional members are added to Surface<REAL> in future:
+    assert(sizeof(internal::SurfaceData) == sizeof(Surface<REAL>));
+
+    surfaces.fvarSurfs = &fvarSurfaces[0].getSurfaceData();
     surfaces.fvarIDs   = &fvarIDs[0];
 
     surfaces.numFVarSurfs = fvarCount;
@@ -1315,38 +1321,36 @@ SurfaceFactory::InitSurfaces(Index faceIndex,
     return populateAllSurfaces(faceIndex, &surfaces);
 }
 
-Surface *
-SurfaceFactory::CreateVertexSurface(Index faceIndex) const {
+//
+//  Explicit instantiation of the preceding template methods:
+//
+template bool
+SurfaceFactory::InitVertexSurface<float>(
+        Index, Surface<float> *) const;
+template bool
+SurfaceFactory::InitVaryingSurface<float>(
+        Index, Surface<float> *) const;
+template bool
+SurfaceFactory::InitFaceVaryingSurface<float>(
+        Index, Surface<float> *, FVarID fvarID) const;
+template bool
+SurfaceFactory::InitSurfaces<float>(
+        Index, Surface<float> *, Surface<float> *, Surface<float> *,
+        int, FVarID const fvarIDs[]) const;
 
-    Surface * s = new Surface();
-
-    if (InitVertexSurface(faceIndex, s)) return s;
-
-    delete s;
-    return 0;
-}
-
-Surface *
-SurfaceFactory::CreateVaryingSurface(Index faceIndex) const {
-
-    Surface * s = new Surface();
-
-    if (InitVaryingSurface(faceIndex, s)) return s;
-
-    delete s;
-    return 0;
-}
-
-Surface *
-SurfaceFactory::CreateFaceVaryingSurface(Index faceIndex, FVarID fvarID) const {
-
-    Surface * s = new Surface();
-
-    if (InitFaceVaryingSurface(faceIndex, s, fvarID)) return s;
-
-    delete s;
-    return 0;
-}
+template bool
+SurfaceFactory::InitVertexSurface<double>(
+        Index, Surface<double> *) const;
+template bool
+SurfaceFactory::InitVaryingSurface<double>(
+        Index, Surface<double> *) const;
+template bool
+SurfaceFactory::InitFaceVaryingSurface<double>(
+        Index, Surface<double> *, FVarID fvarID) const;
+template bool
+SurfaceFactory::InitSurfaces<double>(
+        Index, Surface<double> *, Surface<double> *, Surface<double> *,
+        int, FVarID const fvarIDs[]) const;
 
 //
 //  Optional virtual topology queries:

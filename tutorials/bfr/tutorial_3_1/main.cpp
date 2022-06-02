@@ -24,11 +24,18 @@
 
 //
 //  Description:
-//      This tutorial illustrates the use of the new Bfr::Surface class --
-//      a hierarchical patch that defines the limit surface for the base face
-//      of a mesh.  Surfaces are implemented with the new Far::PatchTree
-//      class, which are topologically independent and can be cached and shared
-//      for use with all faces of the mesh that share the same topology.
+//      This tutorial builds on others using the SurfaceFactory, Surface
+//      and Tessellation classes by using more of the functionality of the
+//      Tessellation class to construct a tessellation of the mesh that is
+//      topologically watertight, i.e. resulting points evaluated along
+//      shared edges or vertices are shared and not duplicated.
+//
+//      Since Tessellation provides points around its boundary first, the
+//      evaluated points for shared vertices and edges are identified when
+//      constructed and reused when shared later. The boundary of the
+//      tessellation of a face is therefore a collection of shared points
+//      and methods of Tessellation help to remap the faces generated to
+//      the shared set of points.
 //
 
 #include "../../../regression/common/far_utils.h"
@@ -362,12 +369,16 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  Initialize an Obj writer locally for this mesh:
     ObjWriter objWriter(args.outputObjFile);
 
+    //  Use simpler type names locally for the Surface and its factory:
+    typedef Bfr::RefinerSurfaceFactory   SurfaceFactory;
+    typedef Bfr::Surface<float>          Surface;
+
     //
     //  Initialize specified evaluation options (none explicit here) and
-    //  declare buffers required by use of instances of Bfr::Surface
-    //  during evaluation (declared here to reuse memory for each face):
+    //  declare buffers required by use of instances of Surface during
+    //  evaluation (declared here to reuse memory for each face):
     //
-    Bfr::RefinerSurfaceFactory::Options surfaceOptions;
+    SurfaceFactory::Options surfaceOptions;
 
     std::vector<Vec3f> surfaceXYZPoints;
 
@@ -388,8 +399,8 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     std::vector<Vec3f> tessXYZ, tessDu, tessDv;
 
     //
-    //  Initialize the Bfr::SurfaceFactory for the given base mesh
-    //  (very low cost in terms of time and space) and tessellate each
+    //  Initialize the SurfaceFactory for the given base mesh (very
+    //  low cost in terms of time and space) and tessellate each
     //  face independently (i.e. no shared vertices):
     //
     //  Note that the SurfaceFactory is not thread-safe by default
@@ -398,7 +409,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  parallelize this loop.  Another (preferred) is to assign a
     //  thread-safe cache to the single instance.
     //
-    Bfr::RefinerSurfaceFactory surfaceFactory(baseMesh, surfaceOptions);
+    SurfaceFactory surfaceFactory(baseMesh, surfaceOptions);
 
     //
     //  Vectors to identify shared tessellation points at vertices and
@@ -420,8 +431,8 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     int numFaces = surfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
         //
-        //  Create/populate the Bfr::Surface for this face (if present,
-        //  i.e. skipping holes and designated boundary faces) and declare
+        //  Create/populate the Surface for this face (if present, i.e.
+        //  skipping holes and designated boundary faces) and declare
         //  the simple uniform Tessellation using its Parameterization:
         //
         //  (The position Surface can also first be used to evaluate points
@@ -431,7 +442,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  parameters can cause Tessellation construction to fail, so use
         //  an assert to catch programming errors.)
         //
-        Bfr::Surface posSurface;
+        Surface posSurface;
 
         if (!surfaceFactory.InitVertexSurface(faceIndex, &posSurface)) {
             continue;
@@ -453,7 +464,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
         //
         //  Assemble/resize the local buffer of points for the Surface
-        //  evaluation and reserve/clear buffers for the evaluated points:
+        //  evaluation and resize buffers for the evaluated points:
         //
         surfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
 

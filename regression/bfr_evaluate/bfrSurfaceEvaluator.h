@@ -39,6 +39,8 @@ using namespace OpenSubdiv::OPENSUBDIV_VERSION;
 template <typename REAL>
 class BfrSurfaceEvaluator {
 public:
+    typedef Bfr::Surface<REAL>           SurfaceType;
+
     typedef Bfr::RefinerSurfaceFactory   SurfaceFactory;
     typedef Bfr::SurfaceFactory::Options FactoryOptions;
 
@@ -61,13 +63,13 @@ public:
                   EvalResults<REAL>     & results) const;
 
 private:
-    void evaluateDirectly(Bfr::Surface    const & posSurface,
-                          Bfr::Surface    const & uvSurface,
+    void evaluateDirectly(SurfaceType     const & posSurface,
+                          SurfaceType     const & uvSurface,
                           TessCoordVector const & tessCoords,
                           EvalResults<REAL>     & results) const;
 
-    void evaluateByStencils(Bfr::Surface    const & posSurface,
-                            Bfr::Surface    const & uvSurface,
+    void evaluateByStencils(SurfaceType     const & posSurface,
+                            SurfaceType     const & uvSurface,
                             TessCoordVector const & tessCoords,
                             EvalResults<REAL>     & results) const;
 

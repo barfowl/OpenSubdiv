@@ -37,6 +37,7 @@ set(SOURCE_FILES
      refinerSurfaceFactory.cpp
      regularPatchBuilder.cpp
      surface.cpp
+     surfaceData.cpp
      surfaceFactory.cpp
      surfaceFactoryCache.cpp
      tessellation.cpp
@@ -60,6 +61,7 @@ set(PUBLIC_HEADER_FILES
      parameterization.h
      refinerSurfaceFactory.h
      surface.h
+     surfaceData.h
      surfaceFactory.h
      surfaceFactoryCache.h
      tessellation.h

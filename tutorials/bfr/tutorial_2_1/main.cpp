@@ -345,12 +345,16 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  Initialize an Obj writer locally for this mesh:
     ObjWriter objWriter(args.outputObjFile);
 
+    //  Use simpler type names locally for the Surface and its factory:
+    typedef SubclassOfSurfaceFactory     SurfaceFactory;
+    typedef Bfr::Surface<float>          Surface;
+
     //
     //  Initialize specified evaluation options (none explicit here) and
-    //  declare buffers required by use of instances of Bfr::Surface
-    //  during evaluation (declared here to reuse memory for each face):
+    //  declare buffers required by use of instances of Surface during
+    //  evaluation (declared here to reuse memory for each face):
     //
-    SubclassOfSurfaceFactory::Options surfaceOptions;
+    SurfaceFactory::Options surfaceOptions;
 
     std::vector<Vec3f> surfaceXYZPoints;
 
@@ -371,8 +375,8 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     std::vector<Vec3f> tessXYZ, tessDu, tessDv;
 
     //
-    //  Initialize the Bfr::SurfaceFactory for the given base mesh
-    //  (very low cost in terms of time and space) and tessellate each
+    //  Initialize the SurfaceFactory for the given base mesh (very
+    //  low cost in terms of time and space) and tessellate each
     //  face independently (i.e. no shared vertices):
     //
     //  Note that the SurfaceFactory is not thread-safe by default
@@ -381,13 +385,13 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  parallelize this loop.  Another (preferred) is to assign a
     //  thread-safe cache to the single instance.
     //
-    SubclassOfSurfaceFactory surfaceFactory(baseMesh, surfaceOptions);
+    SurfaceFactory surfaceFactory(baseMesh, surfaceOptions);
 
     int numFaces = surfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
         //
-        //  Create/populate the Bfr::Surface for this face (if present,
-        //  i.e. skipping holes and designated boundary faces) and declare
+        //  Create/populate the Surface for this face (if present, i.e.
+        //  skipping holes and designated boundary faces) and declare
         //  the simple uniform Tessellation using its Parameterization:
         //
         //  (The position Surface can also first be used to evaluate points
@@ -397,7 +401,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  parameters can cause Tessellation construction to fail, so use
         //  an assert to catch programming errors.)
         //
-        Bfr::Surface posSurface;
+        Surface posSurface;
 
         if (!surfaceFactory.InitVertexSurface(faceIndex, &posSurface)) {
             continue;

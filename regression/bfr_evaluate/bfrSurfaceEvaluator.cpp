@@ -59,8 +59,8 @@ BfrSurfaceEvaluator<REAL>::Evaluate(Bfr::Index                baseFace,
     //  Create the Surfaces for position and UV (optional) and assert if
     //  not valid, since a limit surface is expected here. (Note we may
     //  create the position surface but not actually evaluate it.)
-    Bfr::Surface pSurface;
-    Bfr::Surface uvSurface;
+    SurfaceType pSurface;
+    SurfaceType uvSurface;
 
     //  Figure out how to get a command line arg here to run both
     bool initSeparate = false;
@@ -70,7 +70,7 @@ BfrSurfaceEvaluator<REAL>::Evaluate(Bfr::Index                baseFace,
             _factory.InitFaceVaryingSurface(baseFace, &uvSurface);
         }
     } else {
-        _factory.InitSurfaces(baseFace, &pSurface, 0, &uvSurface);
+        _factory.InitSurfaces<REAL>(baseFace, &pSurface, 0, &uvSurface);
     }
 
     assert(pSurface.IsValid());
@@ -87,7 +87,7 @@ BfrSurfaceEvaluator<REAL>::Evaluate(Bfr::Index                baseFace,
 template <typename REAL>
 void
 BfrSurfaceEvaluator<REAL>::evaluateDirectly(
-        Bfr::Surface const & pSurface, Bfr::Surface const & uvSurface,
+        SurfaceType const & pSurface, SurfaceType const & uvSurface,
         TessCoordVector const & tessCoords, EvalResults<REAL> & results) const {
 
     int numCoords = (int) tessCoords.size() / 2;
@@ -127,7 +127,7 @@ BfrSurfaceEvaluator<REAL>::evaluateDirectly(
 template <typename REAL>
 void
 BfrSurfaceEvaluator<REAL>::evaluateByStencils(
-        Bfr::Surface const & pSurface, Bfr::Surface const & uvSurface,
+        SurfaceType const & pSurface, SurfaceType const & uvSurface,
         TessCoordVector const & tessCoords, EvalResults<REAL> & results) const {
 
     std::vector<REAL> stencilWeights;

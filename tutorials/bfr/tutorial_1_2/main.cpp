@@ -354,18 +354,22 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
                 std::vector<Vec3f> const &   baseMeshFVarUVs,
                 Args const &                 args) {
 
-    bool meshHasUVs = (baseMesh.GetNumFVarChannels() == 1) &&
-                      (baseMeshFVarUVs.size() > 0);
-
     //  Initialize an Obj writer locally for this mesh:
     ObjWriter objWriter(args.outputObjFile);
 
+    //  Use simpler type names locally for the Surface and its factory:
+    typedef Bfr::RefinerSurfaceFactory   SurfaceFactory;
+    typedef Bfr::Surface<float>          Surface;
+
     //
     //  Initialize specified evaluation options (none explicit here) and
-    //  declare buffers required by use of instances of Bfr::Surface
-    //  during evaluation (declared here to reuse memory for each face):
+    //  declare buffers required by use of instances of Surface during
+    //  evaluation (declared here to reuse memory for each face):
     //
-    Bfr::RefinerSurfaceFactory::Options surfaceOptions;
+    SurfaceFactory::Options surfaceOptions;
+
+    bool meshHasUVs = (baseMesh.GetNumFVarChannels() == 1) &&
+                      (baseMeshFVarUVs.size() > 0);
     if (meshHasUVs) {
         surfaceOptions.SetDefaultFVarID(0);
     }
@@ -391,8 +395,8 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     std::vector<Vec3f> tessUV;
 
     //
-    //  Initialize the Bfr::SurfaceFactory for the given base mesh
-    //  (very low cost in terms of time and space) and tessellate each
+    //  Initialize the SurfaceFactory for the given base mesh (very
+    //  low cost in terms of time and space) and tessellate each
     //  face independently (i.e. no shared vertices):
     //
     //  Note that the SurfaceFactory is not thread-safe by default
@@ -401,7 +405,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  parallelize this loop.  Another (preferred) is to assign a
     //  thread-safe cache to the single instance.
     //
-    Bfr::RefinerSurfaceFactory surfaceFactory(baseMesh, surfaceOptions);
+    SurfaceFactory surfaceFactory(baseMesh, surfaceOptions);
 
     int numFaces = surfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
@@ -410,14 +414,14 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  (if present, i.e. skipping holes and designated boundary faces).
         //  There are two ways to do this -- both illustrated here:
         //
-        //  While we can declare the Bfr::Surfaces locally here, they may
-        //  internally need to allocate memory from the heap in cases where
+        //  While we can declare the Surfaces locally here, they may need
+        //  to internally allocate memory from the heap in cases where
         //  vertex valences are high. So its worth moving these declarations
         //  outside the loop so that such memory can be re-used instead of
         //  repeatedly freed and re-allocated.
         //
-        Bfr::Surface posSurface;
-        Bfr::Surface uvSurface;
+        Surface posSurface;
+        Surface uvSurface;
 
         bool createSurfacesIndependently = false;
         if (createSurfacesIndependently || !meshHasUVs) {
@@ -445,7 +449,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
             //  the Surface for vertex data (position), use of the method to
             //  create multiple surfaces at once is preferred.
             //
-            if (!surfaceFactory.InitSurfaces(faceIndex,
+            if (!surfaceFactory.InitSurfaces<float>(faceIndex,
                     &posSurface,    // Surface for vertex data
                     0,              // Surface for varying data, not used
                     &uvSurface)) {  // Surface for face-varying data
