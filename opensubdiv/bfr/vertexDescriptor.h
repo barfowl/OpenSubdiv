@@ -27,10 +27,11 @@
 
 #include "../version.h"
 
-#include "../bfr/types.h"
 #include "../vtr/stackBuffer.h"
 
 #include <cstring>
+#include <cassert>
+#include <algorithm>
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {

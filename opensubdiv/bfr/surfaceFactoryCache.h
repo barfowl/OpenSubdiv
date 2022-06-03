@@ -27,8 +27,6 @@
 
 #include "../version.h"
 
-#include "../bfr/types.h"
-
 #include <map>
 #include <cstdint>
 

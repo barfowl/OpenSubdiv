@@ -27,6 +27,7 @@
 #include <cstring>
 #include <cstdio>
 #include <limits>
+#include <algorithm>
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {

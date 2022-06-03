@@ -28,8 +28,6 @@
 #include "../version.h"
 
 #include "../bfr/parameterization.h"
-#include "../bfr/types.h"
-#include "../sdc/types.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {

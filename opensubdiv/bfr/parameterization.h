@@ -27,10 +27,10 @@
 
 #include "../version.h"
 
-#include "../bfr/types.h"
 #include "../sdc/types.h"
 
 #include <cmath>
+#include <cassert>
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
