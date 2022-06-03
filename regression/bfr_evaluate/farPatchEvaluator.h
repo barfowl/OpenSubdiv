@@ -62,9 +62,9 @@ public:
     ~FarPatchEvaluator();
 
 public:
-    bool FaceHasLimit(Bfr::Index baseFace) const;
+    bool FaceHasLimit(Far::Index baseFace) const;
 
-    void Evaluate(Bfr::Index              baseface,
+    void Evaluate(Far::Index              baseface,
                   TessCoordVector const & tessCoords,
                   EvalResults<REAL>     & results) const;
 

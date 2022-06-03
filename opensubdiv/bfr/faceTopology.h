@@ -62,6 +62,9 @@ namespace Bfr {
 //
 class FaceTopology {
 public:
+    typedef FaceVertex::Index Index;
+
+public:
     FaceTopology(Sdc::SchemeType schemeType,
                  Sdc::Options    schemeOptions);
     ~FaceTopology() { }

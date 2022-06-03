@@ -41,6 +41,7 @@ using Vtr::internal::Level;
 using Vtr::internal::StackBuffer;
 
 using Far::TopologyRefiner;
+using Far::Index;
 using Far::ConstIndexArray;
 using Far::SparseMatrix;
 using Far::PatchBuilder;

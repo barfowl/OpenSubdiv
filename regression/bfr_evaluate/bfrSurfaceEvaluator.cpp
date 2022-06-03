@@ -40,14 +40,14 @@ BfrSurfaceEvaluator<REAL>::BfrSurfaceEvaluator(
 
 template <typename REAL>
 bool
-BfrSurfaceEvaluator<REAL>::FaceHasLimit(Bfr::Index baseFace) const {
+BfrSurfaceEvaluator<REAL>::FaceHasLimit(IndexType baseFace) const {
 
     return _factory.FaceHasLimitSurface(baseFace);
 }
 
 template <typename REAL>
 void
-BfrSurfaceEvaluator<REAL>::Evaluate(Bfr::Index                baseFace,
+BfrSurfaceEvaluator<REAL>::Evaluate(IndexType                 baseFace,
                                     TessCoordVector   const & tessCoords,
                                     EvalResults<REAL>       & results) const {
 

@@ -50,20 +50,20 @@ IrregularPatchBuilder::IrregularPatchBuilder(
 //  Inline private methods for accessing indices associated with the
 //  face-vertex topology and indices stored in map or vector members:
 //
-inline Index const *
+inline IrregularPatchBuilder::Index const *
 IrregularPatchBuilder::getSurfaceIndices() const {
 
     return _surface.GetIndices();
 }
 
-inline Index const *
+inline IrregularPatchBuilder::Index const *
 IrregularPatchBuilder::getCornerIndices(int corner) const { 
 
     return getSurfaceIndices() +
            _cornerHullInfo[corner].surfaceIndicesOffset;
 }
 
-inline Index const *
+inline IrregularPatchBuilder::Index const *
 IrregularPatchBuilder::getBaseFaceIndices() const {
 
     FaceVertex const & corner0 = _surface.GetCornerTopology(0);
@@ -71,7 +71,7 @@ IrregularPatchBuilder::getBaseFaceIndices() const {
            corner0.GetFaceIndexOffset(corner0.GetFace());
 }
 
-inline Index const *
+inline IrregularPatchBuilder::Index const *
 IrregularPatchBuilder::getCornerFaceIndices(int corner, int face) const {
 
     return getCornerIndices(corner) +
@@ -79,12 +79,12 @@ IrregularPatchBuilder::getCornerFaceIndices(int corner, int face) const {
 }
 
 inline int
-IrregularPatchBuilder::getLocalControlVertex(int meshVertIndex) const {
+IrregularPatchBuilder::getLocalControlVertex(Index meshVertIndex) const {
 
     return _controlVertMap.find(meshVertIndex)->second;
 }
 
-inline int
+inline IrregularPatchBuilder::Index
 IrregularPatchBuilder::getMeshControlVertex(int localVertIndex) const {
 
     return _controlVerts[localVertIndex];
@@ -223,7 +223,7 @@ IrregularPatchBuilder::initializeControlHullInventory() {
 }
 
 void
-IrregularPatchBuilder::addMeshControlVertex(int meshVertIndex) {
+IrregularPatchBuilder::addMeshControlVertex(Index meshVertIndex) {
 
     if (_controlVertMap.find(meshVertIndex) == _controlVertMap.end()) {
         int newLocalVertIndex = (int) _controlVerts.size();
@@ -233,7 +233,7 @@ IrregularPatchBuilder::addMeshControlVertex(int meshVertIndex) {
 }
 
 void
-IrregularPatchBuilder::addMeshControlVertices(int const fVerts[], int fSize) {
+IrregularPatchBuilder::addMeshControlVertices(Index const fVerts[], int fSize) {
 
     //  Ignore the first index of the face, which corresponds to a corner
     for (int i = 1; i < fSize; ++i) {
@@ -354,7 +354,7 @@ IrregularPatchBuilder::GatherControlVertexIndices(Index cvIndices[]) const {
             for (int j = 0; j < N; ++j) {
                 nextFace = cTop.GetFaceNext(nextFace);
 
-                int const * faceVerts = getCornerFaceIndices(corner, nextFace);
+                Index const * faceVerts = getCornerFaceIndices(corner,nextFace);
 
                 int S = cTop.GetFaceSize(nextFace);
                 int L = ((j < (N-1)) || cSub.IsBoundary()) ?  0 : 1;
@@ -374,7 +374,7 @@ IrregularPatchBuilder::GatherControlVertexIndices(Index cvIndices[]) const {
             int nextFace = cTop.GetFaceFirst(cSub);
             int N = cSub._numFacesBefore;
             for (int j = 0; j < N; ++j) {
-                int const * faceVerts = getCornerFaceIndices(corner, nextFace);
+                Index const * faceVerts = getCornerFaceIndices(corner,nextFace);
 
                 int S = cTop.GetFaceSize(nextFace);
                 int L = (j < (N-1)) ? 0 : 1;
@@ -612,7 +612,7 @@ IrregularPatchBuilder::gatherControlEdgeSharpness(
 //
 void
 IrregularPatchBuilder::getControlFaceVertices(int fVerts[], int numFVerts,
-        int corner, int const srcVerts[]) const {
+        int corner, Index const srcVerts[]) const {
     assert(_useControlVertMap);
 
     *fVerts++ = corner;

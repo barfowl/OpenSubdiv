@@ -163,14 +163,14 @@ FarPatchEvaluator<REAL>::FarPatchEvaluator(
 
 template <typename REAL>
 bool
-FarPatchEvaluator<REAL>::FaceHasLimit(Bfr::Index baseFace) const {
+FarPatchEvaluator<REAL>::FaceHasLimit(Far::Index baseFace) const {
 
     return ! _baseMesh.GetLevel(0).IsFaceHole(baseFace);
 }
 
 template <typename REAL>
 void
-FarPatchEvaluator<REAL>::Evaluate(Bfr::Index                baseFace,
+FarPatchEvaluator<REAL>::Evaluate(Far::Index                baseFace,
                                   TessCoordVector   const & tessCoords,
                                   EvalResults<REAL>       & results) const {
 

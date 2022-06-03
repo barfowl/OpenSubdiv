@@ -48,7 +48,6 @@
 class SubclassOfSurfaceFactory : public OpenSubdiv::Bfr::SurfaceFactory {
 public:
     typedef OpenSubdiv::Far::TopologyRefiner TopologyRefiner;
-    typedef OpenSubdiv::Bfr::Index           Index;
 
 public:
     //

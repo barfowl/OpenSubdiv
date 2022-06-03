@@ -29,7 +29,7 @@
 
 #include "../bfr/surfaceData.h"
 #include "../bfr/parameterization.h"
-#include "../bfr/types.h"
+#include "../vtr/array.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -109,9 +109,11 @@ public:
     //  bounding box, etc.) and stencils can be optionally applied to
     //  control vertices in this form.
     //
+    typedef internal::SurfaceData::Index Index;
+
     int GetNumControlVertices() const { return _data.getNumCVs(); }
 
-    int const * GetControlVertexIndices() const { return _data.getCVIndices(); }
+    Index const * GetControlVertexIndices() const {return _data.getCVIndices();}
 
     int EvaluateStencils(REAL const uv[2], REAL sP[]) const;
 

@@ -27,11 +27,9 @@
 
 #include "../version.h"
 
-#include "../bfr/types.h"
 #include "../far/patchDescriptor.h"
 #include "../far/patchParam.h"
 #include "../vtr/array.h"
-#include "../sdc/options.h"
 
 #include <vector>
 #include <cstring>
@@ -179,10 +177,10 @@ private:
     //  same vector (using a common stride for each patch) and the patch type
     //  determined by the PatchParam -- in the same way that face-varying
     //  patches are stored in the PatchTable.  Could also be stored in
-    //  separate "patch arrays" or separated in other ways and manged with
+    //  separate "patch arrays" or separated in other ways and managed with
     //  a bit more book-keeping.
     //
-    std::vector<Index>           _patchPoints;
+    std::vector<int>             _patchPoints;
     std::vector<Far::PatchParam> _patchParams;
 
     //  The quadtree organizing the patches:

@@ -43,6 +43,7 @@ public:
 
     typedef Bfr::RefinerSurfaceFactory   SurfaceFactory;
     typedef Bfr::SurfaceFactory::Options FactoryOptions;
+    typedef Bfr::SurfaceFactory::Index   IndexType;
 
     typedef std::vector<REAL>            TessCoordVector;
 
@@ -56,9 +57,9 @@ public:
     ~BfrSurfaceEvaluator() { }
 
 public:
-    bool FaceHasLimit(Bfr::Index baseFace) const;
+    bool FaceHasLimit(IndexType baseFace) const;
 
-    void Evaluate(Bfr::Index              baseface,
+    void Evaluate(IndexType               baseface,
                   TessCoordVector const & tessCoords,
                   EvalResults<REAL>     & results) const;
 

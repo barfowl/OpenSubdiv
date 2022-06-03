@@ -53,6 +53,9 @@ class PatchTree;
 //
 class IrregularPatchBuilder {
 public:
+    typedef FaceSurface::Index Index;
+
+public:
     //  WIP - see note above
     struct Options {
         Options() : sharpLevel(6), smoothLevel(2), doublePrecision(false) { }
@@ -127,16 +130,16 @@ private:
                                 int  corner,      int nextPerimeterVert,
                                 bool lastFace) const;
     void getControlFaceVertices(int  faceVerts[], int numFaceVerts,
-                                int  corner,      int const srcVerts[]) const;
+                                int  corner,      Index const srcVerts[]) const;
 
     //  Methods for dealing with the control vertex map:
     void initializeControlVertexMap();
 
-    void addMeshControlVertex(int faceVertIndex);
-    void addMeshControlVertices(int const faceVertIndices[], int faceSize);
+    void addMeshControlVertex(Index faceVertIndex);
+    void addMeshControlVertices(Index const faceVertIndices[], int faceSize);
 
-    int getLocalControlVertex(int meshVertexIndex) const;
-    int getMeshControlVertex(int localVertexIndex) const;
+    int   getLocalControlVertex(Index meshVertexIndex) const;
+    Index getMeshControlVertex( int   localVertexIndex) const;
 
     bool mayHaveDuplicateControlFaces() const;
     void removeDuplicateControlFaces(int faceSizes[], int faceVerts[],
@@ -158,8 +161,8 @@ private:
 
     CornerHullArray _cornerHullInfo;
 
-    std::map<int,int> _controlVertMap;
-    std::vector<int>  _controlVerts;
+    std::map<Index,int> _controlVertMap;
+    std::vector<Index>  _controlVerts;
 };
 
 } // end namespace Bfr

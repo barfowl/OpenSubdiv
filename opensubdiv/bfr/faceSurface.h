@@ -69,6 +69,9 @@ namespace Bfr {
 //
 class FaceSurface {
 public:
+    typedef FaceTopology::Index Index;
+
+public:
     //  Constructors for vertex and face-varying surfaces:
     FaceSurface();
     FaceSurface(FaceTopology const & vtxTopology, Index const vtxIndices[]);

@@ -36,7 +36,6 @@ namespace Bfr {
 
 using Far::ConstIndexArray;
 using Far::ConstLocalIndexArray;
-using Far::LocalIndex;
 
 
 //
@@ -129,7 +128,7 @@ RefinerSurfaceFactoryBase::populateFaceVertexDescriptor(
     //
     Vtr::internal::Level const & baseLevel = _mesh.getLevel(0);
 
-    Index vIndex = baseLevel.getFaceVertices(baseFace)[cornerVertex];
+    Far::Index vIndex = baseLevel.getFaceVertices(baseFace)[cornerVertex];
 
     ConstIndexArray vFaces = baseLevel.getVertexFaces(vIndex);
     int             nFaces = vFaces.size();
@@ -140,9 +139,8 @@ RefinerSurfaceFactoryBase::populateFaceVertexDescriptor(
     //
     //  Initialize, assign and finalize the vertex topology:
     //
-    //  Note there is no need to check valence or faces sizes with the
-    //  max of LocalIndex here and below -- the construction of the
-    //  TopologyRefiner excludes such cases, so simply casting is safe.
+    //  Note there is no need to check valence or face sizes with any
+    //  max here as TopologyRefiner construction excludes extreme cases.
     //
     vd.Initialize(nFaces);
     {
@@ -156,7 +154,7 @@ RefinerSurfaceFactoryBase::populateFaceVertexDescriptor(
 
             for (int i = 0; i < nFaces; ++i) {
                 int incFaceSize = baseLevel.getFaceVertices(vFaces[i]).size();
-                vd.SetIncidentFaceSize(i, (LocalIndex) incFaceSize);
+                vd.SetIncidentFaceSize(i, incFaceSize);
             }
         } else {
             vd.SetCommonFaceSize(true);
@@ -232,7 +230,7 @@ RefinerSurfaceFactoryBase::getFaceVertexPointIndices(
 
     Vtr::internal::Level const & baseLevel = _mesh.getLevel(0);
 
-    Index vIndex = baseLevel.getFaceVertices(baseFace)[cornerVertex];
+    Far::Index vIndex = baseLevel.getFaceVertices(baseFace)[cornerVertex];
 
     ConstIndexArray      vFaces  = baseLevel.getVertexFaces(vIndex);
     ConstLocalIndexArray vInFace = baseLevel.getVertexFaceLocalIndices(vIndex);
@@ -321,7 +319,7 @@ RefinerSurfaceFactoryBase::getFaceNeighborhoodVertexIndicesIfRegular(
     } else {
         ConstIndexArray fVerts = baseLevel.getFaceVertices(baseFace);
         for (int i = 0; i < fVerts.size(); ++i) {
-            Index vIndex = fVerts[i];
+            Far::Index vIndex = fVerts[i];
             Vtr::internal::Level::VTag vTag = baseLevel.getVertexTag(vIndex);
 
             if (!vTag._boundary) {
@@ -380,8 +378,9 @@ RefinerSurfaceFactoryBase::getFaceNeighborhoodFVarValueIndicesIfRegular(
 //  be as fast as possible for the purpose here.
 //
 namespace {
-    //  Local less-verbose typedefs:
+    //  Local less-verbose typedefs for Far indices and arrays:
     typedef Vtr::internal::Level Level;
+    typedef Far::Index           Index;
     typedef ConstIndexArray      IArray;
     typedef ConstLocalIndexArray LIArray;
 
@@ -393,9 +392,10 @@ namespace {
     //
     //  Retrieval of the 16-point patch for quad schemes:
     //
+    template <typename POINT>
     int
     gatherPatchPoints4(Level const & level, Index face, IArray const & fVerts,
-                       Index P[], int fvar) {
+                       POINT P[], int fvar) {
 
         static int const pointsPerCorner[4][4] = { {  5,  4,  0,  1 },
                                                    {  6,  2,  3,  7 },
@@ -457,9 +457,10 @@ namespace {
     //
     //  Retrieval of the 12-point patch for triangular schemes:
     //
+    template <typename POINT>
     int
     gatherPatchPoints3(Level const & level, Index face, IArray const & fVerts,
-                       Index P[], int fvar) {
+                       POINT P[], int fvar) {
 
         static int const pointsPerCorner[3][4] = { {  4,  3,  0,  1 },
                                                    {  5,  2,  6,  9 },

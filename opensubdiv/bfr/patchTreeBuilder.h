@@ -112,12 +112,12 @@ private:
     template <typename REAL>
     void getIrregularPatchConversion(PatchFace const & patchFace,
                                      Far::SparseMatrix<REAL> & convMatrix,
-                                     std::vector<Index> & srcPoints);
+                                     std::vector<Far::Index> & srcPoints);
 
     template <typename REAL>
     void appendConversionStencilsToMatrix(int stencilIndexBase,
                                      Far::SparseMatrix<REAL> const & convMatrix,
-                                     std::vector<Index> const & srcPoints);
+                                     std::vector<Far::Index> const & srcPoints);
 
 private:
     //  The PatchTree instance being assembled:
@@ -125,7 +125,7 @@ private:
 
     //  Member variables supporting its assembly:
     Far::TopologyRefiner &    _faceRefiner;
-    Index                     _faceAtRoot;
+    Far::Index                _faceAtRoot;
     std::vector<int>          _levelOffsets;
     std::vector<PatchFace>    _patchFaces;
     Far::PatchBuilder *       _patchBuilder;

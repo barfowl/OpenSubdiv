@@ -54,13 +54,13 @@ public:
 
 public:
     //  Local typedefs:
-    typedef int               IndexType;
+    typedef int               Index;
     typedef PatchTree const * IrregPatchPtr;
 
 public:
     //  Simple accessors used by both Surface and SurfaceFactory:
-    int               getNumCVs()    const { return (int)_cvIndices.GetSize(); }
-    IndexType const * getCVIndices() const { return &_cvIndices[0]; }
+    int           getNumCVs()    const { return (int)_cvIndices.GetSize(); }
+    Index const * getCVIndices() const { return &_cvIndices[0]; }
 
     Parameterization  getParam()        const { return _param; }
     bool              isValid()         const { return _isValid; }
@@ -79,8 +79,8 @@ public:
     void initialize();
     void reinitialize() { if (isValid()) clear(), initialize(); }
 
-    IndexType * getCVIndices() { return &_cvIndices[0]; }
-    IndexType * resizeCVs(int size) {
+    Index * getCVIndices() { return &_cvIndices[0]; }
+    Index * resizeCVs(int size) {
         _cvIndices.SetSize(size);
         return &_cvIndices[0];
     }
@@ -98,7 +98,7 @@ public:
 private:
     //  Member variables -- try to avoid redundancy and/or wasted space
     //  here as some may choose to cache all Surfaces of a mesh:
-    typedef Vtr::internal::StackBuffer<IndexType,20,true> CVIndexArray;
+    typedef Vtr::internal::StackBuffer<Index,20,true> CVIndexArray;
 
     CVIndexArray _cvIndices;
 

@@ -532,7 +532,7 @@ struct FaceVertex::Edge {
     Edge() { }
 
     void clear() { std::memset(this, 0, sizeof(*this)); }
-    void Initialize(int vtx) { clear(), vertex = (short) vtx; }
+    void Initialize(Index vtx) { clear(), endVertex = vtx; }
 
     //  Transition of state as incident faces are added:
     void SetBoundary()    { boundary = 1; }
@@ -579,6 +579,8 @@ struct FaceVertex::Edge {
         }
     }
 
+    Index endVertex;
+
     unsigned short boundary    : 1;
     unsigned short interior    : 1;
     unsigned short nonManifold : 1;
@@ -588,7 +590,6 @@ struct FaceVertex::Edge {
     unsigned short infSharp    : 1;
     unsigned short semiSharp   : 1;
 
-    short vertex;
     short prevFace, nextFace;
 };
 
@@ -643,7 +644,7 @@ FaceVertex::createUnOrderedEdges(Edge        edges[],
                                  Index const fvIndices[]) const {
 
     //  Optional map to help construction for high valence:
-    typedef std::map<int,int> EdgeMap;
+    typedef std::map<Index,int> EdgeMap;
 
     EdgeMap edgeMap;
 
@@ -677,7 +678,7 @@ FaceVertex::createUnOrderedEdges(Edge        edges[],
                 }
             } else {
                 for (int j = 0; j < numEdges; ++j) {
-                    if (edges[j].vertex == vIndex) {
+                    if (edges[j].endVertex == vIndex) {
                         eIndex = j;
                         break;
                     }

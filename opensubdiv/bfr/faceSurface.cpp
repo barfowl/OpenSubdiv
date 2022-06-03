@@ -304,6 +304,7 @@ namespace fvar_plus {
     //  subset, i.e. the presence of external face-varying indices or sharp
     //  edges.
     //
+    typedef FaceSurface::Index Index;
 
     //
     //  If more than two distinct face-varying subsets are present, the

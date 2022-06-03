@@ -28,7 +28,6 @@
 #include "../version.h"
 
 #include "../bfr/faceSurface.h"
-#include "../bfr/types.h"
 #include "../far/patchDescriptor.h"
 
 namespace OpenSubdiv {
@@ -40,6 +39,9 @@ namespace Bfr {
 //  RegularPatchBuilder ...
 //
 class RegularPatchBuilder {
+public:
+    typedef FaceSurface::Index Index;
+
 public:
     RegularPatchBuilder(FaceSurface const & surfaceDescription);
     ~RegularPatchBuilder() { }

@@ -38,14 +38,11 @@ namespace Bfr {
 //  Typedefs for indices and limits used either directly with or for
 //  purposes similar to those of Far classes:
 //
-//  WIP - Bfr::Index is to be replaced by types associated with classes
-//      - unclear what the future is for others if Bfr::Index deprecated
+//  WIP - unclear if this is relevant since Bfr::Index was deprecated
 //      - if only valence-limit remains, consider <bfr/limits.h>
-typedef Far::Index       Index;
+template <typename INDEX>
+inline bool IndexIsValid(INDEX index) { return (index >= 0); }
 
-inline bool IndexIsValid(Index index) { return Far::IndexIsValid(index); }
-
-static const Index INDEX_INVALID = Far::INDEX_INVALID;
 static const int   VALENCE_LIMIT = Far::VALENCE_LIMIT;
 
 } // end namespace Bfr

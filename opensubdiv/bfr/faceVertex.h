@@ -30,6 +30,7 @@
 #include "../bfr/vertexTag.h"
 #include "../bfr/vertexDescriptor.h"
 #include "../bfr/faceVertexSubset.h"
+#include "../bfr/surfaceData.h"
 #include "../sdc/crease.h"
 
 namespace OpenSubdiv {
@@ -58,6 +59,9 @@ namespace Bfr {
 //  that subset is defined elsewhere.
 //  
 class FaceVertex {
+public:
+    typedef internal::SurfaceData::Index Index;
+
 public:
     FaceVertex() { }
     ~FaceVertex() { }
@@ -313,19 +317,19 @@ FaceVertex::GetFaceIndexOffset(int face) const {
                              _vTop._faceSizeOffsets[face];
 }
 
-inline Index
+inline FaceVertex::Index
 FaceVertex::GetFaceIndexAtCorner(Index const indices[]) const {
     return indices[GetFaceIndexOffset(_faceInRing)];
 }
-inline Index
+inline FaceVertex::Index
 FaceVertex::GetFaceIndexAtCorner(int face, Index const indices[]) const {
     return indices[GetFaceIndexOffset(face)];
 }
-inline Index
+inline FaceVertex::Index
 FaceVertex::GetFaceIndexLeading(int face, Index const indices[]) const {
     return indices[GetFaceIndexOffset(face) + 1];
 }
-inline Index
+inline FaceVertex::Index
 FaceVertex::GetFaceIndexTrailing(int face, Index const indices[]) const {
     // It is safe to use "face+1" here for the last face:
     return indices[GetFaceIndexOffset(face+1) - 1];

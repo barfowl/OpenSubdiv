@@ -28,7 +28,6 @@
 #include "../version.h"
 
 #include "../bfr/surface.h"
-#include "../bfr/types.h"
 #include "../sdc/options.h"
 #include "../sdc/types.h"
 
@@ -91,6 +90,9 @@ class SurfaceFactoryCache;
 //  between itself and other factories (advanced).
 //
 class SurfaceFactory {
+public:
+    typedef internal::SurfaceData::Index Index;
+
 protected: // non-copyable:
     SurfaceFactory(SurfaceFactory const &);
     SurfaceFactory & operator=(SurfaceFactory const &);
