@@ -38,10 +38,10 @@ namespace Bfr {
 //  assignment (most work is now handled by the containing class):
 //
 void
-VertexDescriptor::Initialize(LocalIndex numFaces) {
+VertexDescriptor::Initialize(int numFaces) {
 
     assert(numFaces > 0);
-    _numFaces = numFaces;
+    _numFaces = std::min(numFaces, VALENCE_LIMIT);
 
     _vertSharpness = 0.0f;
 

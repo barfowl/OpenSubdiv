@@ -30,6 +30,7 @@
 #include "../bfr/types.h"
 #include "../far/patchDescriptor.h"
 #include "../far/patchParam.h"
+#include "../vtr/array.h"
 #include "../sdc/options.h"
 
 #include <vector>
@@ -92,8 +93,9 @@ public:
 
     int FindSubPatch(double u, double v, int subFace=0, int maxDep=-1) const;
 
+    typedef Vtr::ConstArray<int> PatchPointArray;
+    PatchPointArray GetSubPatchPoints(int subPatch) const;
     Far::PatchParam GetSubPatchParam( int subPatch) const;
-    ConstIndexArray GetSubPatchPoints(int subPatch) const;
 
     //  Main evaluation methods - basis weights or limit stencils:
     template <typename REAL>

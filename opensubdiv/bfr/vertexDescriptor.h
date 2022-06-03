@@ -127,12 +127,11 @@ public:
 
     //  The full declarartion must be enclosed by calls to these methods:
     //
-    //  Note that the LocalIndex is a smaller sized integer than Index
-    //  (typically 16-bit) that places a hard limit on the maximum valence
-    //  of a vertex or size of a face. Subclasses are left to deal with
-    //  the possibility of larger values, which cannot be passed here.
+    //  Note that the valence of a vertex will be internally clamped to
+    //  the const VALENCE_LIMIT (typically 16-bits) so beware of exceeding
+    //  that limit.
     //
-    void Initialize(LocalIndex numIncidentFaces);
+    void Initialize(int numIncidentFaces);
     void Finalize();
 
     //
@@ -170,7 +169,7 @@ public:
     void SetCommonFaceSize(bool incidentFacesHaveCommonSize);
     bool HasCommonFaceSize() const;
 
-    void SetIncidentFaceSize(int faceIndex, LocalIndex faceSize);
+    void SetIncidentFaceSize(int faceIndex, int faceSize);
     int  GetIncidentFaceSize(int faceIndex) const;
 
     //  Optional vertex sharpness:
@@ -207,8 +206,8 @@ protected:
     unsigned short _hasEdgeSharpness : 1;
     unsigned short _wasFaceSizesSet  : 1;
 
-    LocalIndex _numFaces;
-    float      _vertSharpness;
+    short _numFaces;
+    float _vertSharpness;
 
     FloatBuffer _faceEdgeSharpness;
     IntBuffer   _faceSizeOffsets;
@@ -268,7 +267,7 @@ VertexDescriptor::HasEdgeSharpness() const {
 }
 
 inline void
-VertexDescriptor::SetIncidentFaceSize(int incFaceIndex, LocalIndex faceSize) {
+VertexDescriptor::SetIncidentFaceSize(int incFaceIndex, int faceSize) {
 
     if ((int)_faceSizeOffsets.GetSize() != (_numFaces + 1)) {
         _faceSizeOffsets.SetSize(_numFaces + 1);

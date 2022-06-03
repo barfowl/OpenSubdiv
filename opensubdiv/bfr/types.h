@@ -38,14 +38,10 @@ namespace Bfr {
 //  Typedefs for indices and limits used either directly with or for
 //  purposes similar to those of Far classes:
 //
+//  WIP - Bfr::Index is to be replaced by types associated with classes
+//      - unclear what the future is for others if Bfr::Index deprecated
+//      - if only valence-limit remains, consider <bfr/limits.h>
 typedef Far::Index       Index;
-typedef Far::LocalIndex  LocalIndex;
-
-typedef Far::IndexArray       IndexArray;
-typedef Far::LocalIndexArray  LocalIndexArray;
-
-typedef Far::ConstIndexArray       ConstIndexArray;
-typedef Far::ConstLocalIndexArray  ConstLocalIndexArray;
 
 inline bool IndexIsValid(Index index) { return Far::IndexIsValid(index); }
 

@@ -153,9 +153,11 @@ private:
 private:
     //  Internal evaluation methods for basis functions and contributing
     //  patch points (implicit for a regular patch) and limit stencils:
+    typedef Vtr::ConstArray<int> PatchPointArray;
+
     void evalRegularPatchBasis(REAL u, REAL v, REAL wP[],
         REAL wDu[], REAL wDv[], REAL wDuu[], REAL wDuv[], REAL wDvv[]) const;
-    ConstIndexArray evalIrregularPatchBasis(REAL u, REAL v, REAL wP[],
+    PatchPointArray evalIrregularPatchBasis(REAL u, REAL v, REAL wP[],
         REAL wDu[], REAL wDv[], REAL wDuu[], REAL wDuv[], REAL wDvv[]) const;
     int evalMultiLinearPatchBasis(REAL u, REAL v, REAL wP[],
         REAL wDu[], REAL wDv[], REAL wDuu[], REAL wDuv[], REAL wDvv[]) const;
@@ -316,7 +318,7 @@ Surface<REAL>::evalIrregularPatch(REAL u, REAL v, T const & patchPoints,
     bool eval2ndDerivs = eval1stDerivs && (Duu && Duv && Dvv);
 
     REAL wP[20], wDu[20], wDv[20], wDuu[20], wDuv[20], wDvv[20];
-    ConstIndexArray subPatchPoints;
+    PatchPointArray subPatchPoints;
 
     if (!eval1stDerivs) {
         subPatchPoints = evalIrregularPatchBasis(u, v,

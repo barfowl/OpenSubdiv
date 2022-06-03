@@ -24,6 +24,7 @@
 
 #include "subclassOfSurfaceFactory.h"
 
+#include <opensubdiv/bfr/types.h>
 #include <opensubdiv/bfr/vertexDescriptor.h>
 #include <opensubdiv/far/topologyLevel.h>
 
@@ -33,10 +34,9 @@
 using OpenSubdiv::Far::TopologyRefiner;
 using OpenSubdiv::Far::TopologyLevel;
 
-using OpenSubdiv::Bfr::Index;
-using OpenSubdiv::Bfr::LocalIndex;
-using OpenSubdiv::Bfr::ConstIndexArray;
-using OpenSubdiv::Bfr::ConstLocalIndexArray;
+using OpenSubdiv::Far::Index;
+using OpenSubdiv::Far::ConstIndexArray;
+using OpenSubdiv::Far::ConstLocalIndexArray;
 
 
 //
@@ -138,14 +138,16 @@ SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
     //
     //  Initialize, assign and finalize the vertex topology:
     //
-    //  Note the Far::TopologyRefiner cannot contain vertices or faces whose
-    //  valence or size exceeds the max of LocalIndex, so the assert()s here
-    //  are a reminder for those mesh representations that may need to check
-    //  and take action in such cases.
+    //  Note that a SurfaceFactory cannot process vertices or faces whose
+    //  valence or size exceeds the max of Bfr::VALENCE_LIMIT. This is the
+    //  same limit in Far for the TopologyRefiner (Far::VALENCE_LIMIT), so
+    //  testing here is not strictly necessary, but assert()s are included
+    //  here as a reminder for those mesh representations that may need to
+    //  check and take action in such cases.
     //
-    assert(numFaces <= std::numeric_limits<LocalIndex>::max());
+    assert(numFaces <= OpenSubdiv::Bfr::VALENCE_LIMIT);
 
-    vd.Initialize((LocalIndex) numFaces);
+    vd.Initialize(numFaces);
     {
         //  Assign ordering and boundary status:
         vd.SetManifold(isManifold);
@@ -155,9 +157,9 @@ SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
         vd.SetCommonFaceSize(false);
         for (int i = 0; i < numFaces; ++i) {
             int incFaceSize = baseLevel.GetFaceVertices(vFaces[i]).size();
-            assert(incFaceSize <= std::numeric_limits<LocalIndex>::max());
+            assert(incFaceSize <= OpenSubdiv::Bfr::VALENCE_LIMIT);
 
-            vd.SetIncidentFaceSize(i, (LocalIndex) incFaceSize);
+            vd.SetIncidentFaceSize(i, incFaceSize);
         }
 
         //  Assign vertex sharpness:

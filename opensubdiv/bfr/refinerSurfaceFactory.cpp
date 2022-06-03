@@ -34,6 +34,11 @@ namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
 
+using Far::ConstIndexArray;
+using Far::ConstLocalIndexArray;
+using Far::LocalIndex;
+
+
 //
 //  Main constructor and destructor:
 //
@@ -139,7 +144,7 @@ RefinerSurfaceFactoryBase::populateFaceVertexDescriptor(
     //  max of LocalIndex here and below -- the construction of the
     //  TopologyRefiner excludes such cases, so simply casting is safe.
     //
-    vd.Initialize((LocalIndex) nFaces);
+    vd.Initialize(nFaces);
     {
         //  Assign ordering and boundary status:
         vd.SetManifold(isManifold);

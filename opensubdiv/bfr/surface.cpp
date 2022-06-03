@@ -105,7 +105,7 @@ Surface<REAL>::getNumIrregPatchPoints() const {
 }
 
 template <typename REAL>
-ConstIndexArray
+typename Surface<REAL>::PatchPointArray
 Surface<REAL>::evalIrregularPatchBasis(REAL u, REAL v,
         REAL wP[],   REAL wDu[],  REAL wDv[],
         REAL wDuu[], REAL wDuv[], REAL wDvv[]) const {

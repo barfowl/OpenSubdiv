@@ -106,10 +106,10 @@ PatchTree::~PatchTree() {
 //
 //  Class methods supporting access to patches:
 //
-ConstIndexArray
+PatchTree::PatchPointArray
 PatchTree::GetSubPatchPoints(int patchIndex) const {
 
-    return ConstIndexArray(
+    return PatchPointArray(
             &_patchPoints[patchIndex * _patchPointStride],
             _patchParams[patchIndex].IsRegular() ? _regPatchSize
                                                  : _irregPatchSize);
@@ -214,7 +214,7 @@ PatchTree::evalSubPatchStencils(int patchIndex, REAL u, REAL v,
             param.IsRegular() ? _regPatchType : _irregPatchType,
             param, u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
 
-    ConstIndexArray patchPoints = GetSubPatchPoints(patchIndex);
+    PatchPointArray patchPoints = GetSubPatchPoints(patchIndex);
 
     //
     //  Clear and accumulate the stencil weights for the contribution of
