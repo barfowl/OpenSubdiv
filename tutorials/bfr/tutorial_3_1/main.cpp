@@ -370,7 +370,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     ObjWriter objWriter(args.outputObjFile);
 
     //  Use simpler type names locally for the Surface and its factory:
-    typedef Bfr::RefinerSurfaceFactory   SurfaceFactory;
+    typedef Bfr::RefinerSurfaceFactory<> SurfaceFactory;
     typedef Bfr::Surface<float>          Surface;
 
     //

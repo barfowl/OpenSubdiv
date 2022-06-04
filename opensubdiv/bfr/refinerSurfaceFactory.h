@@ -35,7 +35,6 @@ namespace OPENSUBDIV_VERSION {
 
 namespace Far {
     class TopologyRefiner;
-    class PatchBuilder;  //  WIP - should be temporary
 }
 
 namespace Bfr {
@@ -131,13 +130,13 @@ private:
 //  their preferred thread-safe type.
 //
 template <class CACHE_TYPE = SurfaceFactoryCache>
-class RefinerSurfaceFactoryCached : public RefinerSurfaceFactoryBase {
+class RefinerSurfaceFactory : public RefinerSurfaceFactoryBase {
 public:
-    RefinerSurfaceFactoryCached(Far::TopologyRefiner const & mesh,
-                                Options options = Options()) :
+    RefinerSurfaceFactory(Far::TopologyRefiner const & mesh,
+                          Options options = Options()) :
             RefinerSurfaceFactoryBase(mesh, options),
             _localCache() { }
-    virtual ~RefinerSurfaceFactoryCached() { }
+    virtual ~RefinerSurfaceFactory() { }
 
 protected:
     virtual SurfaceFactoryCache * getInternalCache() const {
@@ -147,9 +146,6 @@ protected:
 private:
     CACHE_TYPE mutable _localCache;
 };
-
-//  WIP - naming is uncertain here, this typedef may eventually be removed
-typedef RefinerSurfaceFactoryCached<SurfaceFactoryCache> RefinerSurfaceFactory;
 
 } // end namespace Bfr
 

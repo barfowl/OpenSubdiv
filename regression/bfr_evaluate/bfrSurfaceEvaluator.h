@@ -41,7 +41,7 @@ class BfrSurfaceEvaluator {
 public:
     typedef Bfr::Surface<REAL>           SurfaceType;
 
-    typedef Bfr::RefinerSurfaceFactory   SurfaceFactory;
+    typedef Bfr::RefinerSurfaceFactory<> SurfaceFactory;
     typedef Bfr::SurfaceFactory::Options FactoryOptions;
     typedef Bfr::SurfaceFactory::Index   IndexType;
 
