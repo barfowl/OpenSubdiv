@@ -27,6 +27,7 @@
 
 #include "../version.h"
 
+#include "../bfr/types.h"
 #include "../vtr/stackBuffer.h"
 
 #include <cstring>
@@ -129,7 +130,7 @@ public:
     //  The full declarartion must be enclosed by calls to these methods:
     //
     //  Note that the valence of a vertex will be internally clamped to
-    //  the const VALENCE_LIMIT (typically 16-bits) so beware of exceeding
+    //  the const MAX_VALENCE (typically 16-bits) so beware of exceeding
     //  that limit.
     //
     void Initialize(int numIncidentFaces);
@@ -275,7 +276,7 @@ VertexDescriptor::SetIncidentFaceSize(int incFaceIndex, int faceSize) {
         std::memset(_faceSizeOffsets, 0, (_numFaces + 1) * sizeof(int));
         _hasFaceSizes = true;
     }
-    _faceSizeOffsets[incFaceIndex] = faceSize;
+    _faceSizeOffsets[incFaceIndex] = std::min(faceSize, Bfr::MAX_FACE_SIZE);
 }
 inline int
 VertexDescriptor::GetIncidentFaceSize(int incFaceIndex) const {

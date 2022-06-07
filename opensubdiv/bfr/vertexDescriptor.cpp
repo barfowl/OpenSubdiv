@@ -42,7 +42,7 @@ void
 VertexDescriptor::Initialize(int numFaces) {
 
     assert(numFaces > 0);
-    _numFaces = (short) std::min(numFaces, VALENCE_LIMIT);
+    _numFaces = (short) std::min(numFaces, Bfr::MAX_VALENCE);
 
     _vertSharpness = 0.0f;
 

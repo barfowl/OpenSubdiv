@@ -27,6 +27,7 @@
 
 #include "../version.h"
 
+#include "../bfr/types.h"
 #include "../sdc/types.h"
 
 #include <cmath>
@@ -132,12 +133,14 @@ private:
 //  Inline construction and resizing methods:
 //
 inline
-Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) :
-        _uDim(0), _faceSize((unsigned short) faceSize) {
+Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) {
 
     int regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(scheme);
 
-    _type = (unsigned char) ((regFaceSize == 4) ? QUAD : TRI);
+    _type     = (unsigned char) ((regFaceSize == 4) ? QUAD : TRI);
+    _faceSize = (unsigned short) std::min(faceSize, Bfr::MAX_FACE_SIZE);
+    _uDim     = 0;
+
     if (_faceSize != regFaceSize) {
         if (_faceSize < 3) {
             //  Reset size to 0 (invalid) for degenerate faces of all schemes:

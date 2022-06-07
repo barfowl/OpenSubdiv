@@ -38,12 +38,18 @@ namespace Bfr {
 //  Typedefs for indices and limits used either directly with or for
 //  purposes similar to those of Far classes:
 //
-//  WIP - unclear if this is relevant since Bfr::Index was deprecated
-//      - if only valence-limit remains, consider <bfr/limits.h>
+//  WIP - Bfr methods never expose invalid indices, so no need for this test
+//      - and if only limit definitions remain, consider <bfr/limits.h>
 template <typename INDEX>
 inline bool IndexIsValid(INDEX index) { return (index >= 0); }
 
-static const int   VALENCE_LIMIT = Far::VALENCE_LIMIT;
+//
+//  Limits on vertex valence and face size:
+//  WIP - use of suffix/prefix here warrants review
+//      - "limit surface" used much more in Bfr, so avoiding "limit"
+//
+static const int MAX_VALENCE   = Far::VALENCE_LIMIT;
+static const int MAX_FACE_SIZE = Far::VALENCE_LIMIT;
 
 } // end namespace Bfr
 
