@@ -174,23 +174,22 @@ private:
 private:
     //  Access to necessary details of the irregular patch representation,
     //  hidden to avoid publicly exposing that representation:
-    int getNumIrregPatchPoints() const;
+    bool hasIrregPatch() const { return _data.hasIrregPatch(); }
+    int  getNumIrregPatchPoints() const;
 
     REAL const * getIrregPatchPointMatrix() const;
+
+    internal::IrregularPatchPtr getIrregPatch() const;
 
 private:
     //  Access to the set of member variables - provided to the Factory:
     friend class SurfaceFactory;
 
-    typedef internal::SurfaceData SurfaceData;
-
-    SurfaceData       & getSurfaceData()       { return _data; }
-    SurfaceData const & getSurfaceData() const { return _data; }
+    internal::SurfaceData       & getSurfaceData()       { return _data; }
+    internal::SurfaceData const & getSurfaceData() const { return _data; }
 
 private:
     //  Additional simple member accessors for internal use:
-    typedef SurfaceData::IrregPatchPtr IrregPatchPtr;
-
     bool isValid() const   { return _data.isValid(); }
     bool isRegular() const { return _data.isRegular(); }
     bool isLinear() const  { return _data.isLinear(); }
@@ -198,12 +197,9 @@ private:
     unsigned char getRegPatchType() const { return _data.getRegPatchType(); }
     unsigned char getRegPatchMask() const { return _data.getRegPatchMask(); }
 
-    bool          hasIrregPatch() const { return _data.hasIrregPatch(); }
-    IrregPatchPtr getIrregPatch() const { return _data.getIrregPatch(); }
-
 private:
     //  All member variables encapsulated in a single class:
-    SurfaceData _data;
+    internal::SurfaceData _data;
 };
 
 //
@@ -227,6 +223,12 @@ template <typename REAL>
 inline int
 Surface<REAL>::GetNumPatchPoints() const {
     return hasIrregPatch() ? getNumIrregPatchPoints() : GetNumControlVertices();
+}
+
+template <typename REAL>
+inline internal::IrregularPatchPtr
+Surface<REAL>::getIrregPatch() const {
+    return _data.getIrregPatch();
 }
 
 template <typename REAL>

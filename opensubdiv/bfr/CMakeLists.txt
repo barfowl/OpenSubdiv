@@ -58,6 +58,7 @@ set(PRIVATE_HEADER_FILES
 )
 
 set(PUBLIC_HEADER_FILES
+     irregularPatchType.h
      parameterization.h
      refinerSurfaceFactory.h
      surface.h

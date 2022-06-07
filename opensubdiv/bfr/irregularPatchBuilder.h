@@ -28,6 +28,7 @@
 #include "../version.h"
 
 #include "../bfr/faceSurface.h"
+#include "../bfr/irregularPatchType.h"
 #include "../vtr/stackBuffer.h"
 
 #include <map>
@@ -36,7 +37,6 @@ namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
-class PatchTree;
 
 //
 //  IrregularPatchBuilder takes a FaceSurface (that has been flagged as not
@@ -81,9 +81,8 @@ public:
 
 public:
     //  Methods to build irregular patches:
-    typedef PatchTree IrregPatchType;
 
-    IrregPatchType const * Build();
+    internal::IrregularPatchPtr Build();
 
 private:
     //  Private methods to assemble the control hull:

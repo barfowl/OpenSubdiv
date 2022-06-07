@@ -55,9 +55,7 @@ SurfaceFactoryCache::clear() {
 void
 SurfaceFactoryCache::clear(map_type * mapPtr) {
 
-    map_type & map = *mapPtr;
-
-    for (map_type::iterator it = map.begin(); it != map.end(); ++it) {
+    for (map_type::iterator it = mapPtr->begin(); it != mapPtr->end(); ++it) {
         delete it->second;
     }
     mapPtr->clear();
@@ -67,7 +65,7 @@ SurfaceFactoryCache::clear(map_type * mapPtr) {
 //  These definitions do not yet account for the two types of keys --
 //  which in turn require a map corresponding to each type:
 //
-SurfaceFactoryCache::data_type const *
+SurfaceFactoryCache::data_type
 SurfaceFactoryCache::find(Key const & key) const {
 
     assert(key.IsValid());
@@ -79,8 +77,8 @@ SurfaceFactoryCache::find(Key const & key) const {
     return (mapIt == map.end()) ? 0 : mapIt->second;
 }
 
-SurfaceFactoryCache::data_type const *
-SurfaceFactoryCache::add(Key const & key, data_type const * data) {
+SurfaceFactoryCache::data_type
+SurfaceFactoryCache::add(Key const & key, data_type const & data) {
 
     assert(key.IsValid());
 
@@ -97,14 +95,14 @@ SurfaceFactoryCache::add(Key const & key, data_type const * data) {
 //
 //  Virtual methods -- intended to be overridden for thread-safety:
 //
-SurfaceFactoryCache::data_type const *
+SurfaceFactoryCache::data_type
 SurfaceFactoryCache::Find(Key const & key) const {
 
     return find(key);
 }
 
-SurfaceFactoryCache::data_type const *
-SurfaceFactoryCache::Add(Key const & key, data_type const * data) {
+SurfaceFactoryCache::data_type
+SurfaceFactoryCache::Add(Key const & key, data_type const & data) {
 
     return add(key, data);
 }

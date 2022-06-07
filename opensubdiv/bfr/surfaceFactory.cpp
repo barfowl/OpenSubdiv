@@ -769,30 +769,21 @@ void
 SurfaceFactory::assignIrregularSurface(SurfaceType * surfacePtr,
         FaceSurface const & descriptor) const {
 
-    SurfaceType & surface = *surfacePtr;
-
-    //
-    //  Assign the parameterization and discriminants first:
-    //
-    surface.setParam(Parameterization(_schemeType, descriptor.GetFaceSize()));
-
-    surface.setRegular(false);
-    surface.setLinear(false);
-
     //
     //  Construct a new irregular patch or identify one from the cache:
     //
-    typedef IrregularPatchBuilder::IrregPatchType PatchType;
-
     IrregularPatchBuilder::Options buildOptions;
+
     buildOptions.sharpLevel      = _limitOptions.GetApproxLevelSharp();
     buildOptions.smoothLevel     = _limitOptions.GetApproxLevelSmooth();
-    buildOptions.doublePrecision = surface.isDouble();
+    buildOptions.doublePrecision = surfacePtr->isDouble();
 
     IrregularPatchBuilder builder(descriptor, buildOptions);
 
     //  Retrieve an irregular patch representation from cache if possible:
-    surface.setIrregPatch(0);
+    using internal::IrregularPatchPtr;
+
+    IrregularPatchPtr patch(0);
 
     SurfaceFactoryCache * cache = getAssignedCache();
     if (cache) {
@@ -807,34 +798,42 @@ SurfaceFactory::assignIrregularSurface(SurfaceType * surfacePtr,
             key.SetFormat(SurfaceFactoryCache::Key::HASHED);
             key.SetValue(keyValue);
         }
+        assert(key.IsValid());
 
-        //  Use a valid key to find and/or add a patch in the cache:
-        if (key.IsValid()) {
-            PatchType const * patchFound = cache->Find(key);
-            if (patchFound) {
-                surface.setIrregPatch(patchFound);
+        //  Use the valid key to find and/or add a patch in the cache:
+        patch = cache->Find(key);
+        if (patch == 0) {
+            //  Add a new patch to the cache. Beware that another thread
+            //  may have added the same patch while it was being built.
+            //  If so, delete the one built here and use the one added:
+            patch = builder.Build();
+
+            IrregularPatchPtr patchAdded = cache->Add(key, patch);
+            if (patchAdded != patch) {
+                delete patch;
+                patch = patchAdded;
             } else {
-                //  Add a new patch to the cache. Beware that another thread
-                //  may have added the same patch while it was being built.
-                //  If so, use the one added and delete the instance created:
-                PatchType const * patchCreated = builder.Build();
-                PatchType const * patchAdded   = cache->Add(key, patchCreated);
-
-                surface.setIrregPatch(patchAdded);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
-__numIrregularInCache += (patchAdded == patchCreated);
+__numIrregularInCache ++;
 #endif
-                if (patchAdded != patchCreated) delete patchCreated;
             }
-            surface.setIrregPatchOwner(false);
         }
+    } else {
+        patch = builder.Build();
     }
 
-    //  If no patch found in or created for the cache, create it now:
-    if (!surface.hasIrregPatch()) {
-        surface.setIrregPatch(builder.Build());
-        surface.setIrregPatchOwner(true);
-    }
+    //
+    //  Assign the Surface parameterization, discrimanants and patch:
+    //
+    SurfaceType & surface = *surfacePtr;
+
+    surface.setParam(Parameterization(_schemeType, descriptor.GetFaceSize()));
+
+    surface.setRegular(false);
+    surface.setLinear(false);
+
+    surface.setIrregPatch(patch);
+    surface.setIrregPatchOwner(cache == 0);
 
     //  Gather the patch control points from the given indices:
     builder.GatherControlVertexIndices(

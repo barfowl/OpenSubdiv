@@ -27,6 +27,8 @@
 
 #include "../version.h"
 
+#include "../bfr/irregularPatchType.h"
+
 #include <map>
 #include <cstdint>
 
@@ -34,7 +36,6 @@ namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
-class PatchTree;
 
 //
 //  SurfaceFactoryCache is a container for storing/caching instances of the
@@ -63,21 +64,21 @@ protected:
     class Key;
 
     //  WIP - use of STL-style type names for containers is questionable
-    typedef Key       key_type;
-    typedef PatchTree data_type;
+    typedef Key                         key_type;
+    typedef internal::IrregularPatchPtr data_type;
 
 protected:
     //
     //  Potential overrides by subclasses for thread-safety:
     //
-    virtual data_type const * Find(key_type const & key) const;
-    virtual data_type const * Add(key_type const & key, data_type const * data);
+    virtual data_type Find(key_type const & key) const;
+    virtual data_type Add(key_type const & key, data_type const & data);
 
     //
     //  Common implementation used by all subclasses:
     //
-    data_type const * find(key_type const & key) const;
-    data_type const * add(key_type const & key, data_type const * data);
+    data_type find(key_type const & key) const;
+    data_type add(key_type const & key, data_type const & data);
 
 protected:
     //
@@ -109,7 +110,7 @@ protected:
     };
 
 private:
-    typedef std::map<Key::IntType, data_type const *>  map_type;
+    typedef std::map<Key::IntType, data_type>  map_type;
 
     void clear(map_type * map);
     void clear();
@@ -133,12 +134,12 @@ public:
     virtual ~SurfaceFactoryCacheThreaded() { }
 
 protected:
-    virtual data_type const * Find(key_type const & key) const {
+    virtual data_type Find(key_type const & key) const {
         READ_LOCK_GUARD_TYPE lockGuard(_mutex);
         return find(key);
     }
 
-    virtual data_type const * Add(key_type const & key, data_type const * data){
+    virtual data_type Add(key_type const & key, data_type const & data){
         WRITE_LOCK_GUARD_TYPE lockGuard(_mutex);
         return add(key, data);
     }

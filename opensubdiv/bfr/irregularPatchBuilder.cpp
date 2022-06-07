@@ -763,7 +763,7 @@ IrregularPatchBuilder::removeDuplicateControlFaces(
 //  At this point, the PatchTree is used for all topological cases, so
 //  those future intentions are not reflected here.
 //
-IrregularPatchBuilder::IrregPatchType const *
+internal::IrregularPatchPtr
 IrregularPatchBuilder::Build() {
 
     //
@@ -870,7 +870,7 @@ IrregularPatchBuilder::Build() {
     assert(patchTree->GetNumControlPoints() == _numControlVerts);
 
     delete refiner;
-    return patchTree;
+    return internal::IrregularPatchPtr(patchTree);
 }
 
 } // end namespace Bfr

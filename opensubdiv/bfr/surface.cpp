@@ -115,7 +115,7 @@ Surface<REAL>::evalIrregularPatchBasis(REAL u, REAL v,
     int subFace = param.HasSubFaces() ?
                   param.ConvertCoordToNormalizedSubFace(uv, uv) : 0;
 
-    IrregPatchPtr irregPatch = getIrregPatch();
+    internal::IrregularPatchPtr irregPatch = getIrregPatch();
     int subPatchIndex = irregPatch->FindSubPatch(uv[0], uv[1], subFace);
     assert(subPatchIndex >= 0);
 
@@ -136,7 +136,7 @@ Surface<REAL>::evalIrregularPatchStencils(REAL u, REAL v,
     int subFace = param.HasSubFaces() ?
                   param.ConvertCoordToNormalizedSubFace(uv, uv) : 0;
 
-    IrregPatchPtr irregPatch = getIrregPatch();
+    internal::IrregularPatchPtr irregPatch = getIrregPatch();
     int subPatchIndex = irregPatch->FindSubPatch(uv[0], uv[1], subFace);
     assert(subPatchIndex >= 0);
 
@@ -317,8 +317,8 @@ template <typename REAL>
 REAL const *
 Surface<REAL>::getIrregPatchPointMatrix() const {
 
-    IrregPatchPtr irregPatch = getIrregPatch();
-   return irregPatch->GetStencilMatrix<REAL>();
+    internal::IrregularPatchPtr irregPatch = getIrregPatch();
+    return irregPatch->GetStencilMatrix<REAL>();
 }
 
 

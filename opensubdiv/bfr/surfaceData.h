@@ -28,6 +28,7 @@
 #include "../version.h"
 
 #include "../bfr/parameterization.h"
+#include "../bfr/irregularPatchType.h"
 
 #include "../vtr/stackBuffer.h"
 
@@ -35,7 +36,6 @@ namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
-class PatchTree;
 namespace internal {
 
 //
@@ -53,12 +53,9 @@ public:
     ~SurfaceData() { clear(); }
 
 public:
-    //  Local typedefs:
-    typedef int               Index;
-    typedef PatchTree const * IrregPatchPtr;
-
-public:
     //  Simple accessors used by both Surface and SurfaceFactory:
+    typedef int Index;
+
     int           getNumCVs()    const { return (int)_cvIndices.GetSize(); }
     Index const * getCVIndices() const { return &_cvIndices[0]; }
 
@@ -71,7 +68,8 @@ public:
     unsigned char     getRegPatchMask() const { return _regPatchMask; }
     bool              hasIrregPatch()   const { return (_irregPatch != 0); }
     bool              ownsIrregPatch()  const { return _irregOwner; }
-    IrregPatchPtr     getIrregPatch()   const { return _irregPatch; }
+
+    internal::IrregularPatchPtr getIrregPatch() const { return _irregPatch; }
 
 public:
     //  Modifiers used by SurfaceFactory to assemble a Surface:
@@ -92,8 +90,9 @@ public:
     void setLinear(bool on)             { _isLinear = on; }
     void setRegPatchType(int t)         { _regPatchType = (unsigned char) t; }
     void setRegPatchMask(int m)         { _regPatchMask = (unsigned char) m; }
-    void setIrregPatch(IrregPatchPtr p) { _irregPatch = p; }
     void setIrregPatchOwner(bool on)    { _irregOwner = on; }
+
+    void setIrregPatch(internal::IrregularPatchPtr p) { _irregPatch = p; }
 
 private:
     //  Member variables -- try to avoid redundancy and/or wasted space
@@ -112,8 +111,8 @@ private:
     unsigned char _regPatchType;
     unsigned char _regPatchMask;
 
-    unsigned char _irregOwner : 1;
-    IrregPatchPtr _irregPatch;
+    unsigned char               _irregOwner : 1;
+    internal::IrregularPatchPtr _irregPatch;
 };
 
 } // end namespace internal
