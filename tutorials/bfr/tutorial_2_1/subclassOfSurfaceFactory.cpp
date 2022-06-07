@@ -139,13 +139,13 @@ SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
     //  Initialize, assign and finalize the vertex topology:
     //
     //  Note that a SurfaceFactory cannot process vertices or faces whose
-    //  valence or size exceeds the max of Bfr::VALENCE_LIMIT. This is the
-    //  same limit in Far for the TopologyRefiner (Far::VALENCE_LIMIT), so
+    //  valence or size exceeds pre-defined limits. These limits are the
+    //  same as those in Far for TopologyRefiner (Far::VALENCE_LIMIT), so
     //  testing here is not strictly necessary, but assert()s are included
     //  here as a reminder for those mesh representations that may need to
     //  check and take action in such cases.
     //
-    assert(numFaces <= OpenSubdiv::Bfr::VALENCE_LIMIT);
+    assert(numFaces <= OpenSubdiv::Bfr::MAX_VALENCE);
 
     vd.Initialize(numFaces);
     {
@@ -157,7 +157,7 @@ SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
         vd.SetCommonFaceSize(false);
         for (int i = 0; i < numFaces; ++i) {
             int incFaceSize = baseLevel.GetFaceVertices(vFaces[i]).size();
-            assert(incFaceSize <= OpenSubdiv::Bfr::VALENCE_LIMIT);
+            assert(incFaceSize <= OpenSubdiv::Bfr::MAX_FACE_SIZE);
 
             vd.SetIncidentFaceSize(i, incFaceSize);
         }
