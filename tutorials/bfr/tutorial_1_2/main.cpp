@@ -407,6 +407,43 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //
     SurfaceFactory surfaceFactory(baseMesh, surfaceOptions);
 
+    //
+    //  WIP - exploring ways to initialize both position and UV surface
+    //      - some methods involve additional structs, initialized here
+    //
+    Surface posSurface;
+    Surface uvSurface;
+
+    //  Using SurfaceFactory::Surfaces<REAL>:
+    SurfaceFactory::Surfaces<float> surfaces;
+
+    surfaces.vtxSurface   = &posSurface;
+    surfaces.fvarSurfaces = &uvSurface;
+    surfaces.fvarCount    = 1;
+
+    //  Using template <class SURFACE_SET>:
+    struct SurfaceSet {
+        typedef SurfaceFactory::FVarID FVarID;
+
+        //  Define constructor tuned to this use case:
+        SurfaceSet(Surface * posSurfArg, Surface * uvSurfArg) :
+            posSurf(posSurfArg), uvSurf(uvSurfArg) { }
+
+        Surface * GetVertexSurface()          { return posSurf; }
+        Surface * GetVaryingSurface()         { return 0; }
+        int       GetNumFaceVaryingSurfaces() { return 1; }
+        Surface * GetFaceVaryingSurfaces()    { return uvSurf; }
+        FVarID  * GetFaceVaryingIDs()         { return 0; }
+
+        Surface * posSurf;
+        Surface * uvSurf;
+    };
+
+    SurfaceSet surfaceSet(&posSurface, &uvSurface);
+
+    //
+    //  Iterate through all faces and evaluate:
+    //
     int numFaces = surfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
         //
@@ -420,9 +457,6 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  outside the loop so that such memory can be re-used instead of
         //  repeatedly freed and re-allocated.
         //
-        Surface posSurface;
-        Surface uvSurface;
-
         bool createSurfacesIndependently = false;
         if (createSurfacesIndependently || !meshHasUVs) {
             //
@@ -444,16 +478,28 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
                 surfaceFactory.InitFaceVaryingSurface(faceIndex, &uvSurface);
             }
         } else {
+            assert(meshHasUVs);
             //
             //  When creating one or more face-varying Surfaces for use with
             //  the Surface for vertex data (position), use of the method to
             //  create multiple surfaces at once is preferred.
             //
-            if (!surfaceFactory.InitSurfaces<float>(faceIndex,
-                    &posSurface,    // Surface for vertex data
-                    0,              // Surface for varying data, not used
-                    &uvSurface)) {  // Surface for face-varying data
-                continue;
+            //  WIP - exploring 3 ways to achieve this:
+            //
+            int take = 1;
+            if (take == 1) {
+                if (!surfaceFactory.InitFaceVaryingSurface(faceIndex,
+                            &uvSurface, &posSurface)){
+                    continue;
+                }
+            } else if (take == 2) {
+                if (!surfaceFactory.InitSurfaces(faceIndex, &surfaces)) {
+                    continue;
+                }
+            } else if (take == 3) {
+                if (!surfaceFactory.InitSurfaceSet(faceIndex, &surfaceSet)) {
+                    continue;
+                }
             }
         }
 

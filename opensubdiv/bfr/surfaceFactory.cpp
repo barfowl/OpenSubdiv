@@ -1295,7 +1295,7 @@ SurfaceFactory::InitFaceVaryingSurface(Index faceIndex,
 
 template <typename REAL>
 bool
-SurfaceFactory::InitSurfaces(Index faceIndex,
+SurfaceFactory::initSurfaces(Index faceIndex,
         Surface<REAL> * vtxSurface,
         Surface<REAL> * varSurface,
         Surface<REAL> * fvarSurfaces,
@@ -1313,7 +1313,7 @@ SurfaceFactory::InitSurfaces(Index faceIndex,
     assert(sizeof(internal::SurfaceData) == sizeof(Surface<REAL>));
 
     surfaces.fvarSurfs = &fvarSurfaces[0].getSurfaceData();
-    surfaces.fvarIDs   = &fvarIDs[0];
+    surfaces.fvarIDs   =  fvarIDs;
 
     surfaces.numFVarSurfs = fvarCount;
     surfaces.numSurfs     = fvarCount + (vtxSurface != 0) + (varSurface != 0);
@@ -1334,7 +1334,7 @@ template bool
 SurfaceFactory::InitFaceVaryingSurface<float>(
         Index, Surface<float> *, FVarID fvarID) const;
 template bool
-SurfaceFactory::InitSurfaces<float>(
+SurfaceFactory::initSurfaces<float>(
         Index, Surface<float> *, Surface<float> *, Surface<float> *,
         int, FVarID const fvarIDs[]) const;
 
@@ -1348,7 +1348,7 @@ template bool
 SurfaceFactory::InitFaceVaryingSurface<double>(
         Index, Surface<double> *, FVarID fvarID) const;
 template bool
-SurfaceFactory::InitSurfaces<double>(
+SurfaceFactory::initSurfaces<double>(
         Index, Surface<double> *, Surface<double> *, Surface<double> *,
         int, FVarID const fvarIDs[]) const;
 
