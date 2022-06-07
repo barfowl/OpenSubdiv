@@ -55,7 +55,9 @@ void
 SurfaceData::clear() {
 
     if (_irregOwner) {
+#ifndef OPENSUBDIV3_BFR_USE_SHARED_PTR
         delete _irregPatch;
+#endif
         _irregPatch = 0;
     }
 }

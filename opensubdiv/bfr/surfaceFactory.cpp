@@ -810,7 +810,9 @@ SurfaceFactory::assignIrregularSurface(SurfaceType * surfacePtr,
 
             IrregularPatchPtr patchAdded = cache->Add(key, patch);
             if (patchAdded != patch) {
+#ifndef OPENSUBDIV3_BFR_USE_SHARED_PTR
                 delete patch;
+#endif
                 patch = patchAdded;
             } else {
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS

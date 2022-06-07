@@ -27,6 +27,11 @@
 
 #include "../version.h"
 
+//#define OPENSUBDIV3_BFR_USE_SHARED_PTR 1
+#ifdef OPENSUBDIV3_BFR_USE_SHARED_PTR
+#include <memory>
+#endif
+
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
@@ -47,8 +52,14 @@ namespace internal {
 
     typedef PatchTree IrregularPatchType;
 
-    //  WIP - consider use of std::shared_ptr here
+#ifdef OPENSUBDIV3_BFR_USE_SHARED_PTR
+    typedef std::shared_ptr<const IrregularPatchType> IrregularPatchPtr;
+#else
+    //  WIP - some bookkeeping info is added to SurfaceData to manage
+    //  ownership of this raw ptr, and so will need to be removed from
+    //  that class if committing to a shared ptr in future
     typedef IrregularPatchType const * IrregularPatchPtr;
+#endif
 
 } // end namespace internal
 
