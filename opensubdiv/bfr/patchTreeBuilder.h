@@ -100,6 +100,7 @@ private:
     };
 
     //  Internal methods to identify and assemble patches and the tree:
+    bool faceNeedsRefinement(int faceArg) const;
     void identifyPatches();
     void initializePatches();
     void initializeQuadTree();

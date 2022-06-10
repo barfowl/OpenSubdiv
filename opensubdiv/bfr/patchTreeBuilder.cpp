@@ -61,33 +61,37 @@ PatchTreeBuilder::PatchTreeBuilder(TopologyRefiner & faceRefiner,
     _patchBuilder(0) {
 
     //
-    //  If generating patches for the base level, force one level of
-    //  refinement if the face is or is adjacent to a non-quad:
+    //  Adaptive refinement in Far requires smooth level <= sharp level,
+    //  with the sharp level taking precedence.  And if attempting to
+    //  generate patches at the base level, force at least one level of
+    //  refinement when necessary:
     //
-    Vtr::internal::Level const & baseLevel = _faceRefiner.getLevel(0);
-
     int adaptiveLevelPrimary = options.maxPatchDepthSharp;
-    if (adaptiveLevelPrimary == 0) {
-        //  Vertices incident non-quads are tagged, so inspect combined tags:
-        if (baseLevel.getFaceCompositeVTag(_faceAtRoot)._incidIrregFace)
-            adaptiveLevelPrimary = 1;
-    }
 
     int adaptiveLevelSecondary = options.maxPatchDepthSmooth;
     if (adaptiveLevelSecondary > adaptiveLevelPrimary) {
         adaptiveLevelSecondary = adaptiveLevelPrimary;
     }
 
+    //  If primary is 0, so is secondary -- see if level 1 required:
+    if (adaptiveLevelSecondary == 0) {
+        if (faceNeedsRefinement(_faceAtRoot)) {
+            adaptiveLevelPrimary   = std::max(1, adaptiveLevelPrimary);
+            adaptiveLevelSecondary = 1;
+        }
+    }
+
     //
     //  Apply adaptive refinement to a local refiner for this face:
     //
-    ConstIndexArray baseFaceArray(&_faceAtRoot, 1);
-
     TopologyRefiner::AdaptiveOptions adaptiveOptions(adaptiveLevelPrimary);
+
     adaptiveOptions.secondaryLevel       = adaptiveLevelSecondary;
     adaptiveOptions.useInfSharpPatch     = true;
     adaptiveOptions.useSingleCreasePatch = false;
     adaptiveOptions.considerFVarChannels = false;
+
+    ConstIndexArray baseFaceArray(&_faceAtRoot, 1);
 
     _faceRefiner.RefineAdaptive(adaptiveOptions, baseFaceArray);
 
@@ -127,9 +131,10 @@ PatchTreeBuilder::PatchTreeBuilder(TopologyRefiner & faceRefiner,
     //
     //  Initialize general PatchTree members relating to patch topology:
     //
+    Vtr::internal::Level const & baseLevel = _faceRefiner.getLevel(0);
+
     int thisFaceSize = baseLevel.getFaceVertices(_faceAtRoot).size();
-    int regFaceSize  = Sdc::SchemeTypeTraits::GetRegularFaceSize(
-                                                _faceRefiner.GetSchemeType());
+    int regFaceSize  = _patchBuilder->GetRegularFaceSize();
 
     //  Configuration:
     _patchTree->_useDoublePrecision = options.useDoublePrecision;
@@ -175,6 +180,69 @@ PatchTreeBuilder::Build() {
     return _patchTree;
 }
 
+bool
+PatchTreeBuilder::faceNeedsRefinement(int baseFace) const {
+
+    //
+    //  The Far::PatchBuilder cannot construct a single patch from a face
+    //  in the base level under the following circumstances:
+    //
+    //      - the face is or is adjacent to an irregular face (non-quad)
+    //      - the face contains an inf-sharp dart vertex
+    //      - the face contains an interior val-2 vertex
+    //      - the face contains an interior val-3 vertex adj to a tri
+    //
+    //  All but the first are subject to additional conditions (e.g.
+    //  whether the irregular feature is isolated or not) but until those
+    //  conditions are clear, such features will trigger refinement.
+    //
+    Level const & baseLevel = _faceRefiner.getLevel(0);
+
+    Level::VTag const & fTags  = baseLevel.getFaceCompositeVTag(baseFace);
+    ConstIndexArray     fVerts = baseLevel.getFaceVertices(baseFace);
+
+    //
+    //  Vertices incident non-quads in any way are easily detected:
+    //
+    if (fTags._incidIrregFace) return true;
+
+    //
+    //  A dart and inf-sharp irregularity may indicate an inf-sharp dart,
+    //  so inspect the face-vertices:
+    //
+    if ((fTags._rule & Sdc::Crease::RULE_DART) && fTags._infIrregular) {
+        for (int i = 0; i < fVerts.size(); ++i) {
+            Level::VTag const & vTag = baseLevel.getVertexTag(fVerts[i]);
+            if ((vTag._rule & Sdc::Crease::RULE_DART) && vTag._infSharpEdges) {
+                //  WIP - inf-sharp dart is fine in some cases (TBD):
+                //          - possibly when the edge-end isolated
+                //      - refine for any occurrence until fully determined
+                return true;
+            }
+        }
+    }
+
+    //
+    //  Interior extra-ordinary vertices of low valence require inspection
+    //  of the face-vertices to test valence and other conditions:
+    //
+    if (fTags._xordinary) {
+        for (int i = 0, fSize = fVerts.size(); i < fSize; ++i) {
+            Level::VTag const & vTag = baseLevel.getVertexTag(fVerts[i]);
+            if (vTag._xordinary && !vTag._boundary && !vTag._infSharpEdges) {
+                int vValence = baseLevel.getVertexFaces(fVerts[i]).size();
+                if ((vValence == 2) || ((vValence == 3) && (fSize == 3))) {
+                    //  WIP - low valence verts are fine in some cases (TBD)
+                    //          - val-2 a problem only when two adjacent
+                    //      - refine for any occurrence until fully determined
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 void
 PatchTreeBuilder::identifyPatches() {
 
@@ -217,6 +285,7 @@ PatchTreeBuilder::identifyPatches() {
     //  patches:
     //
     int numPatches = (int) _patchFaces.size();
+    assert(numPatches);
 
     _patchTree->_patchPoints.resize(numPatches * _patchTree->_patchPointStride);
     _patchTree->_patchParams.resize(numPatches);
@@ -368,23 +437,26 @@ PatchTreeBuilder::initializeStencilMatrix() {
     stencilMatrix.resize(numPointStencils*numControlPoints);
 
     //
-    //  Initialize successive rows of the stencil matrix a level at a
-    //  time using the PrimvarRefiner to accumulate contributing rows:
+    //  For refined points, initialize successive rows of the stencil matrix
+    //  a level at a time using the PrimvarRefiner to accumulate contributing
+    //  rows:
     //
-    Far::PrimvarRefinerReal<REAL> primvarRefiner(_faceRefiner);
-
-    StencilRow<REAL> dstRow(&stencilMatrix[0], numControlPoints);
-    primvarRefiner.Interpolate(1, ControlRow(-1), dstRow);
-
     int numLevels = _faceRefiner.GetNumLevels();
-    for (int level = 2; level < numLevels; ++level) {
-        StencilRow<REAL> srcRow = dstRow;
-        dstRow = srcRow[_faceRefiner.getLevel(level-1).getNumVertices()];
-        primvarRefiner.Interpolate(level, srcRow, dstRow);
+    if (numLevels > 1) {
+        Far::PrimvarRefinerReal<REAL> primvarRefiner(_faceRefiner);
+
+        StencilRow<REAL> dstRow(&stencilMatrix[0], numControlPoints);
+        primvarRefiner.Interpolate(1, ControlRow(-1), dstRow);
+
+        for (int level = 2; level < numLevels; ++level) {
+            StencilRow<REAL> srcRow = dstRow;
+            dstRow = srcRow[_faceRefiner.getLevel(level-1).getNumVertices()];
+            primvarRefiner.Interpolate(level, srcRow, dstRow);
+        }
     }
 
     //
-    //  Now assign stencils for the points of any irregular patches:
+    //  For irregular patch points, append rows for each irregular patch:
     //
     if (_patchTree->_numIrregPatches) {
         SparseMatrix<REAL> irregConvMatrix;
@@ -435,13 +507,19 @@ PatchTreeBuilder::appendConversionStencilsToMatrix(
         int          rowSize    =  conversionMatrix.GetRowSize(i);
 
         for (int j = 0; j < rowSize; ++j) {
-            REAL srcWeight       = rowWeights[j];
-            int  srcStencilIndex = sourcePoints[rowIndices[j]]
-                                 - numControlPoints;
+            REAL srcWeight = rowWeights[j];
+            int  srcIndex  = sourcePoints[rowIndices[j]];
 
-            StencilRow<REAL> srcStencil = srcStencils[srcStencilIndex];
+            //  Simply increment single weight if this is a control point
+            if (srcIndex < numControlPoints) {
+                dstStencil._data[srcIndex] += srcWeight;
+            } else {
+                int srcStencilIndex = srcIndex - numControlPoints;
 
-            dstStencil.AddWithWeight(srcStencil, srcWeight);
+                StencilRow<REAL> srcStencil = srcStencils[srcStencilIndex];
+
+                dstStencil.AddWithWeight(srcStencil, srcWeight);
+            }
         }
     }
 }
