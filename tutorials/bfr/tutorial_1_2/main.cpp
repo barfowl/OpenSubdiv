@@ -452,13 +452,18 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
             //
             //  WIP - exploring multiple ways to achieve this:
             //
-            int useFaceVaryingExtensions = true;
-            if (useFaceVaryingExtensions) {
+            int take = 1;
+            if (take == 1) {
+                if (!surfaceFactory.InitSurfaces(faceIndex,
+                            &posSurface, &uvSurface)){
+                    continue;
+                }
+            } else if (take == 2) {
                 if (!surfaceFactory.InitFaceVaryingSurface(faceIndex,
                             &uvSurface, &posSurface)){
                     continue;
                 }
-            } else {
+            } else if (take == 3) {
                 //  This typedef would typically be declared above with others:
                 typedef SurfaceFactory::Surfaces<float> SurfaceGroup;
 
