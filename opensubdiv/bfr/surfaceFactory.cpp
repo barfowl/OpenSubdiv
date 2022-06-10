@@ -1239,119 +1239,32 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
 }
 
 //
-//  Public creation methods for instances of Surface:
+//  Main internal method to initialize instances of Surface:
 //
-template <typename REAL>
-bool
-SurfaceFactory::InitVertexSurface(Index faceIndex,
-        Surface<REAL> * vtxSurface) const {
-
-    assert(vtxSurface);
-    //
-    //  This can be streamlined in future (no need to use full SurfaceSet):
-    //
-    SurfaceSet surfaces;
-
-    surfaces.vtxSurf  = &vtxSurface->getSurfaceData();
-    surfaces.numSurfs = 1;
-
-    return populateAllSurfaces(faceIndex, &surfaces);
-}
-
-template <typename REAL>
-bool
-SurfaceFactory::InitVaryingSurface(Index faceIndex,
-        Surface<REAL> * varSurface) const {
-
-    assert(varSurface);
-    //
-    //  This can be streamlined in future (no need to use full SurfaceSet):
-    //
-    SurfaceSet surfaces;
-
-    surfaces.varSurf  = &varSurface->getSurfaceData();
-    surfaces.numSurfs = 1;
-
-    return populateAllSurfaces(faceIndex, &surfaces);
-}
-
-template <typename REAL>
-bool
-SurfaceFactory::InitFaceVaryingSurface(Index faceIndex,
-        Surface<REAL> * fvarSurface, FVarID fvarID) const {
-
-    assert(fvarSurface);
-    //
-    //  This can be streamlined in future (no need to use full SurfaceSet):
-    //
-    SurfaceSet surfaces;
-
-    surfaces.fvarSurfs    = &fvarSurface->getSurfaceData();
-    surfaces.fvarIDs      = &fvarID;
-    surfaces.numSurfs     = 1;
-    surfaces.numFVarSurfs = 1;
-
-    return populateAllSurfaces(faceIndex, &surfaces);
-}
-
-template <typename REAL>
 bool
 SurfaceFactory::initSurfaces(Index faceIndex,
-        Surface<REAL> * vtxSurface,
-        Surface<REAL> * varSurface,
-        Surface<REAL> * fvarSurfaces,
-        int             fvarCount,
-        FVarID const    fvarIDs[]) const {
+        internal::SurfaceData * vtxSurface,
+        internal::SurfaceData * varSurface,
+        internal::SurfaceData * fvarSurfaces,
+        int                     fvarCount,
+        FVarID const            fvarIDs[]) const {
+
+    //  Note the SurfaceData for the first FVar Surface is assumed below
+    //  to be the head of an array of SurfaceData, which will not be true
+    //  if additional members are added to Surface<REAL> in future:
+    assert(sizeof(internal::SurfaceData) == sizeof(Surface<float>));
 
     SurfaceSet surfaces;
 
-    surfaces.vtxSurf = &vtxSurface->getSurfaceData();
-    surfaces.varSurf = &varSurface->getSurfaceData();
-
-    //  Note the SurfaceData for the first FVar Surface<REAL> is assumed to
-    //  be the head of an array of SurfaceData, which will not be true if
-    //  additional members are added to Surface<REAL> in future:
-    assert(sizeof(internal::SurfaceData) == sizeof(Surface<REAL>));
-
-    surfaces.fvarSurfs = &fvarSurfaces[0].getSurfaceData();
-    surfaces.fvarIDs   =  fvarIDs;
-
+    surfaces.vtxSurf      = vtxSurface;
+    surfaces.varSurf      = varSurface;
+    surfaces.fvarSurfs    = fvarSurfaces;
+    surfaces.fvarIDs      = fvarIDs;
     surfaces.numFVarSurfs = fvarCount;
     surfaces.numSurfs     = fvarCount + (vtxSurface != 0) + (varSurface != 0);
 
     return populateAllSurfaces(faceIndex, &surfaces);
 }
-
-//
-//  Explicit instantiation of the preceding template methods:
-//
-template bool
-SurfaceFactory::InitVertexSurface<float>(
-        Index, Surface<float> *) const;
-template bool
-SurfaceFactory::InitVaryingSurface<float>(
-        Index, Surface<float> *) const;
-template bool
-SurfaceFactory::InitFaceVaryingSurface<float>(
-        Index, Surface<float> *, FVarID fvarID) const;
-template bool
-SurfaceFactory::initSurfaces<float>(
-        Index, Surface<float> *, Surface<float> *, Surface<float> *,
-        int, FVarID const fvarIDs[]) const;
-
-template bool
-SurfaceFactory::InitVertexSurface<double>(
-        Index, Surface<double> *) const;
-template bool
-SurfaceFactory::InitVaryingSurface<double>(
-        Index, Surface<double> *) const;
-template bool
-SurfaceFactory::InitFaceVaryingSurface<double>(
-        Index, Surface<double> *, FVarID fvarID) const;
-template bool
-SurfaceFactory::initSurfaces<double>(
-        Index, Surface<double> *, Surface<double> *, Surface<double> *,
-        int, FVarID const fvarIDs[]) const;
 
 //
 //  Optional virtual topology queries:

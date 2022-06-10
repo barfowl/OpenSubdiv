@@ -218,13 +218,13 @@ public:
     //  First, methods to create or initialize instances of a Surface for
     //  eac of the three different data interpolation types:
     //
-    template <typename REAL>
+    template <typename REAL=float>
     Surface<REAL> * CreateVertexSurface(     Index faceIndex) const;
-    template <typename REAL>
+    template <typename REAL=float>
     Surface<REAL> * CreateVaryingSurface(    Index faceIndex) const;
-    template <typename REAL>
+    template <typename REAL=float>
     Surface<REAL> * CreateFaceVaryingSurface(Index faceIndex) const;
-    template <typename REAL>
+    template <typename REAL=float>
     Surface<REAL> * CreateFaceVaryingSurface(Index faceIndex, FVarID id) const;
 
     template <typename REAL>
@@ -245,9 +245,11 @@ public:
     //               puts focus on face-varying as the prime use case
     //      - cons:  dismissive of Varying surface
     //
+    //  This overload likely to be heavily used:
     template <typename REAL>
     bool InitFaceVaryingSurface(Index f, Surface<REAL> * fvarSurface,
                                          Surface<REAL> * vtxSurface) const;
+    //  This overload to be rarely used:
     template <typename REAL>
     bool InitFaceVaryingSurfaces(Index f, Surface<REAL> * fvarSurfaces,
                                           int             fvarCount,
@@ -262,6 +264,7 @@ public:
     //      - cons:  forces client to separately populate an instance
     //               requires nested struct (contrary to convention)
     //               array types within struct refer to data outside it
+    //      * use of a local/nested builder class may reduce some of the cons
     //
     template <typename REAL>
     struct Surfaces {
@@ -272,40 +275,21 @@ public:
         Surface<REAL> * fvarSurfaces;
         int             fvarCount;
         FVarID        * fvarIDs;
+
+        //  WIP - adding some self-referential modifiers could simplify use
     };
 
     template <typename REAL>
     bool InitSurfaces(Index faceIndex, Surfaces<REAL> * surfaces) const;
 
-    //
-    //  WIP - Take 3 multiple surfaces
-    //  Template struct:
-    //      - pros:  single, well-defined method
-    //               no need for a nested class, so less intrusive in header
-    //               clients can tailor both membership and interface
-    //                   constructors can be defined for preferred cases
-    //                   members can be the actual data, not just ptrs to it
-    //      - cons:  forces client to define their own struct
-    //
-    //  <class SURFACE_SET> requires the following interface:
-    //
-    //      Surface<REAL> * GetVertexSurface();
-    //      Surface<REAL> * GetVaryingSurface();
-    //      int             GetNumFaceVaryingSurfaces();
-    //      Surface<REAL> * GetFaceVaryingSurfaces();
-    //      FVarID        * GetFaceVaryingIDs());
-    //
-    template <typename SURFACE_SET>
-    bool InitSurfaceSet(Index faceIndex, SURFACE_SET * surfaces) const;
-
 protected:
     //  WIP - internal method supporting public methods for multiple surfaces
-    template <typename REAL>
-    bool initSurfaces(Index faceIndex, Surface<REAL> * vtxSurface,
-                                       Surface<REAL> * varSurface,
-                                       Surface<REAL> * fvarSurfaces,
-                                       int             fvarCount,
-                                       FVarID const    fvarIDs[]) const;
+    //      - currently here for reference relative to those methods above
+    bool initSurfaces(Index faceIndex, internal::SurfaceData * vtxSurface,
+                                       internal::SurfaceData * varSurface,
+                                       internal::SurfaceData * fvarSurfaces,
+                                       int           fvarCount,
+                                       FVarID const  fvarIDs[]) const;
 
 protected:
     //
@@ -532,9 +516,27 @@ SurfaceFactory::Options::SetApproxLevelSharp(int level) {
 //
 template <typename REAL>
 inline bool
+SurfaceFactory::InitVertexSurface(Index face, Surface<REAL> * s) const {
+
+    return initSurfaces(face, &s->getSurfaceData(), 0, 0, 0, 0);
+}
+template <typename REAL>
+inline bool
+SurfaceFactory::InitVaryingSurface(Index face, Surface<REAL> * s) const {
+
+    return initSurfaces(face, 0, &s->getSurfaceData(), 0, 0, 0);
+}
+template <typename REAL>
+inline bool
+SurfaceFactory::InitFaceVaryingSurface(Index face, Surface<REAL> * s,
+                                                   FVarID fvarID) const {
+    return initSurfaces(face, 0, 0, &s->getSurfaceData(), 1, &fvarID);
+}
+template <typename REAL>
+inline bool
 SurfaceFactory::InitFaceVaryingSurface(Index face, Surface<REAL> * s) const {
     FVarID dfltID = _limitOptions.GetDefaultFVarID();
-    return InitFaceVaryingSurface<REAL>(face, s, dfltID);
+    return initSurfaces(face, 0, 0, &s->getSurfaceData(), 1, &dfltID);
 }
 
 template <typename REAL>
@@ -574,9 +576,10 @@ inline bool
 SurfaceFactory::InitFaceVaryingSurface(Index faceIndex,
         Surface<REAL> * fvarSurface, Surface<REAL> * vtxSurface) const {
     FVarID dfltID = _limitOptions.GetDefaultFVarID();
-    Surface<REAL> * varSurface = 0;
-    return initSurfaces(faceIndex, vtxSurface, varSurface,
-                                   fvarSurface, 1, &dfltID);
+    return initSurfaces(faceIndex,
+            &vtxSurface->getSurfaceData(),
+            0,
+            &fvarSurface->getSurfaceData(), 1, &dfltID);
 }
 template <typename REAL>
 inline bool
@@ -584,30 +587,22 @@ SurfaceFactory::InitFaceVaryingSurfaces(Index faceIndex,
         Surface<REAL> * fvarSurfaces, int fvarCount, FVarID const fvarIDs[],
         Surface<REAL> * vtxSurface) const {
     Surface<REAL> * varSurface = 0;
-    return initSurfaces(faceIndex, vtxSurface, varSurface,
-                                   fvarSurfaces, fvarCount, fvarIDs);
+    return initSurfaces(faceIndex,
+            vtxSurface ? &vtxSurface->getSurfaceData() : 0,
+            0,
+            &fvarSurfaces->getSurfaceData(), fvarCount, fvarIDs);
 }
 
 //  WIP - Take 2 multiple surfaces:  local/nested struct
 template <typename REAL>
 bool
 SurfaceFactory::InitSurfaces(Index faceIndex, Surfaces<REAL> * surfaces) const {
-    return initSurfaces(faceIndex, surfaces->vtxSurface,
-                                   surfaces->varSurface,
-                                   surfaces->fvarSurfaces,
-                                   surfaces->fvarCount,
-                                   surfaces->fvarIDs);
-}
-
-//  WIP - Take 3 multiple surfaces:  template struct
-template <typename SURFACE_SET>
-bool
-SurfaceFactory::InitSurfaceSet(Index faceIndex, SURFACE_SET * surfaces) const {
-    return initSurfaces(faceIndex, surfaces->GetVertexSurface(),
-                                   surfaces->GetVaryingSurface(),
-                                   surfaces->GetFaceVaryingSurfaces(),
-                                   surfaces->GetNumFaceVaryingSurfaces(),
-                                   surfaces->GetFaceVaryingIDs());
+    return initSurfaces(faceIndex,
+        surfaces->vtxSurface   ? &surfaces->vtxSurface->getSurfaceData()   : 0,
+        surfaces->varSurface   ? &surfaces->varSurface->getSurfaceData()   : 0,
+        surfaces->fvarSurfaces ? &surfaces->fvarSurfaces->getSurfaceData() : 0,
+        surfaces->fvarCount,
+        surfaces->fvarIDs);
 }
 
 } // end namespace Bfr
