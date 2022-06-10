@@ -260,27 +260,38 @@ public:
     //  WIP - Take 2 on multiple surfaces
     //  Local/nested struct:
     //      - pros:  single, well-defined method
-    //               reasonably compact in header if interface is excluded
-    //      - cons:  forces client to separately populate an instance
-    //               requires nested struct (contrary to convention)
-    //               array types within struct refer to data outside it
-    //      * use of a local/nested builder class may reduce some of the cons
+    //               reasonably compact in header if interface small
+    //               can use inline with self-referential modifiers
+    //      - cons:  member arrays refer to data outside it:
+    //                 - FVarID array may unknowingly refer to a temporary
     //
     template <typename REAL>
-    struct Surfaces {
-        Surfaces() : vtxSurface(0), varSurface(0),
-                     fvarSurfaces(0), fvarCount(0), fvarIDs(0) { }
-        Surface<REAL> * vtxSurface;
-        Surface<REAL> * varSurface;
-        Surface<REAL> * fvarSurfaces;
-        int             fvarCount;
-        FVarID        * fvarIDs;
+    class Surfaces {
+    public:
+        Surfaces() : _vtxSurface(0), _varSurface(0),
+                     _fvarSurfaces(0), _fvarCount(0), _fvarIDs(0) { }
 
-        //  WIP - adding some self-referential modifiers could simplify use
+        Surfaces & SetVertex(     Surface<REAL> * vtxSurface);
+        Surfaces & SetVarying(    Surface<REAL> * varSurface);
+        Surfaces & SetFaceVarying(Surface<REAL> * fvarSurface);
+        Surfaces & SetFaceVarying(Surface<REAL> * fvarSurface,
+                                  FVarID          fvarID);
+        Surfaces & SetFaceVarying(Surface<REAL>   fvarSurfaces[],
+                                  int             fvarCount,
+                                  FVarID const    fvarIDs[] = 0);
+
+    private:
+        friend class SurfaceFactory;
+
+        Surface<REAL> * _vtxSurface;
+        Surface<REAL> * _varSurface;
+        Surface<REAL> * _fvarSurfaces;
+        int             _fvarCount;
+        FVarID const  * _fvarIDs;
     };
 
     template <typename REAL>
-    bool InitSurfaces(Index faceIndex, Surfaces<REAL> * surfaces) const;
+    bool InitSurfaces(Index faceIndex, Surfaces<REAL> const & surfaces) const;
 
 protected:
     //  WIP - internal method supporting public methods for multiple surfaces
@@ -594,15 +605,56 @@ SurfaceFactory::InitFaceVaryingSurfaces(Index faceIndex,
 }
 
 //  WIP - Take 2 multiple surfaces:  local/nested struct
+//
+//  Inline methods for SurfaceFactory::Surfaces:
+template <typename REAL>
+SurfaceFactory::Surfaces<REAL> &
+SurfaceFactory::Surfaces<REAL>::SetVertex(Surface<REAL> * vtxSurface) {
+    _vtxSurface = vtxSurface;
+    return *this;
+}
+template <typename REAL>
+SurfaceFactory::Surfaces<REAL> &
+SurfaceFactory::Surfaces<REAL>::SetVarying(Surface<REAL> * varSurface) {
+    _varSurface = varSurface;
+    return *this;
+}
+template <typename REAL>
+SurfaceFactory::Surfaces<REAL> &
+SurfaceFactory::Surfaces<REAL>::SetFaceVarying(Surface<REAL> * fvarSurface) {
+    _fvarSurfaces = fvarSurface;
+    _fvarCount    = 1;
+    _fvarIDs      = 0;
+    return *this;
+}
+template <typename REAL>
+SurfaceFactory::Surfaces<REAL> &
+SurfaceFactory::Surfaces<REAL>::SetFaceVarying(Surface<REAL> * fvarSurface,
+        FVarID fvarID) {
+    _fvarSurfaces = fvarSurface;
+    _fvarCount    = 1;
+    _fvarIDs      = &fvarID;  // WIP - ptr to possible temporary may surprise here
+    return *this;
+}
+template <typename REAL>
+SurfaceFactory::Surfaces<REAL> &
+SurfaceFactory::Surfaces<REAL>::SetFaceVarying(Surface<REAL> fvarSurfaces[],
+        int numFVarSurfaces, FVarID const fvarIDs[]) {
+    _fvarSurfaces = fvarSurfaces;
+    _fvarCount    = numFVarSurfaces;
+    _fvarIDs      = fvarIDs;
+    return *this;
+}
+
 template <typename REAL>
 bool
-SurfaceFactory::InitSurfaces(Index faceIndex, Surfaces<REAL> * surfaces) const {
+SurfaceFactory::InitSurfaces(Index faceIndex, Surfaces<REAL> const & s) const {
     return initSurfaces(faceIndex,
-        surfaces->vtxSurface   ? &surfaces->vtxSurface->getSurfaceData()   : 0,
-        surfaces->varSurface   ? &surfaces->varSurface->getSurfaceData()   : 0,
-        surfaces->fvarSurfaces ? &surfaces->fvarSurfaces->getSurfaceData() : 0,
-        surfaces->fvarCount,
-        surfaces->fvarIDs);
+                        s._vtxSurface   ? &s._vtxSurface->getSurfaceData()   : 0,
+                        s._varSurface   ? &s._varSurface->getSurfaceData()   : 0,
+                        s._fvarSurfaces ? &s._fvarSurfaces->getSurfaceData() : 0,
+                        s._fvarCount,
+                        s._fvarIDs);
 }
 
 } // end namespace Bfr

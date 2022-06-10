@@ -459,14 +459,12 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
                     continue;
                 }
             } else {
-                //  This would typically be declared outside the face loop:
-                SurfaceFactory::Surfaces<float> surfaces;
+                //  This typedef would typically be declared above with others:
+                typedef SurfaceFactory::Surfaces<float> SurfaceGroup;
 
-                surfaces.vtxSurface   = &posSurface;
-                surfaces.fvarSurfaces = &uvSurface;
-                surfaces.fvarCount    = 1;
-
-                if (!surfaceFactory.InitSurfaces(faceIndex, &surfaces)) {
+                if (!surfaceFactory.InitSurfaces(faceIndex,
+                        SurfaceGroup().SetVertex(&posSurface).
+                                       SetFaceVarying(&uvSurface))) {
                     continue;
                 }
             }
