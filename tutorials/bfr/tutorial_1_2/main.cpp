@@ -459,17 +459,14 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
                     continue;
                 }
             } else if (take == 2) {
-                if (!surfaceFactory.InitFaceVaryingSurface(faceIndex,
-                            &uvSurface, &posSurface)){
-                    continue;
-                }
+                //  Overloads for face-varying surfaces no longer supported
             } else if (take == 3) {
                 //  This typedef would typically be declared above with others:
                 typedef SurfaceFactory::Surfaces<float> SurfaceGroup;
 
                 if (!surfaceFactory.InitSurfaces(faceIndex,
-                        SurfaceGroup().SetVertex(&posSurface).
-                                       SetFaceVarying(&uvSurface))) {
+                        SurfaceGroup().Vertex(&posSurface).
+                                       FaceVarying(&uvSurface))) {
                     continue;
                 }
             }

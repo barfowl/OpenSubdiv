@@ -70,7 +70,7 @@ BfrSurfaceEvaluator<REAL>::Evaluate(IndexType                 baseFace,
             _factory.InitFaceVaryingSurface(baseFace, &uvSurface);
         }
     } else {
-        _factory.InitFaceVaryingSurface(baseFace, &uvSurface, &pSurface);
+        _factory.InitSurfaces(baseFace, &pSurface, &uvSurface);
     }
 
     assert(pSurface.IsValid());
