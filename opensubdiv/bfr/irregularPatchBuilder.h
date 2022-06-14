@@ -140,9 +140,13 @@ private:
     int   getLocalControlVertex(Index meshVertexIndex) const;
     Index getMeshControlVertex( int   localVertexIndex) const;
 
-    bool mayHaveDuplicateControlFaces() const;
+    //  Methods for dealing with potentially overlapping faces:
+    bool controlFacesMayOverlap() const { return _controlFacesOverlap; }
+
     void removeDuplicateControlFaces(int faceSizes[], int faceVerts[],
                                      int * numFaces, int * numFaceVerts) const;
+    void sharpenBoundaryControlEdges(int edgeIndices[], float edgeSharpness[],
+                                     int * numSharpEdges) const;
 
 private:
     //  Private members:
@@ -156,6 +160,7 @@ private:
     int  _numControlVerts;
     int  _numControlFaces;
     int  _numControlFaceVerts;
+    bool _controlFacesOverlap;
     bool _useControlVertMap;
 
     CornerHullArray _cornerHullInfo;

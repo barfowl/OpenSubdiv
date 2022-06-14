@@ -182,6 +182,7 @@ IrregularPatchBuilder::initializeControlHullInventory() {
                 if (++numVal2IntCorners == faceSize) {
                     cHull.singleSharedFace = true;
                     cHull.numControlFaces = 1;
+                    numCornerFaceVerts = faceSize;
                 }
             }
         }
@@ -216,7 +217,9 @@ IrregularPatchBuilder::initializeControlHullInventory() {
     //  Use/build a map for the control vertex indices when incident
     //  faces overlap to an extent that makes traversal ill-defined:
     //
-    _useControlVertMap = (numVal2IntCorners > 0);
+    _controlFacesOverlap = (numVal2IntCorners > 0);
+
+    _useControlVertMap = _controlFacesOverlap;
     if (_useControlVertMap) {
         initializeControlVertexMap();
     }
@@ -421,6 +424,7 @@ IrregularPatchBuilder::gatherControlFaces(int faceSizes[],
             getControlFaceVertices(faceVerts, faceSize, corner,
                         getCornerFaceIndices(corner, cTop.GetFaceAfter(1)));
             *faceSizes++ = faceSize;
+            faceVerts   += faceSize;
             continue;
         }
 
@@ -671,12 +675,6 @@ IrregularPatchBuilder::getControlFaceVertices(int fVerts[], int numFVerts,
 //  Detection and removal of duplicate control faces -- which can only
 //  occur when incident faces overlap with the base face:
 //
-bool
-IrregularPatchBuilder::mayHaveDuplicateControlFaces() const {
-
-    return _useControlVertMap && (_numControlFaces > 2);
-}
-
 namespace {
     //
     //  Internal helper functions to detect duplicate faces:
@@ -751,6 +749,39 @@ IrregularPatchBuilder::removeDuplicateControlFaces(
     }
 }
 
+void
+IrregularPatchBuilder::sharpenBoundaryControlEdges(
+        int edgeVertPairs[], float edgeSharpness[], int * numSharpEdges) const {
+
+    //
+    //  When extracting a manifold subset from a greater non-manifold
+    //  region, the boundary edges for the subset sometimes occur on
+    //  non-manifold edges.  When extracting the subset topology in
+    //  cases where faces overlap, those boundary edges can sometimes
+    //  be misinterpreted as manifold interior edges -- as the extra
+    //  faces connected to them that made the edge non-manifold are
+    //  not included in the subset.
+    //
+    //  So boundary edges are sharpened here -- which generally has no
+    //  effect (as boundary edges are implicitly sharpened) but ensures
+    //  that if the edge is misinterpreted as interior, it will remain
+    //  sharp. And only boundary edges of the base face are sharpened
+    //  here -- it is not necessary to deal with others.
+    //
+    int faceSize = _surface.GetFaceSize();
+
+    for (int corner = 0; corner < faceSize; ++corner) {
+        FaceVertexSubset const & cSub = _surface.GetCornerSubset(corner);
+
+        if (cSub.IsBoundary() && (cSub._numFacesBefore == 0)) {
+            *edgeSharpness++ = Sdc::Crease::SHARPNESS_INFINITE;
+            *edgeVertPairs++ =  corner;
+            *edgeVertPairs++ = (corner + 1) % faceSize;
+            (*numSharpEdges) ++;
+        }
+    }
+}
+
 //
 //  The main build/assembly method to create a PatchTree:
 //
@@ -807,20 +838,26 @@ IrregularPatchBuilder::Build() {
     float * cornerWeights = floatBuffer;
     float * creaseWeights = cornerWeights + numCorners;
 
-    //  Gather face topology (sizes and vertices):
+    //  Gather face topology (sizes and vertices) and explicit sharpness:
     gatherControlFaces(faceSizes, faceVerts);
 
-    if (mayHaveDuplicateControlFaces()) {
-        removeDuplicateControlFaces(faceSizes, faceVerts,
-                                    &numFaces, &numFaceVerts);
-    }
-
-    //  Gather optional vertex or edge sharpness:
     numCorners = _surface.GetTag().HasSharpVertices() ?
                  gatherControlVertexSharpness(cornerIndices, cornerWeights) : 0;
 
     numCreases = _surface.GetTag().HasSharpEdges() ?
                  gatherControlEdgeSharpness(creaseIndices, creaseWeights) : 0;
+
+    //  Make some adjustments when control faces may overlap:
+    if (controlFacesMayOverlap()) {
+        if (numFaces > 2) {
+            removeDuplicateControlFaces(faceSizes, faceVerts,
+                                        &numFaces, &numFaceVerts);
+        }
+        if (_surface.GetTag().HasBoundaryVertices()) {
+            sharpenBoundaryControlEdges(creaseIndices, creaseWeights,
+                                        &numCreases);
+        }
+    }
 
     //  Declare a TopologyDescriptor to reference the data gathered above:
     Far::TopologyDescriptor topDescriptor;

@@ -378,6 +378,7 @@ PatchTree::buildQuadtree() {
         int depth     = param.GetDepth();
         int rootDepth = param.NonQuadRoot();
         int subFace   = param.GetFaceId();
+        assert((subFace == 0) || (subFace < _numSubFaces));
 
         TreeNode * node = &_treeNodes[subFace];
 

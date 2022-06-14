@@ -75,7 +75,7 @@ PatchTreeBuilder::PatchTreeBuilder(TopologyRefiner & faceRefiner,
 
     //  If primary is 0, so is secondary -- see if level 1 required:
     if (adaptiveLevelSecondary == 0) {
-        if (faceNeedsRefinement(_faceAtRoot)) {
+        if (rootFaceNeedsRefinement()) {
             adaptiveLevelPrimary   = std::max(1, adaptiveLevelPrimary);
             adaptiveLevelSecondary = 1;
         }
@@ -181,7 +181,7 @@ PatchTreeBuilder::Build() {
 }
 
 bool
-PatchTreeBuilder::faceNeedsRefinement(int baseFace) const {
+PatchTreeBuilder::rootFaceNeedsRefinement() const {
 
     //
     //  The Far::PatchBuilder cannot construct a single patch from a face
@@ -196,6 +196,7 @@ PatchTreeBuilder::faceNeedsRefinement(int baseFace) const {
     //  whether the irregular feature is isolated or not) but until those
     //  conditions are clear, such features will trigger refinement.
     //
+    int           baseFace  = _faceAtRoot;
     Level const & baseLevel = _faceRefiner.getLevel(0);
 
     Level::VTag const & fTags  = baseLevel.getFaceCompositeVTag(baseFace);
@@ -243,6 +244,25 @@ PatchTreeBuilder::faceNeedsRefinement(int baseFace) const {
     return false;
 }
 
+bool
+PatchTreeBuilder::testFaceAncestors() const {
+
+    //  Conditions of overlapping faces that require testing base face:
+    return (_patchBuilder->GetRegularFaceSize() == 3) &&
+           (_faceRefiner.getLevel(0).getNumEdges() == 3) &&
+           (_faceRefiner.getLevel(0).getNumFaces() > 1);
+}
+
+bool
+PatchTreeBuilder::faceAncestorIsRoot(int level, int face) const {
+
+    // Move up the hierarchy to the base level:
+    for (int i = level; i > 0; --i) {
+        face = _faceRefiner.getRefinement(i-1).getChildFaceParentFace(face);
+    }
+    return (face == _faceAtRoot);
+}
+
 void
 PatchTreeBuilder::identifyPatches() {
 
@@ -264,17 +284,22 @@ PatchTreeBuilder::identifyPatches() {
         }
     }
 
-    int numLevels = _faceRefiner.GetNumLevels();
-    for (int lIndex = 1; lIndex < numLevels; ++lIndex) {
-        int numFaces = _faceRefiner.getLevel(lIndex).getNumFaces();
+    //  Under rare circumstances, the normally quick test for a patch is
+    //  flawed and includes faces descended from neighboring faces:
+    bool testBaseFace = testFaceAncestors();
 
-        for (int fIndex = 0; fIndex < numFaces; ++fIndex) {
-            if (_patchBuilder->IsFaceAPatch(lIndex, fIndex)) {
-                if (incNonLeaf ||
-                        _patchBuilder->IsFaceALeaf(lIndex, fIndex)) {
-                    bool isReg = _patchBuilder->IsPatchRegular(lIndex, fIndex);
-                    _patchFaces.push_back(PatchFace(lIndex, fIndex, isReg));
-                    numIrregPatches += !isReg;
+    int numLevels = _faceRefiner.GetNumLevels();
+    for (int level = 1; level < numLevels; ++level) {
+        int numFaces = _faceRefiner.getLevel(level).getNumFaces();
+
+        for (int face = 0; face < numFaces; ++face) {
+            if (testBaseFace && !faceAncestorIsRoot(level, face)) continue;
+
+            if (_patchBuilder->IsFaceAPatch(level, face)) {
+                if (incNonLeaf || _patchBuilder->IsFaceALeaf(level, face)) {
+                    bool isRegular = _patchBuilder->IsPatchRegular(level, face);
+                    _patchFaces.push_back(PatchFace(level, face, isRegular));
+                    numIrregPatches += !isRegular;
                 }
             }
         }
@@ -308,6 +333,8 @@ PatchTreeBuilder::initializePatches() {
     for (size_t i = 0; i < _patchFaces.size(); ++i) {
         PatchFace const & pf = _patchFaces[i];
 
+        PatchParam & patchParam = _patchTree->_patchParams[i];
+
         Index * patchPoints =
                 &_patchTree->_patchPoints[i * _patchTree->_patchPointStride];
 
@@ -316,8 +343,8 @@ PatchTreeBuilder::initializePatches() {
             int boundaryMask =
                 _patchBuilder->GetRegularPatchBoundaryMask(pf.level, pf.face);
 
-            _patchTree->_patchParams[i] = _patchBuilder->ComputePatchParam(
-                pf.level, pf.face, ptexIndices, true, boundaryMask, true);
+            patchParam = _patchBuilder->ComputePatchParam(pf.level, pf.face,
+                    ptexIndices, true, boundaryMask, true);
 
             //  Gather the points of the patch -- since they are assigned
             //  directly into the PatchTree's buffer by the PatchBuilder
@@ -330,8 +357,7 @@ PatchTreeBuilder::initializePatches() {
             }
         } else {
             //  Compute/assign the PatchParam for an irregular patch:
-            _patchTree->_patchParams[i] =
-                _patchBuilder->ComputePatchParam(pf.level, pf.face,
+            patchParam = _patchBuilder->ComputePatchParam(pf.level, pf.face,
                     ptexIndices, false /*irreg*/, 0 /*mask*/, false);
 
             //  Assign indices of new/local points for this irregular patch:
