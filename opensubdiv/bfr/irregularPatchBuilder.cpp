@@ -39,7 +39,7 @@ namespace Bfr {
 //  Trivial constructor -- initializes members related to the control hull:
 //
 IrregularPatchBuilder::IrregularPatchBuilder(
-        FaceSurface const & surfaceDescription, Options options) :
+        FaceSurface const & surfaceDescription, Options const & options) :
             _surface(surfaceDescription),
             _options(options) {
 

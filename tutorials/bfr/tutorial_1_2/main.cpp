@@ -362,17 +362,11 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     typedef Bfr::Surface<float>          Surface;
 
     //
-    //  Initialize specified evaluation options (none explicit here) and
-    //  declare buffers required by use of instances of Surface during
+    //  Declare buffers required by use of instances of Surface during
     //  evaluation (declared here to reuse memory for each face):
     //
-    SurfaceFactory::Options surfaceOptions;
-
     bool meshHasUVs = (baseMesh.GetNumFVarChannels() == 1) &&
                       (baseMeshFVarUVs.size() > 0);
-    if (meshHasUVs) {
-        surfaceOptions.SetDefaultFVarID(0);
-    }
 
     std::vector<Vec3f> surfaceXYZPoints;
     std::vector<Vec3f> surfaceUVPoints;
@@ -405,7 +399,8 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  parallelize this loop.  Another (preferred) is to assign a
     //  thread-safe cache to the single instance.
     //
-    SurfaceFactory surfaceFactory(baseMesh, surfaceOptions);
+    SurfaceFactory surfaceFactory(baseMesh,
+            SurfaceFactory::Options().SetDefaultFVarID(0));
 
     int numFaces = surfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {

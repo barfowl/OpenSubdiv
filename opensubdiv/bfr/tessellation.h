@@ -56,22 +56,22 @@ public:
 
         //  Choice of triangulation (default) or preservation of quads
         //  with quad-based subdivision:
-        void PreserveQuads(bool on) { _preserveQuads = on; }
-        bool PreserveQuads() const  { return _preserveQuads; }
+        Options & PreserveQuads(bool on);
+        bool      PreserveQuads() const { return _preserveQuads; }
 
         //  Option for the number of indices associated with each facet
         //  (i.e. the number of indices set by the Tessellation) which can
         //  be 3 or 4 (default is 3 and remains so unless 4 specified):
-        void SetFacetSize(int numIndices) { _facetSize4 = (numIndices == 4); }
-        int  GetFacetSize() const         { return 3 + (int)_facetSize4; }
+        Options & SetFacetSize(int numIndices);
+        int       GetFacetSize() const { return 3 + (int)_facetSize4; }
 
         //  Option for stride between facets within a larger set:
-        void SetFacetStride(int stride)  { _facetStride = (short) stride; }
-        int  GetFacetStride() const      { return _facetStride; }
+        Options & SetFacetStride(int stride);
+        int       GetFacetStride() const { return _facetStride; }
 
         //  Option for stride between (u,v) pairs within a larger set:
-        void SetCoordStride(int stride) { _coordStride = (short) stride; }
-        int  GetCoordStride() const     { return _coordStride; }
+        Options & SetCoordStride(int stride);
+        int       GetCoordStride() const { return _coordStride; }
 
     private:
         unsigned int _preserveQuads : 1;
@@ -116,9 +116,9 @@ public:
     //  non-positive tessellation rates, etc.
     //
     Tessellation(Parameterization const & p, int uniformRate,
-                 Options options = Options());
+                 Options const & options = Options());
     Tessellation(Parameterization const & p, int numRates, int const rates[],
-                 Options options = Options());
+                 Options const & options = Options());
     ~Tessellation();
 
     bool IsValid() const { return _isValid; }
@@ -228,6 +228,27 @@ private:
 //
 //  Inline implementations:
 //
+inline Tessellation::Options &
+Tessellation::Options::PreserveQuads(bool on) {
+    _preserveQuads = on;
+    return *this;
+}
+inline Tessellation::Options &
+Tessellation::Options::SetFacetSize(int numIndices) {
+    _facetSize4 = (numIndices == 4);
+    return *this;
+}
+inline Tessellation::Options &
+Tessellation::Options::SetFacetStride(int stride)  {
+    _facetStride = (short) stride;
+    return *this;
+}
+inline Tessellation::Options &
+Tessellation::Options::SetCoordStride(int stride) {
+    _coordStride = (short) stride;
+    return *this;
+}
+
 template <typename REAL>
 inline int
 Tessellation::GetVertexCoord(int vertex, REAL coord[]) const {

@@ -56,7 +56,7 @@ public:
     //  Subclass-specific constructor:
     //
     RefinerSurfaceFactoryBase(Far::TopologyRefiner const & mesh,
-                               Options options = Options());
+                              Options const & options);
     virtual ~RefinerSurfaceFactoryBase();
 
     //
@@ -133,7 +133,7 @@ template <class CACHE_TYPE = SurfaceFactoryCache>
 class RefinerSurfaceFactory : public RefinerSurfaceFactoryBase {
 public:
     RefinerSurfaceFactory(Far::TopologyRefiner const & mesh,
-                          Options options = Options()) :
+                          Options const & options = Options()) :
             RefinerSurfaceFactoryBase(mesh, options),
             _localCache() { }
     virtual ~RefinerSurfaceFactory() { }

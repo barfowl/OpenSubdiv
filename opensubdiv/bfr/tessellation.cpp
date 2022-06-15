@@ -2273,14 +2273,16 @@ Tessellation::initializeInventoryForParamQPoly(int sumOfEdgeRates) {
 //
 //  Tessellation constructors and destructor:
 //
-Tessellation::Tessellation(Parameterization const & p,
-        int uniformRate, Options options) {
+Tessellation::Tessellation(
+        Parameterization const & p, int uniformRate,
+        Options const & options) {
 
     initialize(p, 1, &uniformRate, options);
 }
 
-Tessellation::Tessellation(Parameterization const & p,
-        int numRates, int const rates[], Options options) {
+Tessellation::Tessellation(
+        Parameterization const & p, int numRates, int const rates[],
+        Options const & options) {
 
     initialize(p, numRates, rates, options);
 }

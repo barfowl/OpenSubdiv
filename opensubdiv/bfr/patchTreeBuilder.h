@@ -81,7 +81,7 @@ public:
     //  Public interface intended for use by other builders requiring
     //  PatchTrees -- now reduced essentially to a single method:
     //
-    PatchTreeBuilder(Far::TopologyRefiner & refiner, Options options);
+    PatchTreeBuilder(Far::TopologyRefiner & refiner, Options const & options);
     ~PatchTreeBuilder();
 
     const PatchTree * Build();

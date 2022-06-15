@@ -67,7 +67,7 @@ public:
 
 public:
     IrregularPatchBuilder(FaceSurface const & surfaceDescription,
-                          Options             options = Options());
+                          Options     const & options = Options());
     ~IrregularPatchBuilder() { }
 
     //  Debugging:

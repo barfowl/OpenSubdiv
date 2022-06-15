@@ -135,24 +135,24 @@ public:
                     _approxLevelSmooth(2), _approxLevelSharp(6) { }
 
         //  Assign the default face-varying ID (no valid default):
-        void   SetDefaultFVarID(FVarID id) { _dfltFVarID = id; }
-        FVarID GetDefaultFVarID()    const { return _dfltFVarID; }
+        Options & SetDefaultFVarID(FVarID id);
+        FVarID    GetDefaultFVarID() const { return _dfltFVarID; }
 
         //  Enable the internal cache (default is true):
-        void EnableInternalCache(bool on)   { _enableCache = on; }
-        bool IsInternalCacheEnabled() const { return _enableCache; }
+        Options & EnableInternalCache(bool on);
+        bool      IsInternalCacheEnabled() const { return _enableCache; }
 
         //  Assign a shared cache between multiple Factories:
-        void SetSharedCache(SurfaceFactoryCache * c) { _sharedCache = c; }
+        Options &             SetSharedCache(SurfaceFactoryCache * c);
         SurfaceFactoryCache * GetSharedCache() const { return _sharedCache; }
 
         //  Set refinement levels used to approximate the limit surface
         //  for smooth and sharp features (reasonable defaults assigned):
-        void SetApproxLevelSmooth(int level);
-        int  GetApproxLevelSmooth() const { return _approxLevelSmooth; }
+        Options & SetApproxLevelSmooth(int level);
+        int       GetApproxLevelSmooth() const { return _approxLevelSmooth; }
 
-        void SetApproxLevelSharp(int level);
-        int  GetApproxLevelSharp() const { return _approxLevelSharp; }
+        Options & SetApproxLevelSharp(int level);
+        int       GetApproxLevelSharp() const { return _approxLevelSharp; }
 
     private:
         //  Member variables:
@@ -461,7 +461,7 @@ protected:
     //
     SurfaceFactory(Sdc::SchemeType schemeType,
                    Sdc::Options    schemeOptions,
-                   Options         limitOptions);
+                   Options const & limitOptions);
     virtual ~SurfaceFactory();
 
     virtual SurfaceFactoryCache * getInternalCache() const = 0;
@@ -538,15 +538,32 @@ private:
 };
 
 //
-//  Inline Options and its template specializations:
+//  Inline Options:
 //
-inline void
+inline SurfaceFactory::Options &
+SurfaceFactory::Options::SetDefaultFVarID(FVarID id) {
+    _dfltFVarID = id;
+    return *this;
+}
+inline SurfaceFactory::Options &
+SurfaceFactory::Options::EnableInternalCache(bool on) {
+    _enableCache = on;
+    return *this;
+}
+inline SurfaceFactory::Options & 
+SurfaceFactory::Options::SetSharedCache(SurfaceFactoryCache * c) {
+    _sharedCache = c;
+    return *this;
+}
+inline SurfaceFactory::Options &
 SurfaceFactory::Options::SetApproxLevelSmooth(int level) {
     _approxLevelSmooth = (unsigned char) level;
+    return *this;
 }
-inline void
+inline SurfaceFactory::Options &
 SurfaceFactory::Options::SetApproxLevelSharp(int level) {
     _approxLevelSharp = (unsigned char) level;
+    return *this;
 }
 
 //

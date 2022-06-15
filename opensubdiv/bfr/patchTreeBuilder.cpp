@@ -54,7 +54,7 @@ using Far::PatchParam;
 //  the work to other methods:
 //
 PatchTreeBuilder::PatchTreeBuilder(TopologyRefiner & faceRefiner,
-                                   Options options) :
+                                   Options const & options) :
     _patchTree(new PatchTree),
     _faceRefiner(faceRefiner),
     _faceAtRoot(0),

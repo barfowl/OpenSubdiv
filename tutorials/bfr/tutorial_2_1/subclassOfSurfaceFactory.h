@@ -54,7 +54,7 @@ public:
     //  Subclass-specific constructor:
     //
     SubclassOfSurfaceFactory(TopologyRefiner const & mesh,
-                             Options options = Options());
+                             Options const & options = Options());
     virtual ~SubclassOfSurfaceFactory();
 
     //

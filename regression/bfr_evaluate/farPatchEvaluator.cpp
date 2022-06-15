@@ -35,7 +35,7 @@ FarPatchEvaluator<REAL>::FarPatchEvaluator(
         Far::TopologyRefiner const & baseMesh,
         Vec3RealVector       const & basePos,
         Vec3RealVector       const & baseUVs,
-        FactoryOptions               factoryOptions) :
+        BfrSurfaceOptions    const & bfrSurfaceOptions) :
             _baseMesh(baseMesh),
             _baseMeshPos(basePos),
             _baseMeshUVs(baseUVs) {
@@ -49,8 +49,6 @@ FarPatchEvaluator<REAL>::FarPatchEvaluator(
     //
     //  Declare options to use in construction of PatchTable et al:
     //
-    FactoryOptions bfrSurfaceOptions = factoryOptions;
-
     int primaryLevel   = bfrSurfaceOptions.GetApproxLevelSharp();
     int secondaryLevel = bfrSurfaceOptions.GetApproxLevelSmooth();
 

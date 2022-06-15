@@ -126,7 +126,7 @@ public:
 SurfaceFactory::SurfaceFactory(
     Sdc::SchemeType schemeType,
     Sdc::Options    schemeOptions,
-    Options         limitOptions) :
+    Options const & limitOptions) :
         _schemeType(schemeType),
         _schemeOptions(schemeOptions),
         _limitOptions(limitOptions) {

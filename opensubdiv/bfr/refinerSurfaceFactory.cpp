@@ -42,7 +42,7 @@ using Far::ConstLocalIndexArray;
 //  Main constructor and destructor:
 //
 RefinerSurfaceFactoryBase::RefinerSurfaceFactoryBase(
-    Far::TopologyRefiner const & mesh, Options limitOptions) :
+    Far::TopologyRefiner const & mesh, Options const & limitOptions) :
         SurfaceFactory(mesh.GetSchemeType(),
                        mesh.GetSchemeOptions(),
                        limitOptions),

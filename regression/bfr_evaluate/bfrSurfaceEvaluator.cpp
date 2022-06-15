@@ -30,7 +30,7 @@ BfrSurfaceEvaluator<REAL>::BfrSurfaceEvaluator(
         Far::TopologyRefiner const & baseMesh,
         Vec3Vector           const & basePos,
         Vec3Vector           const & baseUVs,
-        FactoryOptions               factoryOptions) :
+        FactoryOptions       const & factoryOptions) :
             _baseMesh(baseMesh),
             _baseMeshPos(basePos),
             _baseMeshUVs(baseUVs),

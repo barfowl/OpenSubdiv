@@ -51,9 +51,9 @@ public:
 
 public:
     BfrSurfaceEvaluator(Far::TopologyRefiner const & baseMesh,
-                        Vec3Vector const           & basePos,
-                        Vec3Vector const           & baseUVs,
-                        FactoryOptions options = FactoryOptions());
+                        Vec3Vector           const & basePos,
+                        Vec3Vector           const & baseUVs,
+                        FactoryOptions       const & factoryOptions);
     ~BfrSurfaceEvaluator() { }
 
 public:

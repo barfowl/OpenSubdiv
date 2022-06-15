@@ -43,7 +43,7 @@ using OpenSubdiv::Far::ConstLocalIndexArray;
 //  Main constructor and destructor:
 //
 SubclassOfSurfaceFactory::SubclassOfSurfaceFactory(
-    TopologyRefiner const & mesh, Options factoryOptions) :
+    TopologyRefiner const & mesh, Options const & factoryOptions) :
         SurfaceFactory(mesh.GetSchemeType(),
                        mesh.GetSchemeOptions(),
                        factoryOptions),

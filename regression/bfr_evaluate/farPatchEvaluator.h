@@ -47,7 +47,7 @@ template <typename REAL>
 class FarPatchEvaluator {
 public:
     typedef Far::PatchTableFactory       PatchFactory;
-    typedef Bfr::SurfaceFactory::Options FactoryOptions;
+    typedef Bfr::SurfaceFactory::Options BfrSurfaceOptions;
 
     typedef std::vector<REAL>            TessCoordVector;
 
@@ -58,7 +58,7 @@ public:
     FarPatchEvaluator(Far::TopologyRefiner const & baseMesh,
                       Vec3RealVector       const & basePos,
                       Vec3RealVector       const & baseUVs,
-                      FactoryOptions options = FactoryOptions());
+                      BfrSurfaceOptions    const & bfrSurfaceOptions);
     ~FarPatchEvaluator();
 
 public:
