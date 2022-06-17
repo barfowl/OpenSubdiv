@@ -27,7 +27,7 @@
 
 #include "../version.h"
 
-#include "../bfr/types.h"
+#include "../bfr/limits.h"
 #include "../vtr/stackBuffer.h"
 
 #include <cstring>
@@ -129,8 +129,9 @@ public:
 
     //  The full declarartion must be enclosed by calls to these methods:
     //
-    //  Note that the valence of a vertex will be internally clamped to
-    //  the const MAX_VALENCE (typically 16-bits) so beware of exceeding
+    //  Note that the valence of a vertex will be internally clamped to a
+    //  value determined by Bfr::Limits (typically 16-bits) that reflects
+    //  topological limits elsewhere in OpenSubdiv, so beware of exceeding
     //  that limit.
     //
     void Initialize(int numIncidentFaces);
@@ -276,7 +277,7 @@ VertexDescriptor::SetIncidentFaceSize(int incFaceIndex, int faceSize) {
         std::memset(_faceSizeOffsets, 0, (_numFaces + 1) * sizeof(int));
         _hasFaceSizes = true;
     }
-    _faceSizeOffsets[incFaceIndex] = std::min(faceSize, Bfr::MAX_FACE_SIZE);
+    _faceSizeOffsets[incFaceIndex] = std::min(faceSize, Limits::MaxFaceSize());
 }
 inline int
 VertexDescriptor::GetIncidentFaceSize(int incFaceIndex) const {

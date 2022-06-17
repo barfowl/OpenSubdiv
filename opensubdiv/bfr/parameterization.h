@@ -27,7 +27,7 @@
 
 #include "../version.h"
 
-#include "../bfr/types.h"
+#include "../bfr/limits.h"
 #include "../sdc/types.h"
 
 #include <cmath>
@@ -138,7 +138,7 @@ Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) {
     int regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(scheme);
 
     _type     = (unsigned char) ((regFaceSize == 4) ? QUAD : TRI);
-    _faceSize = (unsigned short) std::min(faceSize, Bfr::MAX_FACE_SIZE);
+    _faceSize = (unsigned short) std::min(faceSize, Limits::MaxFaceSize());
     _uDim     = 0;
 
     if (_faceSize != regFaceSize) {

@@ -24,7 +24,7 @@
 
 #include "subclassOfSurfaceFactory.h"
 
-#include <opensubdiv/bfr/types.h>
+#include <opensubdiv/bfr/limits.h>
 #include <opensubdiv/bfr/vertexDescriptor.h>
 #include <opensubdiv/far/topologyLevel.h>
 
@@ -145,7 +145,7 @@ SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
     //  here as a reminder for those mesh representations that may need to
     //  check and take action in such cases.
     //
-    assert(numFaces <= OpenSubdiv::Bfr::MAX_VALENCE);
+    assert(numFaces <= OpenSubdiv::Bfr::Limits::MaxValence());
 
     vd.Initialize(numFaces);
     {
@@ -157,7 +157,7 @@ SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
         vd.SetCommonFaceSize(false);
         for (int i = 0; i < numFaces; ++i) {
             int incFaceSize = baseLevel.GetFaceVertices(vFaces[i]).size();
-            assert(incFaceSize <= OpenSubdiv::Bfr::MAX_FACE_SIZE);
+            assert(incFaceSize <= OpenSubdiv::Bfr::Limits::MaxFaceSize());
 
             vd.SetIncidentFaceSize(i, incFaceSize);
         }

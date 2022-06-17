@@ -23,7 +23,7 @@
 //
 
 #include "../bfr/vertexDescriptor.h"
-#include "../bfr/types.h"
+#include "../bfr/limits.h"
 #include "../sdc/crease.h"
 
 #include <cstring>
@@ -42,7 +42,7 @@ void
 VertexDescriptor::Initialize(int numFaces) {
 
     assert(numFaces > 0);
-    _numFaces = (short) std::min(numFaces, Bfr::MAX_VALENCE);
+    _numFaces = (short) std::min(numFaces, Limits::MaxValence());
 
     _vertSharpness = 0.0f;
 

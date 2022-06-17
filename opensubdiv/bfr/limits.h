@@ -22,8 +22,8 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#ifndef OPENSUBDIV3_BFR_TYPES_H
-#define OPENSUBDIV3_BFR_TYPES_H
+#ifndef OPENSUBDIV3_BFR_LIMITS_H
+#define OPENSUBDIV3_BFR_LIMITS_H
 
 #include "../version.h"
 
@@ -35,21 +35,12 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 
 //
-//  Typedefs for indices and limits used either directly with or for
-//  purposes similar to those of Far classes:
+//  Public struct with limits related to topology:
 //
-//  WIP - Bfr methods never expose invalid indices, so no need for this test
-//      - and if only limit definitions remain, consider <bfr/limits.h>
-template <typename INDEX>
-inline bool IndexIsValid(INDEX index) { return (index >= 0); }
-
-//
-//  Limits on vertex valence and face size:
-//  WIP - use of suffix/prefix here warrants review
-//      - "limit surface" used much more in Bfr, so avoiding "limit"
-//
-static const int MAX_VALENCE   = Far::VALENCE_LIMIT;
-static const int MAX_FACE_SIZE = Far::VALENCE_LIMIT;
+struct Limits {
+    static int MaxValence()  { return Far::VALENCE_LIMIT; }
+    static int MaxFaceSize() { return Far::VALENCE_LIMIT; }
+};
 
 } // end namespace Bfr
 
@@ -57,4 +48,4 @@ static const int MAX_FACE_SIZE = Far::VALENCE_LIMIT;
 using namespace OPENSUBDIV_VERSION;
 } // end namespace OpenSubdiv
 
-#endif /* OPENSUBDIV3_BFR_TYPES_H */
+#endif /* OPENSUBDIV3_BFR_LIMITS_H */
