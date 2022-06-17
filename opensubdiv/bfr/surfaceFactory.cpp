@@ -124,9 +124,9 @@ public:
 //  Main constructor and destructor:
 //
 SurfaceFactory::SurfaceFactory(
-    Sdc::SchemeType schemeType,
-    Sdc::Options    schemeOptions,
-    Options const & limitOptions) :
+    Sdc::SchemeType      schemeType,
+    Sdc::Options const & schemeOptions,
+    Options      const & limitOptions) :
         _schemeType(schemeType),
         _schemeOptions(schemeOptions),
         _limitOptions(limitOptions) {

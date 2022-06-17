@@ -385,9 +385,9 @@ protected:
     //  provided by an additional virtual method, but other means are under
     //  consideration, e.g. a separate initializer, via Options, etc.)
     //
-    SurfaceFactory(Sdc::SchemeType schemeType,
-                   Sdc::Options    schemeOptions,
-                   Options const & limitOptions);
+    SurfaceFactory(Sdc::SchemeType      schemeType,
+                   Sdc::Options const & schemeOptions,
+                   Options      const & limitOptions);
     virtual ~SurfaceFactory();
 
     virtual SurfaceFactoryCache * getInternalCache() const = 0;
