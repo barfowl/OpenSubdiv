@@ -59,6 +59,7 @@ set(PRIVATE_HEADER_FILES
 
 set(PUBLIC_HEADER_FILES
      irregularPatchType.h
+     limits.h
      parameterization.h
      refinerSurfaceFactory.h
      surface.h
@@ -66,7 +67,6 @@ set(PUBLIC_HEADER_FILES
      surfaceFactory.h
      surfaceFactoryCache.h
      tessellation.h
-     types.h
      vertexDescriptor.h
 )
 
