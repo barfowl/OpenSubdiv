@@ -69,7 +69,12 @@ public:
     bool              hasIrregPatch()   const { return (_irregPatch != 0); }
     bool              ownsIrregPatch()  const { return _irregOwner; }
 
-    internal::IrregularPatchPtr getIrregPatch() const { return _irregPatch; }
+    internal::IrregularPatchPtr getIrregPatchPtr() const {
+        return _irregPatch;
+    }
+    internal::IrregularPatchType const & getIrregPatch() const {
+        return *_irregPatch;
+    }
 
 public:
     //  Modifiers used by SurfaceFactory to assemble a Surface:
@@ -92,7 +97,9 @@ public:
     void setRegPatchMask(int m)         { _regPatchMask = (unsigned char) m; }
     void setIrregPatchOwner(bool on)    { _irregOwner = on; }
 
-    void setIrregPatch(internal::IrregularPatchPtr p) { _irregPatch = p; }
+    void setIrregPatchPtr(internal::IrregularPatchPtr const & p) {
+        _irregPatch = p;
+    }
 
 private:
     //  Member variables -- try to avoid redundancy and/or wasted space

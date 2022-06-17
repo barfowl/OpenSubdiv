@@ -834,12 +834,12 @@ __numIrregularInCache ++;
     surface.setRegular(false);
     surface.setLinear(false);
 
-    surface.setIrregPatch(patch);
+    surface.setIrregPatchPtr(patch);
     surface.setIrregPatchOwner(cache == 0);
 
     //  Gather the patch control points from the given indices:
     builder.GatherControlVertexIndices(
-            surface.resizeCVs(surface.getIrregPatch()->GetNumControlPoints()));
+            surface.resizeCVs(patch->GetNumControlPoints()));
 
     surface.setValid(true);
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
@@ -884,7 +884,7 @@ SurfaceFactory::copyNonLinearSurface(
 __numRegularPatches ++;
 #endif
     } else {
-        surfaceDst.setIrregPatch(surfaceSrc.getIrregPatch());
+        surfaceDst.setIrregPatchPtr(surfaceSrc.getIrregPatchPtr());
         surfaceDst.setIrregPatchOwner(false);
 
         IrregularPatchBuilder builder(descriptor);

@@ -101,7 +101,7 @@ template <typename REAL>
 int
 Surface<REAL>::getNumIrregPatchPoints() const {
 
-    return getIrregPatch()->GetNumPointsTotal();
+    return getIrregPatch().GetNumPointsTotal();
 }
 
 template <typename REAL>
@@ -115,14 +115,14 @@ Surface<REAL>::evalIrregularPatchBasis(REAL u, REAL v,
     int subFace = param.HasSubFaces() ?
                   param.ConvertCoordToNormalizedSubFace(uv, uv) : 0;
 
-    internal::IrregularPatchPtr irregPatch = getIrregPatch();
-    int subPatchIndex = irregPatch->FindSubPatch(uv[0], uv[1], subFace);
+    internal::IrregularPatchType const & irregPatch = getIrregPatch();
+    int subPatchIndex = irregPatch.FindSubPatch(uv[0], uv[1], subFace);
     assert(subPatchIndex >= 0);
 
-    irregPatch->EvalSubPatchBasis(subPatchIndex, uv[0], uv[1],
-                                   wP, wDu, wDv, wDuu, wDuv, wDvv);
+    irregPatch.EvalSubPatchBasis(subPatchIndex, uv[0], uv[1],
+                                 wP, wDu, wDv, wDuu, wDuv, wDvv);
 
-    return irregPatch->GetSubPatchPoints(subPatchIndex);
+    return irregPatch.GetSubPatchPoints(subPatchIndex);
 }
 
 template <typename REAL>
@@ -136,11 +136,11 @@ Surface<REAL>::evalIrregularPatchStencils(REAL u, REAL v,
     int subFace = param.HasSubFaces() ?
                   param.ConvertCoordToNormalizedSubFace(uv, uv) : 0;
 
-    internal::IrregularPatchPtr irregPatch = getIrregPatch();
-    int subPatchIndex = irregPatch->FindSubPatch(uv[0], uv[1], subFace);
+    internal::IrregularPatchType const & irregPatch = getIrregPatch();
+    int subPatchIndex = irregPatch.FindSubPatch(uv[0], uv[1], subFace);
     assert(subPatchIndex >= 0);
 
-    return irregPatch->EvalSubPatchStencils(
+    return irregPatch.EvalSubPatchStencils(
             subPatchIndex, uv[0], uv[1], sP, sDu, sDv, sDuu, sDuv, sDvv);
 }
 
@@ -317,8 +317,8 @@ template <typename REAL>
 REAL const *
 Surface<REAL>::getIrregPatchPointMatrix() const {
 
-    internal::IrregularPatchPtr irregPatch = getIrregPatch();
-    return irregPatch->GetStencilMatrix<REAL>();
+    internal::IrregularPatchType const & irregPatch = getIrregPatch();
+    return irregPatch.GetStencilMatrix<REAL>();
 }
 
 

@@ -31,6 +31,8 @@
 #include "../bfr/parameterization.h"
 #include "../vtr/array.h"
 
+#include <cstring>
+
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
@@ -109,11 +111,10 @@ public:
     //  bounding box, etc.) and stencils can be optionally applied to
     //  control vertices in this form.
     //
-    typedef internal::SurfaceData::Index Index;
+    typedef int Index;
 
-    int GetNumControlVertices() const { return _data.getNumCVs(); }
-
-    Index const * GetControlVertexIndices() const {return _data.getCVIndices();}
+    int GetNumControlVertices() const;
+    int GetControlVertexIndices(Index cvIndices[]) const;
 
     int EvaluateStencils(REAL const uv[2], REAL sP[]) const;
 
@@ -179,7 +180,7 @@ private:
 
     REAL const * getIrregPatchPointMatrix() const;
 
-    internal::IrregularPatchPtr getIrregPatch() const;
+    internal::IrregularPatchType const & getIrregPatch() const;
 
 private:
     //  Access to the set of member variables - provided to the Factory:
@@ -206,11 +207,24 @@ private:
 //  Inline methods and templates for gathering control points:
 //
 template <typename REAL>
+inline int
+Surface<REAL>::GetNumControlVertices() const {
+    return _data.getNumCVs();
+}
+
+template <typename REAL>
+inline int
+Surface<REAL>::GetControlVertexIndices(Index cvs[]) const {
+    std::memcpy(cvs, _data.getCVIndices(), _data.getNumCVs() * sizeof(Index));
+    return _data.getNumCVs();
+}
+
+template <typename REAL>
 template <class T, class U>
 void
 Surface<REAL>::GatherControlVertexValues(T const & meshPoints,
                                          U       & controlPoints) const {
-    Index const * cvs = GetControlVertexIndices();
+    Index const * cvs = _data.getCVIndices();
     for (int i = 0; i < GetNumControlVertices(); ++i) {
         //  WIP - cannot guarantee that type T is copyable here, so must
         //        use Clear() and AddWithWeight():
@@ -226,7 +240,7 @@ Surface<REAL>::GetNumPatchPoints() const {
 }
 
 template <typename REAL>
-inline internal::IrregularPatchPtr
+inline internal::IrregularPatchType const &
 Surface<REAL>::getIrregPatch() const {
     return _data.getIrregPatch();
 }
@@ -491,7 +505,7 @@ void
 Surface<REAL>::ApplyStencil(REAL const sD[], T const & meshVertices, U * D) const {
 
     D->Clear();
-    Index const * cvs = GetControlVertexIndices();
+    Index const * cvs = _data.getCVIndices();
     for (int i = 0; i < GetNumControlVertices(); ++i) {
         D->AddWithWeight(meshVertices[cvs[i]], sD[i]);
     }
