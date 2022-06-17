@@ -445,25 +445,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
             //  the Surface for vertex data (position), use of the method to
             //  create multiple surfaces at once is preferred.
             //
-            //  WIP - exploring multiple ways to achieve this:
-            //
-            int take = 1;
-            if (take == 1) {
-                if (!surfaceFactory.InitSurfaces(faceIndex,
-                            &posSurface, &uvSurface)){
-                    continue;
-                }
-            } else if (take == 2) {
-                //  Overloads for face-varying surfaces no longer supported
-            } else if (take == 3) {
-                //  This typedef would typically be declared above with others:
-                typedef SurfaceFactory::Surfaces<float> SurfaceGroup;
-
-                if (!surfaceFactory.InitSurfaces(faceIndex,
-                        SurfaceGroup().Vertex(&posSurface).
-                                       FaceVarying(&uvSurface))) {
-                    continue;
-                }
+            if (!surfaceFactory.InitSurfaces(faceIndex, &posSurface,
+                                                        &uvSurface)) {
+                continue;
             }
         }
 
