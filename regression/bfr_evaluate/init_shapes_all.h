@@ -101,6 +101,9 @@ initShapesAll(std::vector<ShapeDesc> & shapes) {
     shapes.push_back(ShapeDesc("catmark_torus_creases0", catmark_torus_creases0, kCatmark));
     shapes.push_back(ShapeDesc("catmark_torus_creases1", catmark_torus_creases1, kCatmark));
     shapes.push_back(ShapeDesc("catmark_val2_interior", catmark_val2_interior, kCatmark));
+    shapes.push_back(ShapeDesc("catmark_val2_back2back", catmark_val2_back2back, kCatmark));
+    shapes.push_back(ShapeDesc("catmark_val2_foldover", catmark_val2_foldover, kCatmark));
+    shapes.push_back(ShapeDesc("catmark_val2_nonman", catmark_val2_nonman, kCatmark));
     shapes.push_back(ShapeDesc("catmark_xord_interior", catmark_xord_interior, kCatmark));
     shapes.push_back(ShapeDesc("catmark_xord_boundary", catmark_xord_boundary, kCatmark));
     shapes.push_back(ShapeDesc("bilinear_cube", bilinear_cube, kBilinear));
@@ -135,6 +138,7 @@ initShapesAll(std::vector<ShapeDesc> & shapes) {
     shapes.push_back(ShapeDesc("loop_triangle_edgeonly", loop_triangle_edgeonly, kLoop));
     shapes.push_back(ShapeDesc("loop_xord_boundary", loop_xord_boundary, kLoop));
     shapes.push_back(ShapeDesc("loop_xord_interior", loop_xord_interior, kLoop));
+    shapes.push_back(ShapeDesc("loop_val2_interior", loop_val2_interior, kLoop));
 
     //  More complicated shapes with longer execution times:
     shapes.push_back(ShapeDesc("catmark_car", catmark_car, kCatmark));
