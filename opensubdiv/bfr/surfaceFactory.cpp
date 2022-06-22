@@ -155,13 +155,12 @@ SurfaceFactory::SurfaceFactory(
 inline SurfaceFactoryCache *
 SurfaceFactory::getAssignedCache() const {
 
-    if (!_limitOptions.IsInternalCacheEnabled()) {
-        return 0;
-    } else if (_limitOptions.GetSharedCache()) {
-        return _limitOptions.GetSharedCache();
-    } else {
-        return getInternalCache();
+    if (_limitOptions.IsCachingEnabled()) {
+        return _limitOptions.GetExternalCache() ?
+               _limitOptions.GetExternalCache() :
+               getInternalCache();
     }
+    return 0;
 }
 
 SurfaceFactory::~SurfaceFactory() {

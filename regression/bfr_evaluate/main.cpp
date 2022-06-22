@@ -658,7 +658,7 @@ testMesh(Far::TopologyRefiner      const & mesh,
         surfaceOptions.SetApproxLevelSmooth(args.depthSmooth);
     }
     surfaceOptions.SetDefaultFVarID(0);
-    surfaceOptions.EnableInternalCache(!args.noCacheFlag);
+    surfaceOptions.EnableCaching(!args.noCacheFlag);
 
     BfrSurfaceEvaluator<REAL> bfrEval(mesh, meshPos, meshUVs, surfaceOptions);
     FarPatchEvaluator<REAL>   farEval(mesh, meshPos, meshUVs, surfaceOptions);

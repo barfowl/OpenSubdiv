@@ -130,20 +130,20 @@ public:
     //
     class Options {
     public:
-        Options() : _dfltFVarID(-1), _sharedCache(0), _enableCache(true),
+        Options() : _dfltFVarID(-1), _externCache(0), _enableCache(true),
                     _approxLevelSmooth(2), _approxLevelSharp(6) { }
 
         //  Assign the default face-varying ID (no valid default):
         Options & SetDefaultFVarID(FVarID id);
         FVarID    GetDefaultFVarID() const { return _dfltFVarID; }
 
-        //  Enable the internal cache (default is true):
-        Options & EnableInternalCache(bool on);
-        bool      IsInternalCacheEnabled() const { return _enableCache; }
+        //  Enable caching via internal or external cache (default is true):
+        Options & EnableCaching(bool on);
+        bool      IsCachingEnabled() const { return _enableCache; }
 
-        //  Assign a shared cache between multiple Factories:
-        Options &             SetSharedCache(SurfaceFactoryCache * c);
-        SurfaceFactoryCache * GetSharedCache() const { return _sharedCache; }
+        //  Assign an external cache, potentially shared between Factories:
+        Options &             SetExternalCache(SurfaceFactoryCache * c);
+        SurfaceFactoryCache * GetExternalCache() const { return _externCache; }
 
         //  Set refinement levels used to approximate the limit surface
         //  for smooth and sharp features (reasonable defaults assigned):
@@ -157,7 +157,7 @@ public:
         //  Member variables:
         FVarID _dfltFVarID;
 
-        SurfaceFactoryCache * _sharedCache;
+        SurfaceFactoryCache * _externCache;
 
         unsigned char _enableCache : 1;
         unsigned char _approxLevelSmooth;
@@ -478,13 +478,13 @@ SurfaceFactory::Options::SetDefaultFVarID(FVarID id) {
     return *this;
 }
 inline SurfaceFactory::Options &
-SurfaceFactory::Options::EnableInternalCache(bool on) {
+SurfaceFactory::Options::EnableCaching(bool on) {
     _enableCache = on;
     return *this;
 }
 inline SurfaceFactory::Options & 
-SurfaceFactory::Options::SetSharedCache(SurfaceFactoryCache * c) {
-    _sharedCache = c;
+SurfaceFactory::Options::SetExternalCache(SurfaceFactoryCache * c) {
+    _externCache = c;
     return *this;
 }
 inline SurfaceFactory::Options &
