@@ -26,6 +26,7 @@
 
 #include <cstring>
 #include <cstdio>
+#include <cassert>
 #include <limits>
 #include <algorithm>
 

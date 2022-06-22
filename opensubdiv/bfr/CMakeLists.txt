@@ -32,6 +32,7 @@ set(SOURCE_FILES
      faceVertex.cpp
      hash.cpp
      irregularPatchBuilder.cpp
+     parameterization.cpp
      patchTree.cpp
      patchTreeBuilder.cpp
      refinerSurfaceFactory.cpp
