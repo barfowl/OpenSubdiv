@@ -45,5 +45,10 @@ osd_add_executable(bfr_evaluate "regression"
 
 install(TARGETS bfr_evaluate DESTINATION "${CMAKE_BINDIR_BASE}")
 
-add_test(bfr_evaluate ${EXECUTABLE_OUTPUT_PATH}/bfr_evaluate)
+add_test(bfr_evaluate_pos ${EXECUTABLE_OUTPUT_PATH}/bfr_evaluate
+                          -all -silent -l 3 -pass 2)
+add_test(bfr_evaluate_uv1 ${EXECUTABLE_OUTPUT_PATH}/bfr_evaluate
+                          -all -silent -l 3 -pass 0 -skippos -uv -uvint 1)
+add_test(bfr_evaluate_uv5 ${EXECUTABLE_OUTPUT_PATH}/bfr_evaluate
+                          -all -silent -l 3 -pass 0 -skippos -uv -uvint 5)
 

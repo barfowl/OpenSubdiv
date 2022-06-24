@@ -96,6 +96,9 @@ public:
 
     std::vector<ShapeDesc> shapes;
 
+    //  options determining overall success/failure:
+    int passCount;
+
 public:
     Args(int argc, char **argv) :
         posEvaluate(true),
@@ -127,7 +130,8 @@ public:
         shapeScheme(kCatmark),
         shapesCat2Loop(false),
         shapesAll(false),
-        shapes() {
+        shapes(),
+        passCount(0) {
 
         std::string fileString;
 
@@ -256,6 +260,10 @@ public:
                 printSummary  = false;
                 printWarnings = false;
 
+            //  Success/failure of the entire test:
+            } else if (!strcmp(argv[i], "-pass")) {
+                if (++i < argc) passCount = atoi(argv[i]);
+
             //  Unrecognized...
             } else {
                 fprintf(stderr, "Error: Unrecognized argument '%s'\n", arg);
@@ -263,7 +271,7 @@ public:
             }
         }
 
-        //  Validation -- possible conflicting options. values, etc.
+        //  Validation -- possible conflicting options, values, etc.
         if (bndInterp > 2) {
             fprintf(stderr, "Warning: Ignoring bad value to -bint (%d)\n",
                     bndInterp);
@@ -297,6 +305,11 @@ public:
         if (posIgnore && d1Ignore && d2Ignore && uvIgnore) {
             fprintf(stderr, "Error: All pos and UV comparisons disabled.\n");
             exit(0);
+        }
+
+        if ((depthSmooth == 0) || (depthSharp == 0)) {
+            fprintf(stderr,
+                "Warning: Far evaluation unstable with refinement level 0.\n");
         }
 
         //  Managing the list of shapes:
@@ -345,13 +358,13 @@ public:
 
         printf("\n");
         printf("Shape options:\n");
-        if (depthSharp > 0) {
+        if (depthSharp >= 0) {
             printf("  - max level sharp  = %d\n",  depthSharp);
         } else {
             printf("  - max level sharp  = %d (dflt)\n",
                 (Bfr::SurfaceFactory::Options()).GetApproxLevelSharp());
         }
-        if (depthSmooth > 0) {
+        if (depthSmooth >= 0) {
             printf("  - max level smooth = %d\n",  depthSmooth);
         } else {
             printf("  - max level smooth = %d (dflt)\n",
@@ -651,10 +664,10 @@ testMesh(Far::TopologyRefiner      const & mesh,
     Bfr::SurfaceFactory::Options surfaceOptions;
 
     //  Leave approximation defaults in place unless explicitly overridden:
-    if (args.depthSharp > 0) {
+    if (args.depthSharp >= 0) {
         surfaceOptions.SetApproxLevelSharp(args.depthSharp);
     }
-    if (args.depthSmooth > 0) {
+    if (args.depthSmooth >= 0) {
         surfaceOptions.SetApproxLevelSmooth(args.depthSmooth);
     }
     surfaceOptions.SetDefaultFVarID(0);
@@ -894,7 +907,6 @@ main(int argc, char **argv) {
         shapesIgnored = shapesToTest - args.shapeCount;
         shapesToTest = args.shapeCount;
     }
-    int failedShapes = 0;
 
     if (args.printProgress) {
         printf("Testing %d shapes", shapesToTest);
@@ -908,6 +920,8 @@ main(int argc, char **argv) {
     //  Run the comparison test for each shape (ShapeDesc) in the
     //  specified precision and report results:
     //
+    int shapesFailed = 0;
+
     for (int shapeIndex = 0; shapeIndex < shapesToTest; ++shapeIndex) {
         ShapeDesc  & shapeDesc = shapeList[shapeIndex];
 
@@ -922,20 +936,22 @@ main(int argc, char **argv) {
 
         if (nFailures < 0) {
             //  Possible error/warning...?
-            ++ failedShapes;
+            ++ shapesFailed;
         }
         if (nFailures > 0) {
-            ++ failedShapes;
+            ++ shapesFailed;
         }
     }
 
     if (args.printSummary) {
         printf("\n");
-        if (failedShapes == 0) {
+        if (shapesFailed == 0) {
             printf("All tests passed for %d shapes\n", shapesToTest);
         } else {
-            printf("Total failures: %d of %d shapes\n", failedShapes,
+            printf("Total failures: %d of %d shapes\n", shapesFailed,
                                                         shapesToTest);
         }
     }
+
+    return (shapesFailed == args.passCount) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
