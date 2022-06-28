@@ -47,19 +47,12 @@ SurfaceData::initialize() {
     _regPatchMask = 0;
     _regPatchType = 0;
 
-    _irregOwner = false;
     _irregPatch = 0;
 }
 
 void
 SurfaceData::clear() {
 
-    if (_irregOwner) {
-#ifndef OPENSUBDIV3_BFR_USE_SHARED_PTR
-        delete _irregPatch;
-#endif
-        _irregPatch = 0;
-    }
 }
 
 } // end namespace internal

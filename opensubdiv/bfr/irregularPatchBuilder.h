@@ -82,7 +82,7 @@ public:
 public:
     //  Methods to build irregular patches:
 
-    internal::IrregularPatchPtr Build();
+    internal::IrregularPatchSharedPtr Build();
 
 private:
     //  Private methods to assemble the control hull:

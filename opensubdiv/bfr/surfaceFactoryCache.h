@@ -64,8 +64,8 @@ protected:
     class Key;
 
     //  WIP - use of STL-style type names for containers is questionable
-    typedef Key                         key_type;
-    typedef internal::IrregularPatchPtr data_type;
+    typedef Key                               key_type;
+    typedef internal::IrregularPatchSharedPtr data_type;
 
 protected:
     //

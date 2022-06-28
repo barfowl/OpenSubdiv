@@ -794,7 +794,7 @@ IrregularPatchBuilder::sharpenBoundaryControlEdges(
 //  At this point, the PatchTree is used for all topological cases, so
 //  those future intentions are not reflected here.
 //
-internal::IrregularPatchPtr
+internal::IrregularPatchSharedPtr
 IrregularPatchBuilder::Build() {
 
     //
@@ -907,7 +907,7 @@ IrregularPatchBuilder::Build() {
     assert(patchTree->GetNumControlPoints() == _numControlVerts);
 
     delete refiner;
-    return internal::IrregularPatchPtr(patchTree);
+    return internal::IrregularPatchSharedPtr(patchTree);
 }
 
 } // end namespace Bfr

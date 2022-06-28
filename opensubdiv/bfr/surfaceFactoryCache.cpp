@@ -55,11 +55,6 @@ SurfaceFactoryCache::clear() {
 void
 SurfaceFactoryCache::clear(map_type * mapPtr) {
 
-#ifndef OPENSUBDIV3_BFR_USE_SHARED_PTR
-    for (map_type::iterator it = mapPtr->begin(); it != mapPtr->end(); ++it) {
-        delete it->second;
-    }
-#endif
     mapPtr->clear();
 }
 

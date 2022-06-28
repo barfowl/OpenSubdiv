@@ -780,9 +780,7 @@ SurfaceFactory::assignIrregularSurface(SurfaceType * surfacePtr,
     IrregularPatchBuilder builder(descriptor, buildOptions);
 
     //  Retrieve an irregular patch representation from cache if possible:
-    using internal::IrregularPatchPtr;
-
-    IrregularPatchPtr patch(0);
+    internal::IrregularPatchSharedPtr patch(0);
 
     SurfaceFactoryCache * cache = getAssignedCache();
     if (cache) {
@@ -799,25 +797,17 @@ SurfaceFactory::assignIrregularSurface(SurfaceType * surfacePtr,
         }
         assert(key.IsValid());
 
-        //  Use the valid key to find and/or add a patch in the cache:
+        //  Find the patch from or add it to the cache:
         patch = cache->Find(key);
         if (patch == 0) {
-            //  Add a new patch to the cache. Beware that another thread
-            //  may have added the same patch while it was being built.
-            //  If so, delete the one built here and use the one added:
-            patch = builder.Build();
-
-            IrregularPatchPtr patchAdded = cache->Add(key, patch);
-            if (patchAdded != patch) {
-#ifndef OPENSUBDIV3_BFR_USE_SHARED_PTR
-                delete patch;
-#endif
-                patch = patchAdded;
-            } else {
+            //  Be sure to use return result of Add() here as it may be
+            //  the case that another thread added a patch with the same
+            //  key while this one was being built. So use the returned
+            //  patch -- potentially release the one built here:
+            patch = cache->Add(key, builder.Build());
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numIrregularInCache ++;
 #endif
-            }
         }
     } else {
         patch = builder.Build();
@@ -834,7 +824,6 @@ __numIrregularInCache ++;
     surface.setLinear(false);
 
     surface.setIrregPatchPtr(patch);
-    surface.setIrregPatchOwner(cache == 0);
 
     //  Gather the patch control points from the given indices:
     builder.GatherControlVertexIndices(
@@ -884,7 +873,6 @@ __numRegularPatches ++;
 #endif
     } else {
         surfaceDst.setIrregPatchPtr(surfaceSrc.getIrregPatchPtr());
-        surfaceDst.setIrregPatchOwner(false);
 
         IrregularPatchBuilder builder(descriptor);
         assert(builder.GetNumControlVertices() == surfaceDst.getNumCVs());
