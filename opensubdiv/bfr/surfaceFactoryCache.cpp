@@ -33,73 +33,41 @@ namespace Bfr {
 //
 //  Trivial constructor and destructor:
 //
-SurfaceFactoryCache::SurfaceFactoryCache() : _mapBits(), _mapHash() {
+SurfaceFactoryCache::SurfaceFactoryCache() : _map() {
 }
 
 SurfaceFactoryCache::~SurfaceFactoryCache() {
+}
 
-    clear();
+
+//
+//  Internal methods to find and add map entries:
+//
+SurfaceFactoryCache::DataType
+SurfaceFactoryCache::find(KeyType const & key) const {
+
+    MapType::const_iterator itFound = _map.find(key);
+    return (itFound != _map.end()) ? itFound->second : DataType(0);
+}
+
+SurfaceFactoryCache::DataType
+SurfaceFactoryCache::add(KeyType const & key, DataType const & data) {
+
+    MapType::const_iterator itFound = _map.find(key);
+    return (itFound != _map.end()) ? itFound->second : (_map[key] = data);
 }
 
 //
-//  The cache owns the data that is assigned to it, so destroy all entries
-//  when explicitly cleared or the destructor is called:
+//  Virtual method defaults -- intended to be overridden for thread-safety:
 //
-void
-SurfaceFactoryCache::clear() {
-
-    clear(&_mapBits);
-    clear(&_mapHash);
-}
-
-void
-SurfaceFactoryCache::clear(map_type * mapPtr) {
-
-    mapPtr->clear();
-}
-
-//
-//  These definitions do not yet account for the two types of keys --
-//  which in turn require a map corresponding to each type:
-//
-SurfaceFactoryCache::data_type
-SurfaceFactoryCache::find(Key const & key) const {
-
-    assert(key.IsValid());
-
-    map_type const & map = (key.GetFormat() == Key::BITFIELDS)
-                         ? _mapBits : _mapHash;
-
-    map_type::const_iterator mapIt = map.find(key.GetValue());
-    return (mapIt == map.end()) ? 0 : mapIt->second;
-}
-
-SurfaceFactoryCache::data_type
-SurfaceFactoryCache::add(Key const & key, data_type const & data) {
-
-    assert(key.IsValid());
-
-    map_type & map = (key.GetFormat() == Key::BITFIELDS)
-                   ? _mapBits : _mapHash;
-
-    map_type::const_iterator mapIt = map.find(key.GetValue());
-    if (mapIt != map.end()) return mapIt->second;
-
-    map[key.GetValue()] = data;
-    return data;
-}
-
-//
-//  Virtual methods -- intended to be overridden for thread-safety:
-//
-SurfaceFactoryCache::data_type
-SurfaceFactoryCache::Find(Key const & key) const {
+SurfaceFactoryCache::DataType
+SurfaceFactoryCache::Find(KeyType const & key) const {
 
     return find(key);
 }
 
-SurfaceFactoryCache::data_type
-SurfaceFactoryCache::Add(Key const & key, data_type const & data) {
+SurfaceFactoryCache::DataType
+SurfaceFactoryCache::Add(KeyType const & key, DataType const & data) {
 
     return add(key, data);
 }

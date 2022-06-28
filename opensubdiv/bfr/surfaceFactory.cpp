@@ -311,7 +311,8 @@ SurfaceFactory::GetFaceParameterization(Index faceIndex) const {
 
 
 //
-//  Internal namespace with utilities for computing topology keys:
+//  Namespace with internal utilities to compute keys for unique surface
+//  topologies to help cache their limit surface representations:
 //
 namespace {
     //  Need to redefine since SurfaceFactoryCache::Key is protected:
@@ -326,20 +327,30 @@ namespace {
     //
     //  It may be worth separating these -- writing a method to deal
     //  with the pure topology first, then combining it with details
-    //  of the representation.  But that would only help the hashing
-    //  case -- packing everything tightly into bit-fields cannot
-    //  easily avoid consideration of both at once.
+    //  of the representation.
     //
 
+#ifdef _OPENSUBDIV_BFR_INCLUDE_PACKED_TOPOLOGY_KEY_
     //
-    //  Function to pack the topology for common cases (low-valence,
-    //  no creasing, irregular faces, etc.) into the desired integer
-    //  using bitfields:
+    //  This alternate function for computing the cache key was applied
+    //  to common topologies with low-valence and simply packs integer
+    //  bifields with the topology of the face and all of its corners.
     //
-    bool
+    //  It is typically 3x faster than the hashing method, but is suited
+    //  for general use. Given the relatively low cost of computing the
+    //  cache key (compared to building an irregular patch) use of this
+    //  faster function is not generally significant, but could become
+    //  so in future when/if other costs are reduced.
+    //
+    //  When the cost of building new patches is very low due to a high
+    //  percentage of cache hits, the cost of computing the cache keys
+    //  (relative to constructing the entire Surface) can rise to over
+    //  10% in extreme cases.
+    //
+    KeyIntType
     packTopologyKey(FaceSurface const & surface,
-                    IrregularPatchBuilder::Options options,
-                    KeyIntType * keyValue) {
+                    IrregularPatchBuilder::Options options) {
+
         //
         //  Keep the bitfield struct local in scope unless needed elsewhere:
         //
@@ -468,47 +479,51 @@ namespace {
             keyBits.v3FaceInBoundary = subsets[3]._numFacesBefore;
         }
 
-        std::memcpy(keyValue, &keyBits, sizeof(*keyValue));
-        return true;
+        KeyIntType keyValue = 0;
+        std::memcpy(&keyValue, &keyBits, sizeof(KeyIntType));
+        return keyValue;
     }
+#endif
 
     //
     //  Function to assign the topology of any FaceSurface to the desired
     //  integer using a hashing function that considers all topological
     //  features (incident face sizes, crease and corner sharpness, etc.):
     //
-    bool
+    KeyIntType
     hashTopologyKey(FaceSurface const & surface,
-                    IrregularPatchBuilder::Options options,
-                    KeyIntType * keyValue) {
+                    IrregularPatchBuilder::Options options) {
 
         //
         //  Structs for "headers" for the entire surface and each corner,
         //  to be assigned and copied into a larger buffer to be hashed:
         //
+        typedef unsigned char uchar;
+
         struct SurfaceHeader {
             //  Be sure to clear to avoid uninitialized bits:
             SurfaceHeader() { std::memset(this, 0, sizeof(*this)); }
 
-            short          faceSize;
-            unsigned short subdScheme    :  1;
-            unsigned short subdCreasing  :  1;
-            unsigned short subdTriSmooth :  1;
-            unsigned short sharpLevel    :  4;
-            unsigned short smoothLevel   :  4;
-            unsigned short usesDouble    :  1;
+            short faceSize;
+            uchar subdScheme;
+            uchar subdCreasing;
+            uchar subdTriSmooth;
+            uchar sharpLevel;
+            uchar smoothLevel;
+            uchar usesDouble;
         };
         struct CornerHeader {
             //  Be sure to clear to avoid uninitialized bits:
             CornerHeader() { std::memset(this, 0, sizeof(*this)); }
 
-            short          numFaces;
-            short          faceInBoundary;
-            unsigned short isBoundary    : 1;
-            unsigned short isInfSharp    : 1;
-            unsigned short isSemiSharp   : 1;
-            unsigned short hasFaceSizes  : 1;
-            unsigned short hasSharpEdges : 1;
+            short numFaces;
+            short faceInBoundary;
+
+            uchar isBoundary    : 1;
+            uchar isInfSharp    : 1;
+            uchar isSemiSharp   : 1;
+            uchar hasFaceSizes  : 1;
+            uchar hasSharpEdges : 1;
         };
 
         //
@@ -566,13 +581,13 @@ namespace {
         Sdc::Options subdOptions = surface.GetSdcOptionsInEffect();
 
         SurfaceHeader sHeader;
-        sHeader.faceSize      = faceSize;
-        sHeader.subdScheme    = surface.GetSdcScheme();
-        sHeader.subdCreasing  = subdOptions.GetCreasingMethod();
-        sHeader.subdTriSmooth = subdOptions.GetTriangleSubdivision();
-        sHeader.sharpLevel    = options.sharpLevel;
-        sHeader.smoothLevel   = options.smoothLevel;
-        sHeader.usesDouble    = options.doublePrecision;
+        sHeader.faceSize      = (short) faceSize;
+        sHeader.subdScheme    = (uchar) surface.GetSdcScheme();
+        sHeader.subdCreasing  = (uchar) subdOptions.GetCreasingMethod();
+        sHeader.subdTriSmooth = (uchar) subdOptions.GetTriangleSubdivision();
+        sHeader.sharpLevel    = (uchar) options.sharpLevel;
+        sHeader.smoothLevel   = (uchar) options.smoothLevel;
+        sHeader.usesDouble    = (uchar) options.doublePrecision;
 
         std::memcpy(hashBuffer, &sHeader, sizeof(sHeader));
 
@@ -633,9 +648,7 @@ namespace {
         }
         assert((bufferPtr - hashBuffer) == (int)hashBufferSize);
 
-        *keyValue = internal::Hash64(hashBuffer, hashBufferSize);
-
-        return true;
+        return internal::Hash64(hashBuffer, hashBufferSize);
     }
 }
 
@@ -769,7 +782,8 @@ SurfaceFactory::assignIrregularSurface(SurfaceType * surfacePtr,
         FaceSurface const & descriptor) const {
 
     //
-    //  Construct a new irregular patch or identify one from the cache:
+    //  A builder for the irregular patch is required regardless of
+    //  whether a new instance is constructed:
     //
     IrregularPatchBuilder::Options buildOptions;
 
@@ -779,38 +793,34 @@ SurfaceFactory::assignIrregularSurface(SurfaceType * surfacePtr,
 
     IrregularPatchBuilder builder(descriptor, buildOptions);
 
-    //  Retrieve an irregular patch representation from cache if possible:
     internal::IrregularPatchSharedPtr patch(0);
 
+    //
+    //  Construct a new irregular patch or identify one from the cache:
+    //
     SurfaceFactoryCache * cache = getAssignedCache();
-    if (cache) {
-        //  Construct a key to identify a patch in the cache:
-        SurfaceFactoryCache::Key key;
-        SurfaceFactoryCache::Key::IntType keyValue = 0;
+    if (cache == 0) {
+        patch = builder.Build();
+    } else {
+        //
+        //  Compute the cache key for the topology of this face, search the
+        //  cache for an existing patch and build/add one if not found:
+        //
+        //  Be sure to use the return result of Add() when adding as it may
+        //  be the case that another thread added a patch with the same key
+        //  while this one was being built. Using the instance assigned to
+        //  the cache intentionally releases the one built here.
+        //
+        SurfaceFactoryCache::KeyType key =
+                hashTopologyKey(descriptor, buildOptions);
 
-        if (packTopologyKey(descriptor, buildOptions, &keyValue)) {
-            key.SetFormat(SurfaceFactoryCache::Key::BITFIELDS);
-            key.SetValue(keyValue);
-        } else if (hashTopologyKey(descriptor, buildOptions, &keyValue)) {
-            key.SetFormat(SurfaceFactoryCache::Key::HASHED);
-            key.SetValue(keyValue);
-        }
-        assert(key.IsValid());
-
-        //  Find the patch from or add it to the cache:
         patch = cache->Find(key);
         if (patch == 0) {
-            //  Be sure to use return result of Add() here as it may be
-            //  the case that another thread added a patch with the same
-            //  key while this one was being built. So use the returned
-            //  patch -- potentially release the one built here:
             patch = cache->Add(key, builder.Build());
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numIrregularInCache ++;
 #endif
         }
-    } else {
-        patch = builder.Build();
     }
 
     //

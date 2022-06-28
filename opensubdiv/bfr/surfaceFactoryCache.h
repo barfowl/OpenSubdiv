@@ -38,86 +38,51 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 
 //
-//  SurfaceFactoryCache is a container for storing/caching instances of the
-//  internal representation of complex patches (currently via PatchTrees)
-//  used by the SurfaceFactory so that they can be quickly identified and
-//  retrieved for reuse.
+//  SurfaceFactoryCache is a container for storing/caching instances of
+//  the internal representation of complex patches used by SurfaceFactory
+//  so that they can be quickly identified and retrieved for reuse.
+//
+//  It is intended for internal use by SurfaceFactory.  Public access is
+//  available but limited to construction only -- allowing an instance to
+//  be reused by assigning it to more than one SurfaceFactory.
 //
 //  Initial/expected use requires simple searches of and additions to the
 //  cache by the SurfaceFactory or its Builders.  Longer term, with the
 //  possibility of instances of caches being shared between meshes and
-//  factories, additional options and/or methods may be warranted to limit
-//  what is cached or to prune the cache if it gets too large.
+//  factories, additional options and/or public methods may be warranted
+//  to limit what is cached or to prune the cache if it gets too large.
 //
 class SurfaceFactoryCache {
 public:
     SurfaceFactoryCache();
     virtual ~SurfaceFactoryCache();
 
-    size_t Size() const { return _mapBits.size() + _mapHash.size(); }
+    size_t Size() const { return _map.size(); }
 
 protected:
     //  Access restricted to the Factory, its Builders, etc.
     friend class SurfaceFactory;
 
-    //  Forward declaration of the Key type
-    class Key;
-
-    //  WIP - use of STL-style type names for containers is questionable
-    typedef Key                               key_type;
-    typedef internal::IrregularPatchSharedPtr data_type;
+    typedef std::uint64_t                     KeyType;
+    typedef internal::IrregularPatchSharedPtr DataType;
 
 protected:
     //
     //  Potential overrides by subclasses for thread-safety:
     //
-    virtual data_type Find(key_type const & key) const;
-    virtual data_type Add(key_type const & key, data_type const & data);
+    virtual DataType Find(KeyType const & key) const;
+    virtual DataType Add(KeyType const & key, DataType const & data);
 
     //
     //  Common implementation used by all subclasses:
     //
-    data_type find(key_type const & key) const;
-    data_type add(key_type const & key, data_type const & data);
-
-protected:
-    //
-    //  Keys associated with unique topologies in the cache consist of an
-    //  integer value that may be computed in at least two different ways:
-    //  the most common, simple topologies are encoded into a simple set
-    //  of bitfields, while those more complex require a hashing function.
-    //
-    class Key {
-    public:
-        typedef std::uint64_t IntType;
-
-        enum Format { INVALID, BITFIELDS, HASHED };
-
-    public:
-        Key() : _value(0), _format(INVALID) { }
-
-        bool IsValid() const { return (_format != INVALID); }
-
-        Format  GetFormat() const { return _format; }
-        IntType GetValue()  const { return _value; }
-
-        void SetFormat(Format format) { _format = format; }
-        void SetValue(IntType value)  { _value  = value; }
-
-    private:
-        IntType _value;
-        Format  _format;
-    };
+    DataType find(KeyType const & key) const;
+    DataType add(KeyType const & key, DataType const & data);
 
 private:
-    typedef std::map<Key::IntType, data_type>  map_type;
+    typedef std::map<KeyType, DataType> MapType;
 
-    void clear(map_type * map);
-    void clear();
-
-private:
-    map_type _mapBits;
-    map_type _mapHash;
+    MapType _map;
 };
 
 //
@@ -134,12 +99,12 @@ public:
     virtual ~SurfaceFactoryCacheThreaded() { }
 
 protected:
-    virtual data_type Find(key_type const & key) const {
+    virtual DataType Find(KeyType const & key) const {
         READ_LOCK_GUARD_TYPE lockGuard(_mutex);
         return find(key);
     }
 
-    virtual data_type Add(key_type const & key, data_type const & data){
+    virtual DataType Add(KeyType const & key, DataType const & data){
         WRITE_LOCK_GUARD_TYPE lockGuard(_mutex);
         return add(key, data);
     }
