@@ -40,15 +40,17 @@ namespace Far {
 namespace Bfr {
 
 //
-//  Intermediate subclass of SurfaceFactory using Far::TopologyRefiner as
-//  the connected mesh representation.
+//  RefinerSurfaceFactoryBase is an intermediate subclass of SurfaceFactory
+//  using Far::TopologyRefiner as the connected mesh representation.
 //
-//  This subclass provides additional public interface methods specific to
-//  TopologyRefiner along with most requirements of the base class related
-//  to the TopologyRefiner. The requirement not completed here is that of
-//  providing a local SurfaceFactoryCache -- that is deferred to a template
-//  below so that a wide range of clients desiring a thread-safe cache can
-//  easily declare a subclass for a preferred thread-safe type.
+//  The SurfaceFactoryAdaptor interface for TopologyRefiner is provided in
+//  full, along with some public extensions specific to TopologyRefiner.
+//
+//  Remaining virtual requirements of SurfaceFactory are NOT specified
+//  here. These are deferred to subclasses to implement different behaviors
+//  of the factory's internal caching. A template for such subclasses is 
+//  additionally provided -- allowing clients desiring a thread-safe cache
+//  to simply declare a subclass for a preferred thread-safe type.
 //
 class RefinerSurfaceFactoryBase : public SurfaceFactory {
 public:
@@ -71,7 +73,7 @@ public:
 
 protected:
     //
-    //  Virtual methods to satisfy topological requirements:
+    //  Virtual methods to satisfy the SurfaceFactoryAdaptor interface:
     //
     virtual bool isFaceHole( Index faceIndex) const;
     virtual int  getFaceSize(Index faceIndex) const;
@@ -91,9 +93,7 @@ protected:
                             Index faceIndex, int faceVertex, FVarID fvarID,
                             Index fvarValueIndices[]) const;
 
-    //
-    //  Optional overrides for accelerating regular patches:
-    //
+    //  Optional SurfaceFactoryAdaptor overrides for regular patches:
     virtual bool getFaceNeighborhoodVertexIndicesIfRegular(
                             Index faceIndex,
                             Index vertexIndices[]) const;
@@ -104,7 +104,7 @@ protected:
 
 private:
     //
-    //  Additional supporting methods:
+    //  Internal supporting methods:
     //
     int getFaceVaryingChannel(FVarID fvarID) const;
 

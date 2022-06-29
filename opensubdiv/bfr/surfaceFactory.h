@@ -28,6 +28,7 @@
 #include "../version.h"
 
 #include "../bfr/surface.h"
+#include "../bfr/surfaceFactoryAdaptor.h"
 #include "../sdc/options.h"
 #include "../sdc/types.h"
 
@@ -41,10 +42,9 @@ namespace Bfr {
 //
 //  Forward declarations of public and internal classes used by factories:
 //
-class VertexDescriptor;
+class SurfaceFactoryCache;
 class FaceTopology;
 class FaceSurface;
-class SurfaceFactoryCache;
 
 //
 //  SurfaceFactory is an abstract class that provides both the interface
@@ -59,19 +59,31 @@ class SurfaceFactoryCache;
 //  may involve the mesh's data types in their native form (potentially
 //  identifying face-varying topologies).
 //
-//  A subclass of SurfaceFactory is also required to implement the small
-//  suite of pure virtual methods to complete the factory's implementation
-//  for the subclass' mesh type. Most of these methods provide the base
-//  factory with topological information about faces of that mesh -- from
-//  which it creates instances of Surface defining their limit surface.
+//  By inheriting the SurfaceFactoryAdaptor interface, a subclass of
+//  SurfaceFactory is also required to implement the small suite of pure
+//  virtual methods to complete the factory's implementation for the
+//  subclass' mesh type. These methods provide the base factory with
+//  topological information about faces of that mesh -- from which it
+//  creates instances of Surface defining their limit surface.
 //
-//  It should be emphasized that a subclass is written to support a
-//  specific type of "connected" mesh -- not simply a container of data
-//  defining a mesh. The abstract methods required by the SurfaceFactory
-//  describe the complete topological neighborhood around a specific face,
-//  and without any connectivity between mesh components (e.g. given a
-//  vertex, what are its incident faces?), satisfying these methods will
-//  be impossible, or, at best, extremely inefficient.
+//  The SurfaceFactory inherits rather than contains SurfaceFactoryAdaptor
+//  as instances of SurfaceFactoryAdaptor serve no other purpose, and the
+//  interface between the two is designed with the specific needs of the
+//  SurfaceFactory. When customizing a subclass of SurfaceFactory for a
+//  particular mesh type, it also avoids having to coordinate the subclass
+//  of SurfaceFactory with the subclass of SurfaceFactoryAdaptor.
+//
+//  It must be emphasized that a subclass of SurfaceFactory is written to
+//  support a specific type of "connected" mesh -- not simply a container
+//  of data defining a mesh. The SurfaceFactoryAdaptor interface describes
+//  the complete topological neighborhood around a specific face, and
+//  without any connectivity between mesh components (e.g. given a vertex,
+//  what are its incident faces?), satisfying these methods will be
+//  impossible, or, at best, extremely inefficient.
+//
+//  In addition to the virtual SurfaceFactoryAdaptor interface, additional
+//  pure virtual methods are required for the subclass to choose the way
+//  its instances manage caching of internal data reused by the factory.
 //
 //  Ultimately a subclass of SurfaceFactory is expected to be a lightweight
 //  interface to a connected mesh -- lightweight in terms of both time and
@@ -89,14 +101,12 @@ class SurfaceFactoryCache;
 //  manage caching for construction efficiency -- either internally or
 //  between itself and other factories (advanced).
 //
-class SurfaceFactory {
+class SurfaceFactory : public SurfaceFactoryAdaptor {
 protected: // non-copyable:
     SurfaceFactory(SurfaceFactory const &);
     SurfaceFactory & operator=(SurfaceFactory const &);
 
 public:
-    typedef int Index;
-
     //
     //  A face-varying ID is used to specifiy face-varying primvars for
     //  evaluation so that they can be identified by the subclass for
@@ -111,22 +121,11 @@ public:
     //
     //  The Options class is a simple container specfying options for the
     //  construction of the Factory that will apply to it for its lifetime.
-    //  These options currently include:
     //
-    //      - a default identifier to use for face-varying surfaces
-    //      - caching of intermediate topological results
-    //      - parameters for approximating the limit surface
-    //  
-    //  Choices for caching behavior include disabling all caching, the
-    //  use of an internal cache for each Factory (the default), or the
-    //  specification of an external cache shared between Factories (for
-    //  advanced use only).
-    //  
-    //  For surface approximation, the number of options is intentionally
-    //  minimized here for simplicity (in contrast to the Far classes that
-    //  are forced to maintain legacy options).  Using a max tessellation
-    //  rate is under consideration to control local refinement depth, but
-    //  may limit the effectiveness of caching across multiple meshes.
+    //  These options currently include choices to identify a default
+    //  face-varying ID, to control caching behavior (on or off, use of
+    //  external vs internal cache), and to control the accuracy of the
+    //  resulting limit surface representations.
     //
     class Options {
     public:
@@ -190,6 +189,8 @@ public:
     //  processing prior to surface construction -- it assumes the face
     //  has been tested for a limit surface and so is trivial:
     //
+    typedef int Index;
+
     bool FaceHasLimitSurface(Index faceIndex) const;
 
     Parameterization GetFaceParameterization(Index faceIndex) const;
@@ -257,117 +258,7 @@ public:
 
 protected:
     //
-    //  Virtual methods required to support construction of Surfaces:
-    //
-    //  These methods require a subclass to provide a complete description
-    //  of the topology around a base face, as well as indices associated
-    //  with it (both vertex and face-varying).  A goal here is to keep
-    //  the number of methods required to a minimum, and also that these
-    //  methods be invoked minimally by the base class as part of the
-    //  construction process.
-    //
-    //  With the need to support both linear and non-linear cases (for
-    //  which linear is trivial by comparison) and the limit surface for
-    //  both vertex and face-varying topologies, the result is a small set
-    //  of methods covering this matrix of functionality.
-    //
-    //  Since face-varying data may differ in topology from the vertex
-    //  data -- with each set of face-varying data potentially having its
-    //  own unique topology -- sets of face-varying data are uniquely
-    //  distinguished by an associated integer (a face-varying ID).
-    //
-    //  Trivial queries:
-    virtual bool isFaceHole(Index faceIndex) const = 0;
-
-    virtual int  getFaceSize(Index faceIndex) const = 0;
-
-    //  Identifying indices for a single base face (for linear cases):
-    //
-    //  (Note use of "face vertex" vs "face fvar-value" for face-varying
-    //  is consistent with Far topology queries and used elsewhere.)
-    virtual int getFaceVertexIndices(Index faceIndex,
-                    Index vertexIndices[]) const = 0;
-
-    virtual int getFaceFVarValueIndices(Index faceIndex,
-                    FVarID fvarID, Index fvarValueIndices[]) const = 0;
-
-    //  Identifying topology and associated indices for the complete set
-    //  of incident faces surrounding a face-vertex (corner) of a face --
-    //  necessary for supporting non-linear surfaces.
-    //
-    //  Methods here use "FaceVertex" in the name to emphasize that they
-    //  require information for a particular corner vertex of the face.
-    //
-    //  The topology around the face-vertex is described by populating a
-    //  given instance of a simple VertexDescriptor class -- which fully
-    //  describes the face-vertex, it incident faces and any sharpness
-    //  assigned at or around the face.vertex.  (See the comments with
-    //  the VertexDescriptor definition for more details.)
-    //
-    //  Two associated methods are required to identify indices for the
-    //  incident faces around a face-vertex (getFaceVertexIncidentFace...).
-    //  One method gathers the indices for control vertices of the mesh
-    //  assigned to the incident faces (their VertexIndices), while the
-    //  other gathers indices for a particular set of face-varying values
-    //  assigned to them (their FVarValueIndices).  Both methods expect
-    //  the incident faces to be ordered consistent with the specification
-    //  in VertexDescriptor, and all indices for all incident faces are
-    //  required.
-    //
-    //  The order of indices assigned to each face for these methods must
-    //  also be specified relative to the face-vertex, rather than the
-    //  way the face is defined.  For example, if a quad Q is defined by
-    //  the four vertices {A, B, C, D}, when gathering the indices for Q
-    //  as part of face-vertex C, the indices should be specified starting
-    //  with C, i.e. as {C, D, A, B}.  Ordering indices this way makes it
-    //  much easier for the factory to identify when face-varying topology
-    //  differs from the vertex topology, and both the face-varying and
-    //  vertex indices are ordered this way for consistency.
-    //
-    virtual int populateFaceVertexDescriptor(
-                    Index faceIndex, int faceVertex,
-                    VertexDescriptor * vertexDescriptor) const = 0;
-
-    virtual int getFaceVertexIncidentFaceVertexIndices(
-                    Index faceIndex, int faceVertex,
-                    Index vertexIndices[]) const = 0;
-
-    virtual int getFaceVertexIncidentFaceFVarValueIndices(
-                    Index faceIndex, int faceVertex,
-                    FVarID fvarID, Index fvarValueIndices[]) const = 0;
-
-protected:
-    //
-    //  Optional virtual topology methods for advanced use:
-    //
-    //  For cases when a mesh can quickly determine if the neighborhood
-    //  around a faces is purely regular, these methods can be used to
-    //  quickly identify the control point indices for the corresponding
-    //  regular patch. In doing so, the more tedious topological assembly
-    //  requiring information about each face-vertex can be avoided.
-    //
-    //  The indices returned must be ordered according to the regular
-    //  patch type corresponding to the subdivision scheme of the mesh.
-    //  Boundary vertices are allowed and indicated by an Index of -1.
-    //
-    //  The face-varying version will only be called if the vertex version
-    //  is purely regular, in which case, the face-varying topology is
-    //  expected to be similar.
-    //
-    //  Note that these methods may pass 0 for the index array[] in some
-    //  cases -- in which case only the return value should be provided.
-    //
-    virtual bool getFaceNeighborhoodVertexIndicesIfRegular(
-                    Index faceIndex,
-                    Index vertexIndices[]) const;
-
-    virtual bool getFaceNeighborhoodFVarValueIndicesIfRegular(
-                    Index faceIndex,
-                    FVarID fvarID, Index fvarValueIndices[]) const;
-
-protected:
-    //
-    //  Additional protected methods used to define a subclasses:
+    //  Additional protected methods required to define a subclass:
     //
     //  Construction requires specification of the subdivision scheme and
     //  options associated with the mesh (as is the case with other classes
@@ -394,7 +285,6 @@ protected:
 
 private:
     //  Supporting internal methods:
-    //
     bool faceHasLimitSimple(Index faceIndex, int faceSize) const;
 
     bool faceHasLimitNeighborhood(Index faceIndex) const;
@@ -470,7 +360,7 @@ private:
 };
 
 //
-//  Inline Options:
+//  Inline methods for Options:
 //
 inline SurfaceFactory::Options &
 SurfaceFactory::Options::SetDefaultFVarID(FVarID id) {

@@ -1263,22 +1263,6 @@ SurfaceFactory::initSurfaces(Index faceIndex,
     return populateAllSurfaces(faceIndex, &surfaces);
 }
 
-//
-//  Optional virtual topology queries:
-//
-bool
-SurfaceFactory::getFaceNeighborhoodVertexIndicesIfRegular(
-                        Index, Index[]) const {
-    return false;
-}
-
-bool
-SurfaceFactory::getFaceNeighborhoodFVarValueIndicesIfRegular(
-                        Index, FVarID, Index[]) const {
-    return false;
-}
-
-
 } // end namespace Bfr
 
 } // end namespace OPENSUBDIV_VERSION

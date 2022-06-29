@@ -69,7 +69,8 @@ RefinerSurfaceFactoryBase::getFaceVaryingChannel(FVarID fvarID) const {
 
 
 //
-//  Virtual methods supporting Surface creation and population:
+//  Virtual methods from the SurfaceFactoryAdaptor interface supporting
+//  Surface construction and initialization:
 //
 //  Simple/trivial face queries:
 //
@@ -273,8 +274,8 @@ RefinerSurfaceFactoryBase::getFaceVertexIncidentFaceFVarValueIndices(
 }
 
 //
-//  Optional virtual methods for determining if a face has purely regular
-//  topology, and retrieving its control point indices if so:
+//  Optional SurfaceFactoryAdaptor methods for determining if a face has
+//  purely regular topology, and retrieving its control point indices if so:
 //
 bool
 RefinerSurfaceFactoryBase::getFaceNeighborhoodVertexIndicesIfRegular(
