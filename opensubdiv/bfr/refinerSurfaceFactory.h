@@ -43,7 +43,7 @@ namespace Bfr {
 //  RefinerSurfaceFactoryBase is an intermediate subclass of SurfaceFactory
 //  using Far::TopologyRefiner as the connected mesh representation.
 //
-//  The SurfaceFactoryAdaptor interface for TopologyRefiner is provided in
+//  The SurfaceFactoryAdapter interface for TopologyRefiner is provided in
 //  full, along with some public extensions specific to TopologyRefiner.
 //
 //  Remaining virtual requirements of SurfaceFactory are NOT specified
@@ -73,7 +73,7 @@ public:
 
 protected:
     //
-    //  Virtual methods to satisfy the SurfaceFactoryAdaptor interface:
+    //  Virtual methods to satisfy the SurfaceFactoryAdapter interface:
     //
     virtual bool isFaceHole( Index faceIndex) const;
     virtual int  getFaceSize(Index faceIndex) const;
@@ -93,7 +93,7 @@ protected:
                             Index faceIndex, int faceVertex, FVarID fvarID,
                             Index fvarValueIndices[]) const;
 
-    //  Optional SurfaceFactoryAdaptor overrides for regular patches:
+    //  Optional SurfaceFactoryAdapter overrides for regular patches:
     virtual bool getFaceNeighborhoodVertexIndicesIfRegular(
                             Index faceIndex,
                             Index vertexIndices[]) const;

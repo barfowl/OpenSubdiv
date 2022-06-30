@@ -28,7 +28,7 @@
 #include "../version.h"
 
 #include "../bfr/surface.h"
-#include "../bfr/surfaceFactoryAdaptor.h"
+#include "../bfr/surfaceFactoryAdapter.h"
 #include "../sdc/options.h"
 #include "../sdc/types.h"
 
@@ -59,29 +59,29 @@ class FaceSurface;
 //  may involve the mesh's data types in their native form (potentially
 //  identifying face-varying topologies).
 //
-//  By inheriting the SurfaceFactoryAdaptor interface, a subclass of
+//  By inheriting the SurfaceFactoryAdapter interface, a subclass of
 //  SurfaceFactory is also required to implement the small suite of pure
 //  virtual methods to complete the factory's implementation for the
 //  subclass' mesh type. These methods provide the base factory with
 //  topological information about faces of that mesh -- from which it
 //  creates instances of Surface defining their limit surface.
 //
-//  The SurfaceFactory inherits rather than contains SurfaceFactoryAdaptor
-//  as instances of SurfaceFactoryAdaptor serve no other purpose, and the
+//  The SurfaceFactory inherits rather than contains SurfaceFactoryAdapter
+//  as instances of SurfaceFactoryAdapter serve no other purpose, and the
 //  interface between the two is designed with the specific needs of the
 //  SurfaceFactory. When customizing a subclass of SurfaceFactory for a
 //  particular mesh type, it also avoids having to coordinate the subclass
-//  of SurfaceFactory with the subclass of SurfaceFactoryAdaptor.
+//  of SurfaceFactory with the subclass of SurfaceFactoryAdapter.
 //
 //  It must be emphasized that a subclass of SurfaceFactory is written to
 //  support a specific type of "connected" mesh -- not simply a container
-//  of data defining a mesh. The SurfaceFactoryAdaptor interface describes
+//  of data defining a mesh. The SurfaceFactoryAdapter interface describes
 //  the complete topological neighborhood around a specific face, and
 //  without any connectivity between mesh components (e.g. given a vertex,
 //  what are its incident faces?), satisfying these methods will be
 //  impossible, or, at best, extremely inefficient.
 //
-//  In addition to the virtual SurfaceFactoryAdaptor interface, additional
+//  In addition to the virtual SurfaceFactoryAdapter interface, additional
 //  pure virtual methods are required for the subclass to choose the way
 //  its instances manage caching of internal data reused by the factory.
 //
@@ -101,7 +101,7 @@ class FaceSurface;
 //  manage caching for construction efficiency -- either internally or
 //  between itself and other factories (advanced).
 //
-class SurfaceFactory : public SurfaceFactoryAdaptor {
+class SurfaceFactory : public SurfaceFactoryAdapter {
 protected: // non-copyable:
     SurfaceFactory(SurfaceFactory const &);
     SurfaceFactory & operator=(SurfaceFactory const &);

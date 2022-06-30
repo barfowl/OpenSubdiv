@@ -22,12 +22,10 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#ifndef OPENSUBDIV3_BFR_SURFACE_FACTORY_ADAPTOR_H
-#define OPENSUBDIV3_BFR_SURFACE_FACTORY_ADAPTOR_H
+#ifndef OPENSUBDIV3_BFR_SURFACE_FACTORY_ADAPTER_H
+#define OPENSUBDIV3_BFR_SURFACE_FACTORY_ADAPTER_H
 
 #include "../version.h"
-
-#include "../bfr/surface.h"
 
 #include <cstdint>
 
@@ -39,13 +37,13 @@ namespace Bfr {
 class VertexDescriptor;
 
 //
-//  SurfaceFactoryAdaptor is an abstract class that defines the interface
+//  SurfaceFactoryAdapter is an abstract class that defines the interface
 //  through which subclasses of SurfaceFactory adapt to a connected mesh
 //  representation. The interface defines methods that describe the mesh
 //  topology and control indices in the neighborhood of a mesh -- from
 //  which the SurfaceFactory to identifies an appropriate limit surface.
 //
-//  SurfaceFactoryAdaptor methods require a subclass to provide a complete
+//  SurfaceFactoryAdapter methods require a subclass to provide a complete
 //  description of the topology around a base face, as well as indices
 //  associated with it (both vertex and face-varying).  The intent here is
 //  to keep the number of methods required to a minimum, and also to minimize
@@ -61,10 +59,10 @@ class VertexDescriptor;
 //  topology -- sets of face-varying data are uniquely distinguished by an
 //  associated integer (a face-varying ID).
 //
-class SurfaceFactoryAdaptor {
+class SurfaceFactoryAdapter {
 protected:
-    SurfaceFactoryAdaptor() { }
-    virtual ~SurfaceFactoryAdaptor() { }
+    SurfaceFactoryAdapter() { }
+    virtual ~SurfaceFactoryAdapter() { }
 
 protected:
     //  Typedefs used by the interface:
@@ -173,13 +171,13 @@ private:
 //  Inline defaults for optional methods:
 //
 inline bool
-SurfaceFactoryAdaptor::getFaceNeighborhoodVertexIndicesIfRegular(
+SurfaceFactoryAdapter::getFaceNeighborhoodVertexIndicesIfRegular(
         Index, Index[]) const {
     return false;
 }
 
 inline bool
-SurfaceFactoryAdaptor::getFaceNeighborhoodFVarValueIndicesIfRegular(
+SurfaceFactoryAdapter::getFaceNeighborhoodFVarValueIndicesIfRegular(
         Index, FVarID, Index[]) const {
     return false;
 }
@@ -191,4 +189,4 @@ using namespace OPENSUBDIV_VERSION;
 
 } // end namespace OpenSubdiv
 
-#endif /* OPENSUBDIV3_BFR_SURFACE_FACTORY_ADAPTOR_H */
+#endif /* OPENSUBDIV3_BFR_SURFACE_FACTORY_ADAPTER_H */
