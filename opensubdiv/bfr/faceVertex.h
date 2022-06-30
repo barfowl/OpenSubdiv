@@ -33,6 +33,8 @@
 #include "../bfr/surfaceData.h"
 #include "../sdc/crease.h"
 
+#include <cassert>
+
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 

@@ -28,11 +28,8 @@
 #include "../version.h"
 
 #include "../bfr/limits.h"
-#include "../vtr/stackBuffer.h"
 
-#include <cstring>
-#include <cassert>
-#include <algorithm>
+#include "../vtr/stackBuffer.h"
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -129,13 +126,16 @@ public:
 
     //  The full declarartion must be enclosed by calls to these methods:
     //
-    //  Note that the valence of a vertex will be internally clamped to a
-    //  value determined by Bfr::Limits (typically 16-bits) that reflects
-    //  topological limits elsewhere in OpenSubdiv, so beware of exceeding
-    //  that limit.
+    //  Note that vertex valences or face sizes in excess of those defined
+    //  in Bfr::Limits (typically 16-bits) are not valid.  When specifying
+    //  values in excess of these limits, initialization will fail and/or
+    //  the descriptor will be marked invalid and finalization will fail.
     //
-    void Initialize(int numIncidentFaces);
-    void Finalize();
+    bool Initialize(int numIncidentFaces);
+    bool Finalize();
+
+    //  Mainly intended for assertions if not ensuring all input is valid:
+    bool IsValid() const;
 
     //
     //  Three groups of methods describe the topology around a vertex:
@@ -197,8 +197,12 @@ protected:
     typedef Vtr::internal::StackBuffer<int,8,true>    IntBuffer;
     typedef Vtr::internal::StackBuffer<float,16,true> FloatBuffer;
 
+    void initFaceSizes();
+    void initEdgeSharpness();
+
 protected:
     //  Member variables assigned through the above interface:
+    unsigned short _isValid       : 1;
     unsigned short _isInitialized : 1;
     unsigned short _isFinalized   : 1;
 
@@ -219,6 +223,11 @@ protected:
 //
 //  Public inline methods for simple assignment:
 //  
+inline bool
+VertexDescriptor::IsValid() const {
+    return _isValid;
+}
+
 inline void
 VertexDescriptor::SetManifold(bool isManifold) {
     _isOrdered  = isManifold;
@@ -273,11 +282,15 @@ inline void
 VertexDescriptor::SetIncidentFaceSize(int incFaceIndex, int faceSize) {
 
     if ((int)_faceSizeOffsets.GetSize() != (_numFaces + 1)) {
-        _faceSizeOffsets.SetSize(_numFaces + 1);
-        std::memset(_faceSizeOffsets, 0, (_numFaces + 1) * sizeof(int));
-        _hasFaceSizes = true;
+        initFaceSizes();
     }
-    _faceSizeOffsets[incFaceIndex] = std::min(faceSize, Limits::MaxFaceSize());
+    if (faceSize > Limits::MaxFaceSize()) {
+        _faceSizeOffsets[incFaceIndex] = Limits::MaxFaceSize();
+        _isValid = false;
+    } else {
+        _faceSizeOffsets[incFaceIndex] = faceSize;
+        _isValid = _isValid && (faceSize >= 2);
+    }
 }
 inline int
 VertexDescriptor::GetIncidentFaceSize(int incFaceIndex) const {
@@ -287,11 +300,8 @@ VertexDescriptor::GetIncidentFaceSize(int incFaceIndex) const {
 inline void
 VertexDescriptor::SetManifoldEdgeSharpness(int edgeIndex, float sharpness) {
 
-    assert(IsManifold());
     if (!_hasEdgeSharpness) {
-        _faceEdgeSharpness.SetSize(_numFaces * 2);
-        std::memset(_faceEdgeSharpness, 0, (_numFaces * 2) * sizeof(float));
-        _hasEdgeSharpness = true;
+        initEdgeSharpness();
     }
 
     //  Assign the leading edge of the face after the edge (even index):
@@ -307,15 +317,11 @@ VertexDescriptor::SetManifoldEdgeSharpness(int edgeIndex, float sharpness) {
     }
 }
 inline void
-VertexDescriptor::SetIncidentFaceEdgeSharpness(int   faceIndex,
-                                               float leadingEdgeSharpness,
-                                               float trailingEdgeSharpness) {
+VertexDescriptor::SetIncidentFaceEdgeSharpness(int faceIndex,
+        float leadingEdgeSharpness, float trailingEdgeSharpness) {
 
     if (!_hasEdgeSharpness) {
-        _faceEdgeSharpness.SetSize(_numFaces * 2);
-        std::fill(&_faceEdgeSharpness[0],
-                  &_faceEdgeSharpness[_numFaces*2], 0.0f);
-        _hasEdgeSharpness = true;
+        initEdgeSharpness();
     }
 
     _faceEdgeSharpness[2*faceIndex  ] = leadingEdgeSharpness;

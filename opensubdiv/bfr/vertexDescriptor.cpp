@@ -38,12 +38,19 @@ namespace Bfr {
 //  Main initialize/finalize methods used by clients to delimit the
 //  assignment (most work is now handled by the containing class):
 //
-void
+bool
 VertexDescriptor::Initialize(int numFaces) {
 
-    assert(numFaces > 0);
-    _numFaces = (short) std::min(numFaces, Limits::MaxValence());
+    //  Mark invalid if too many or too few incident faces specified:
+    if (numFaces > Limits::MaxValence()) {
+        _numFaces = (short) Limits::MaxValence();
+        _isValid  = false;
+    } else {
+        _numFaces = (short) numFaces;
+        _isValid  = (numFaces > 0);
+    }
 
+    //  Initialize all other members regardless of the above:
     _vertSharpness = 0.0f;
 
     _isOrdered  = false;
@@ -55,31 +62,32 @@ VertexDescriptor::Initialize(int numFaces) {
 
     _isInitialized = true;
     _isFinalized   = false;
+
+    return _isValid;
 }
 
-void
+bool
 VertexDescriptor::Finalize() {
 
-    assert(_isInitialized);
-
     //
-    //  Should test for errors here and fail, e.g.:
+    //  Test for a number of possible errors here and fail, e.g.:
+    //      - invalid or uninitialized
     //      - whether face sizes common not set (don't rely on default)
     //      - face sizes expected but not present
     //      - edge sharpness expected but not present
     //
-    assert(_wasFaceSizesSet);
+    //  WIP - failure could set an error code for inspection
+    //
+    if (!_isValid || !_isInitialized) return false;
 
-    if (_hasFaceSizes)     assert(_faceSizeOffsets.GetSize() > 0);
-    if (_hasEdgeSharpness) assert(_faceEdgeSharpness.GetSize() > 0);
+    if (!_wasFaceSizesSet) return false;
 
-    //  Convert the N face sizes to N+1 offsets and assign face-verts:
+    if (_hasFaceSizes && (_faceSizeOffsets.GetSize() == 0)) return false;
+
+    //  Convert the N face sizes to N+1 offsets (total face-vertices last):
     if (_hasFaceSizes) {
-        //  WIP - worth testing if all same size and ignoring if so
         int sum = 0;
         for (int i = 0; i < _numFaces; ++i) {
-            //  WIP - test face size for degenerate (< 3) here and tag
-            //      - may want to defer this conversion for this reason
             int nextSum = sum + _faceSizeOffsets[i];
             _faceSizeOffsets[i] = sum;
             sum = nextSum;
@@ -88,6 +96,27 @@ VertexDescriptor::Finalize() {
     }
 
     _isFinalized = true;
+
+    return true;
+}
+
+//
+//  Internal methods for resizing local buffers:
+//
+void
+VertexDescriptor::initFaceSizes() {
+
+    _faceSizeOffsets.SetSize(_numFaces + 1);
+    std::memset(_faceSizeOffsets, 0, (_numFaces + 1) * sizeof(int));
+    _hasFaceSizes = true;
+}
+
+void
+VertexDescriptor::initEdgeSharpness() {
+
+    _faceEdgeSharpness.SetSize(_numFaces * 2);
+    std::memset(_faceEdgeSharpness, 0, (_numFaces * 2) * sizeof(float));
+    _hasEdgeSharpness = true;
 }
 
 } // end namespace Bfr
