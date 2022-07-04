@@ -79,14 +79,19 @@ public:
     //  consist of a subset of the control vertices of the mesh in the
     //  neighborhood of the face plus any additional points derived from
     //  them that may be required to represent the limit surface as one
-    //  or more parametric patches.
+    //  or more parametric patches. If the control points are already
+    //  gathered as part of a larger collection of patch points, the
+    //  remaining patch points can be computed with a separate method.
     //
     int GetNumPatchPoints() const;
 
     template <class T, class U>
-    void PreparePatchPointValues(T const & meshVertices,
-                                 U       & patchPoints) const;
+    void PreparePatchPoints(T const & meshPoints, U & patchPoints) const;
 
+    template <class T>
+    void ComputePatchPoints(T & patchPoints) const;
+
+    //  Primary evaluation methods:
     template <class T, class U>
     void Evaluate(REAL const uv[2], T const & patchPoints, U * P) const;
 
@@ -99,22 +104,20 @@ public:
                                     U * Duu, U * Duv, U * Dvv) const;
 
     //
-    //  The "control vertices" identify the subset of vertices of the
-    //  mesh that contribute to the limit surface of the face (use of
-    //  "vertex" here is intended to emphasize their presence in the
-    //  mesh, unlike patch "points" which may be derived from them).
-    //  They will be a subset of the patch points and are intended for
+    //  The "control points" identify the subset of vertices of the
+    //  mesh that contribute to the limit surface of the face.  They
+    //  will be a subset of the patch points and are intended for
     //  combination with "limit stencils" that can be evaluated below.
     //
-    //  Control vertices can be "gathered" into a local buffer for
+    //  Control points can be "gathered" into a local buffer for
     //  various purposes (e.g. repeated evaluation, computation of
     //  bounding box, etc.) and stencils can be optionally applied to
-    //  control vertices in this form.
+    //  control points in this form.
     //
     typedef int Index;
 
-    int GetNumControlVertices() const;
-    int GetControlVertexIndices(Index cvIndices[]) const;
+    int GetNumControlPoints() const;
+    int GetControlPointIndices(Index meshPointIndices[]) const;
 
     int EvaluateStencils(REAL const uv[2], REAL sP[]) const;
 
@@ -126,15 +129,17 @@ public:
                          REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
 
     template <class T, class U>
-    void ApplyStencil(REAL const sD[], T const & meshVerts, U * D) const;
+    void ApplyStencil(REAL const stencil[], T const & meshPoints,
+                                            U * result) const;
 
-    //  Convenience methods to gather control vertices and apply stencil
-    //  to the resulting local array of control vertices:
+    //  Convenience methods to gather control points and apply stencil
+    //  to the resulting local array of control points:
     template <class T, class U>
-    void GatherControlVertexValues(T const & meshVerts, U & cVerts) const;
+    void GatherControlPoints(T const & meshPoints, U & controlPoints) const;
 
     template <class T, class U>
-    void ApplyStencilGathered(REAL const sD[], T const & cVerts, U * D) const;
+    void ApplyStencilGathered(REAL const stencil[], T const & controlPoints,
+                                                    U * result) const;
 
 private:
     //  Internal evaluation methods applying weighted combinations of client
@@ -208,13 +213,13 @@ private:
 //
 template <typename REAL>
 inline int
-Surface<REAL>::GetNumControlVertices() const {
+Surface<REAL>::GetNumControlPoints() const {
     return _data.getNumCVs();
 }
 
 template <typename REAL>
 inline int
-Surface<REAL>::GetControlVertexIndices(Index cvs[]) const {
+Surface<REAL>::GetControlPointIndices(Index cvs[]) const {
     std::memcpy(cvs, _data.getCVIndices(), _data.getNumCVs() * sizeof(Index));
     return _data.getNumCVs();
 }
@@ -222,10 +227,10 @@ Surface<REAL>::GetControlVertexIndices(Index cvs[]) const {
 template <typename REAL>
 template <class T, class U>
 void
-Surface<REAL>::GatherControlVertexValues(T const & meshPoints,
+Surface<REAL>::GatherControlPoints(T const & meshPoints,
                                          U       & controlPoints) const {
     Index const * cvs = _data.getCVIndices();
-    for (int i = 0; i < GetNumControlVertices(); ++i) {
+    for (int i = 0; i < GetNumControlPoints(); ++i) {
         //  WIP - cannot guarantee that type T is copyable here, so must
         //        use Clear() and AddWithWeight():
         controlPoints[i].Clear();
@@ -236,7 +241,7 @@ Surface<REAL>::GatherControlVertexValues(T const & meshPoints,
 template <typename REAL>
 inline int
 Surface<REAL>::GetNumPatchPoints() const {
-    return hasIrregPatch() ? getNumIrregPatchPoints() : GetNumControlVertices();
+    return hasIrregPatch() ? getNumIrregPatchPoints() : GetNumControlPoints();
 }
 
 template <typename REAL>
@@ -246,18 +251,15 @@ Surface<REAL>::getIrregPatch() const {
 }
 
 template <typename REAL>
-template <class T, class U>
+template <class T>
 void
-Surface<REAL>::PreparePatchPointValues(T const & meshPoints,
-                                       U       & patchPoints) const {
+Surface<REAL>::ComputePatchPoints(T & patchPoints) const {
 
-    GatherControlVertexValues(meshPoints, patchPoints);
-
-    int numControlPoints = GetNumControlVertices();
+    int numControlPoints = GetNumControlPoints();
     int numPatchPoints   = GetNumPatchPoints();
 
     //  Apply the coefficient matrix to compute any patch points in
-    //  addition to the control points gathered above:
+    //  addition to the control points gathered previously:
     if (numPatchPoints > numControlPoints) {
         REAL const * matrixRow = getIrregPatchPointMatrix();
 
@@ -268,6 +270,18 @@ Surface<REAL>::PreparePatchPointValues(T const & meshPoints,
             }
             matrixRow += numControlPoints;
         }
+    }
+}
+
+template <typename REAL>
+template <class T, class U>
+void
+Surface<REAL>::PreparePatchPoints(T const & meshPoints, U & patchPoints) const {
+
+    GatherControlPoints(meshPoints, patchPoints);
+
+    if (GetNumPatchPoints() > GetNumControlPoints()) {
+        ComputePatchPoints(patchPoints);
     }
 }
 
@@ -307,7 +321,7 @@ Surface<REAL>::evalRegularPatch(REAL u, REAL v, T const & patchPoints,
         }
     }
 
-    for (int i = 0; i < GetNumControlVertices(); ++i) {
+    for (int i = 0; i < GetNumControlPoints(); ++i) {
         P->AddWithWeight(patchPoints[i], wP[i]);
         if (eval1stDerivs) {
             Du->AddWithWeight(patchPoints[i], wDu[i]);
@@ -413,7 +427,7 @@ Surface<REAL>::evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
         }
     }
 
-    int numControlPoints = GetNumControlVertices();
+    int numControlPoints = GetNumControlPoints();
 
     int iNext = (iOrigin + 1) % numControlPoints;
     int iPrev = (iOrigin + numControlPoints - 1) % numControlPoints;
@@ -502,12 +516,12 @@ Surface<REAL>::EvaluateStencils(REAL const uv[2], REAL sP[]) const {
 template <typename REAL>
 template <class T, class U>
 void
-Surface<REAL>::ApplyStencil(REAL const sD[], T const & meshVertices, U * D) const {
+Surface<REAL>::ApplyStencil(REAL const sD[], T const & meshPoints, U * D) const {
 
     D->Clear();
-    Index const * cvs = _data.getCVIndices();
-    for (int i = 0; i < GetNumControlVertices(); ++i) {
-        D->AddWithWeight(meshVertices[cvs[i]], sD[i]);
+    Index const * meshIndices = _data.getCVIndices();
+    for (int i = 0; i < GetNumControlPoints(); ++i) {
+        D->AddWithWeight(meshPoints[meshIndices[i]], sD[i]);
     }
 }
 template <typename REAL>
@@ -516,7 +530,7 @@ void
 Surface<REAL>::ApplyStencilGathered(REAL const sD[], T const & cvs, U * D) const {
 
     D->Clear();
-    for (int i = 0; i < GetNumControlVertices(); ++i) {
+    for (int i = 0; i < GetNumControlPoints(); ++i) {
         D->AddWithWeight(cvs[i], sD[i]);
     }
 }

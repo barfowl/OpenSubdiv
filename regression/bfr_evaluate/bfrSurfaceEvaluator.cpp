@@ -95,7 +95,7 @@ BfrSurfaceEvaluator<REAL>::evaluateDirectly(
     if (results.evalPosition) {
         Vec3Vector baseFacePos(pSurface.GetNumPatchPoints());
 
-        pSurface.PreparePatchPointValues(_baseMeshPos, baseFacePos);
+        pSurface.PreparePatchPoints(_baseMeshPos, baseFacePos);
 
         REAL const * st = &tessCoords[0];
         for (int i = 0; i < numCoords; ++i, st += 2) {
@@ -115,7 +115,7 @@ BfrSurfaceEvaluator<REAL>::evaluateDirectly(
     if (results.evalUV) {
         Vec3Vector baseFaceUVs(uvSurface.GetNumPatchPoints());
 
-        uvSurface.PreparePatchPointValues(_baseMeshUVs, baseFaceUVs);
+        uvSurface.PreparePatchPoints(_baseMeshUVs, baseFaceUVs);
 
         REAL const * st = &tessCoords[0];
         for (int i = 0; i < numCoords; ++i, st += 2) {
@@ -135,14 +135,14 @@ BfrSurfaceEvaluator<REAL>::evaluateByStencils(
     int numCoords = (int) tessCoords.size() / 2;
 
     if (results.evalPosition) {
-        stencilWeights.resize(6 * pSurface.GetNumControlVertices());
+        stencilWeights.resize(6 * pSurface.GetNumControlPoints());
 
         REAL * sP   = &stencilWeights[0];
-        REAL * sDu  = sP   + pSurface.GetNumControlVertices();
-        REAL * sDv  = sDu  + pSurface.GetNumControlVertices();
-        REAL * sDuu = sDv  + pSurface.GetNumControlVertices();
-        REAL * sDuv = sDuu + pSurface.GetNumControlVertices();
-        REAL * sDvv = sDuv + pSurface.GetNumControlVertices();
+        REAL * sDu  = sP   + pSurface.GetNumControlPoints();
+        REAL * sDv  = sDu  + pSurface.GetNumControlPoints();
+        REAL * sDuu = sDv  + pSurface.GetNumControlPoints();
+        REAL * sDuv = sDuu + pSurface.GetNumControlPoints();
+        REAL * sDvv = sDuv + pSurface.GetNumControlPoints();
 
         REAL const * st = &tessCoords[0];
         for (int i = 0; i < numCoords; ++i, st += 2) {
@@ -170,7 +170,7 @@ BfrSurfaceEvaluator<REAL>::evaluateByStencils(
         }
     }
     if (results.evalUV) {
-        stencilWeights.resize(uvSurface.GetNumControlVertices());
+        stencilWeights.resize(uvSurface.GetNumControlPoints());
 
         REAL * sUV = &stencilWeights[0];
 

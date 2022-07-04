@@ -79,10 +79,10 @@ Surface<REAL>::evalRegularPatchStencils(REAL u, REAL v,
         REAL sDuu[], REAL sDuv[], REAL sDvv[]) const {
 
     //
-    //  The control vertices of a regular patch are always the full set
+    //  The control points of a regular patch are always the full set
     //  of points required by a patch, i.e. phantom points will have an
     //  entry of some kind (a duplicate).  For example, for an isolated
-    //  quad, its regular patch still has 16 control vertices.  So we can
+    //  quad, its regular patch still has 16 control points.  So we can
     //  return the basis weights as stencil weights for all cases.
     //
     Far::PatchParam patchParam;
@@ -91,7 +91,7 @@ Surface<REAL>::evalRegularPatchStencils(REAL u, REAL v,
     Far::internal::EvaluatePatchBasisNormalized(
         getRegPatchType(), patchParam, u, v, sP, sDu, sDv, sDuu, sDuv, sDvv);
 
-    return GetNumControlVertices();
+    return GetNumControlPoints();
 }
 
 //
@@ -209,7 +209,7 @@ Surface<REAL>::evalMultiLinearPatchBasis(REAL u, REAL v,
     Far::internal::EvaluatePatchBasisNormalized(Far::PatchDescriptor::QUADS,
             Far::PatchParam(), uv[0], uv[1], wP, wDu, wDv, wDuu, wDuv, wDvv);
 
-    int numControlPoints = GetNumControlVertices();
+    int numControlPoints = GetNumControlPoints();
 
     transformSubFaceWeightsToBase<REAL>(numControlPoints, wP, 1.0f);
     if (wDu) {
@@ -258,7 +258,7 @@ Surface<REAL>::evalMultiLinearPatchStencils(REAL u, REAL v,
                                                         wDuu, wDuv, wDvv);
     }
 
-    int numControlPoints = GetNumControlVertices();
+    int numControlPoints = GetNumControlPoints();
 
     int iNext = (iOrigin + 1) % numControlPoints;
     int iPrev = (iOrigin + numControlPoints - 1) % numControlPoints;

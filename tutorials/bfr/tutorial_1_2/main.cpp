@@ -480,8 +480,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         {
             surfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
 
-            posSurface.PreparePatchPointValues(baseMeshVertexXYZs,
-                                               surfaceXYZPoints);
+            posSurface.PreparePatchPoints(baseMeshVertexXYZs, surfaceXYZPoints);
 
             tessXYZ.resize(numTessCoords);
             tessDu.resize(numTessCoords);
@@ -498,8 +497,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         if (meshHasUVs) {
             surfaceUVPoints.resize(uvSurface.GetNumPatchPoints());
 
-            uvSurface.PreparePatchPointValues(baseMeshFVarUVs,
-                                              surfaceUVPoints);
+            uvSurface.PreparePatchPoints(baseMeshFVarUVs, surfaceUVPoints);
 
             tessUV.resize(numTessCoords);
 

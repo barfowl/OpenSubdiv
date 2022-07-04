@@ -468,8 +468,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //
         surfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
 
-        posSurface.PreparePatchPointValues(baseMeshVertexXYZs,
-                                           surfaceXYZPoints);
+        posSurface.PreparePatchPoints(baseMeshVertexXYZs, surfaceXYZPoints);
 
         //  Resize these buffers for all points now, but the actual number
         //  of new points evaulated may be less -- remember to trim later:
