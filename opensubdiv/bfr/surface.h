@@ -241,7 +241,9 @@ Surface<REAL>::GatherControlPoints(T const & meshPoints,
 template <typename REAL>
 inline int
 Surface<REAL>::GetNumPatchPoints() const {
-    return hasIrregPatch() ? getNumIrregPatchPoints() : GetNumControlPoints();
+    return isRegular() ? GetNumControlPoints() :
+                (isLinear() ? (2*GetNumControlPoints() + 1) :
+                                getNumIrregPatchPoints());
 }
 
 template <typename REAL>
@@ -258,9 +260,26 @@ Surface<REAL>::ComputePatchPoints(T & patchPoints) const {
     int numControlPoints = GetNumControlPoints();
     int numPatchPoints   = GetNumPatchPoints();
 
-    //  Apply the coefficient matrix to compute any patch points in
-    //  addition to the control points gathered previously:
-    if (numPatchPoints > numControlPoints) {
+    if (numPatchPoints == numControlPoints) return;
+
+    if (isLinear()) {
+        //  Following the N control points, compute patch points for the
+        //  midpoint of the face followed by the midpoint of the N edges:
+        int N = numControlPoints;
+        REAL vertWeight = 1.0f / (REAL) N;
+
+        patchPoints[N].Clear();
+        for (int i = 0; i < N; ++i) {
+            patchPoints[N].AddWithWeight(patchPoints[i], vertWeight);
+
+            int iNext = (i < (N - 1)) ? (i + 1) : 0;
+            patchPoints[N+1+i].Clear();
+            patchPoints[N+1+i].AddWithWeight(patchPoints[i],     0.5f);
+            patchPoints[N+1+i].AddWithWeight(patchPoints[iNext], 0.5f);
+        }
+    } else {
+        //  Apply the coefficient matrix to compute any patch points
+        //  in addition to the control points gathered previously:
         REAL const * matrixRow = getIrregPatchPointMatrix();
 
         for (int i = numControlPoints; i < numPatchPoints; ++i) {
@@ -406,15 +425,23 @@ Surface<REAL>::evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
 
     REAL wP[4], wDu[4], wDv[4], wDuu[4], wDuv[4], wDvv[4];
 
-    int iOrigin = -1;
+    int subQuad = -1;
     if (!eval1stDerivs) {
-        iOrigin = evalMultiLinearPatchBasis(u, v, wP, 0, 0, 0, 0, 0);
+        subQuad = evalMultiLinearPatchBasis(u, v, wP, 0, 0, 0, 0, 0);
     } else if (!eval2ndDerivs) {
-        iOrigin = evalMultiLinearPatchBasis(u, v, wP, wDu, wDv, 0, 0, 0);
+        subQuad = evalMultiLinearPatchBasis(u, v, wP, wDu, wDv, 0, 0, 0);
     } else {
-        iOrigin = evalMultiLinearPatchBasis(u, v, wP, wDu, wDv,
+        subQuad = evalMultiLinearPatchBasis(u, v, wP, wDu, wDv,
                                                         wDuu, wDuv, wDvv);
     }
+
+    int N = GetNumControlPoints();
+
+    int quadIndices[4];
+    quadIndices[0] = subQuad;
+    quadIndices[1] = N + 1 + subQuad;
+    quadIndices[2] = N;
+    quadIndices[3] = N + 1 + (subQuad + N - 1) % N;
 
     P->Clear();
     if (eval1stDerivs) {
@@ -427,28 +454,17 @@ Surface<REAL>::evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
         }
     }
 
-    int numControlPoints = GetNumControlPoints();
+    for (int i = 0; i < 4; ++i) {
+        int pIndex = quadIndices[i];
 
-    int iNext = (iOrigin + 1) % numControlPoints;
-    int iPrev = (iOrigin + numControlPoints - 1) % numControlPoints;
-
-    for (int i = 0; i < numControlPoints; ++i) {
-        int wIndex = 2;
-        if (i == iOrigin) {
-            wIndex = 0;
-        } else if (i == iNext) {
-            wIndex = 1;
-        } else if (i == iPrev) {
-            wIndex = 3;
-        }
-        P->AddWithWeight( patchPoints[i], wP[wIndex]);
+        P->AddWithWeight( patchPoints[pIndex], wP[i]);
         if (eval1stDerivs) {
-            Du->AddWithWeight(patchPoints[i], wDu[wIndex]);
-            Dv->AddWithWeight(patchPoints[i], wDv[wIndex]);
+            Du->AddWithWeight(patchPoints[pIndex], wDu[i]);
+            Dv->AddWithWeight(patchPoints[pIndex], wDv[i]);
             if (eval2ndDerivs) {
-                Duu->AddWithWeight(patchPoints[i], wDuu[wIndex]);
-                Duv->AddWithWeight(patchPoints[i], wDuv[wIndex]);
-                Dvv->AddWithWeight(patchPoints[i], wDvv[wIndex]);
+                Duu->AddWithWeight(patchPoints[pIndex], wDuu[i]);
+                Duv->AddWithWeight(patchPoints[pIndex], wDuv[i]);
+                Dvv->AddWithWeight(patchPoints[pIndex], wDvv[i]);
             }
         }
     }

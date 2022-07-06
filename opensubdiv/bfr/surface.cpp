@@ -145,16 +145,11 @@ Surface<REAL>::evalIrregularPatchStencils(REAL u, REAL v,
 }
 
 //
-//  Evaluation methods for the N-sided quadrangulated linear patch:
-//
-//  Rather than computing a set of weights for potentially large N, basis
-//  evaluation computes basis functions on the containing bilinear sub-face
-//  (only 4 weights) and transforms them to a set of 4 unique weights to
-//  be used for all N base points.
+//  Supporting methods for the N-sided quadrangulated linear patch:
 //
 namespace {
     //
-    //  Regardless of N, there are four unique weights derived from the
+    //  For stencils, there are four unique weights derived from the
     //  four bilinear weights of the sub-face.  Given these weights as
     //  input for a sub-face with origin at base point P, the resulting
     //  weights are associated with the N base points as follows:
@@ -166,7 +161,7 @@ namespace {
     //
     template <typename REAL>
     inline void
-    transformSubFaceWeightsToBase(int N, REAL w[4], REAL derivScale) {
+    transformLinearQuadWeightsToStencil(REAL w[4], int N) {
 
         REAL wOrigin = w[0];
         REAL wNext   = w[1] * 0.5f;
@@ -177,8 +172,12 @@ namespace {
         w[1] = wCenter + wNext;
         w[2] = wCenter;
         w[3] = wCenter + wPrev;
+    }
 
-        if (derivScale > 0.0f) {
+    template <typename REAL>
+    inline void
+    scaleWeights4(REAL w[4], REAL derivScale) {
+        if (w) {
             w[0] *= derivScale;
             w[1] *= derivScale;
             w[2] *= derivScale;
@@ -209,24 +208,12 @@ Surface<REAL>::evalMultiLinearPatchBasis(REAL u, REAL v,
     Far::internal::EvaluatePatchBasisNormalized(Far::PatchDescriptor::QUADS,
             Far::PatchParam(), uv[0], uv[1], wP, wDu, wDv, wDuu, wDuv, wDvv);
 
-    int numControlPoints = GetNumControlPoints();
+    //  Scale weights for derivatives (only mixed partial of 2nd is non-zero):
+    scaleWeights4<REAL>(wDu, 2.0f);
+    scaleWeights4<REAL>(wDv, 2.0f);
 
-    transformSubFaceWeightsToBase<REAL>(numControlPoints, wP, 1.0f);
-    if (wDu) {
-        transformSubFaceWeightsToBase<REAL>(numControlPoints, wDu, 2.0f);
-    }
-    if (wDv) {
-        transformSubFaceWeightsToBase<REAL>(numControlPoints, wDv, 2.0f);
-    }
-    if (wDuu) {
-        //  Basis weights will be and should remain zero for this 2nd deriv
-    }
-    if (wDuv) {
-        transformSubFaceWeightsToBase<REAL>(numControlPoints, wDuv, 4.0f);
-    }
-    if (wDvv) {
-        //  Basis weights will be and should remain zero for this 2nd deriv
-    }
+    scaleWeights4<REAL>(wDuv, 4.0f);
+
     return subFace;
 }
 
@@ -255,11 +242,26 @@ Surface<REAL>::evalMultiLinearPatchStencils(REAL u, REAL v,
         iOrigin = evalMultiLinearPatchBasis(u, v, wP, wDu, wDv, 0, 0, 0);
     } else {
         iOrigin = evalMultiLinearPatchBasis(u, v, wP, wDu, wDv,
-                                                        wDuu, wDuv, wDvv);
+                                                      wDuu, wDuv, wDvv);
     }
 
+    //
+    //  Transform the four linear weights to four unique stencil weights:
+    //
     int numControlPoints = GetNumControlPoints();
 
+    transformLinearQuadWeightsToStencil(wP, numControlPoints);
+    if (eval1stDerivs) {
+        transformLinearQuadWeightsToStencil(wDu, numControlPoints);
+        transformLinearQuadWeightsToStencil(wDv, numControlPoints);
+        if (sDuv) {
+            transformLinearQuadWeightsToStencil(wDuv, numControlPoints);
+        }
+    }
+
+    //
+    //  Assign the N stencil weights from the four unique values:
+    //
     int iNext = (iOrigin + 1) % numControlPoints;
     int iPrev = (iOrigin + numControlPoints - 1) % numControlPoints;
 
