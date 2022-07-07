@@ -31,8 +31,6 @@
 #include "../bfr/parameterization.h"
 #include "../vtr/array.h"
 
-#include <cstring>
-
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
 
@@ -131,7 +129,7 @@ public:
     //
     typedef int Index;
 
-    int GetNumControlPoints() const;
+    int GetNumControlPoints() const { return _data.getNumCVs(); }
     int GetControlPointIndices(Index meshPointIndices[]) const;
 
     int EvaluateStencils(REAL const uv[2], REAL sP[]) const;
@@ -158,10 +156,9 @@ public:
                               REAL result[]) const;
 
 private:
-    //  Internal evaluation methods applying weighted combinations of client
-    //  point data:
-    void evaluate(REAL u, REAL v, PointBuffer const & pts, REAL P[],
-        REAL Du[], REAL Dv[], REAL Duu[], REAL Dvu[], REAL Dvv[]) const;
+    //  Internal evaluation methods supporting regular, irregular linear
+    //  and irregular non-linear patches:
+    typedef Vtr::ConstArray<int> PatchPointArray;
 
     void evalRegularPatch(REAL u, REAL v, PointBuffer const & pts, REAL P[],
         REAL Du[], REAL Dv[], REAL Duu[], REAL Dvu[], REAL Dvv[]) const;
@@ -169,16 +166,6 @@ private:
         REAL Du[], REAL Dv[], REAL Duu[], REAL Dvu[], REAL Dvv[]) const;
     void evalMultiLinearPatch(REAL u, REAL v, PointBuffer const & pts, REAL P[],
         REAL Du[], REAL Dv[], REAL Duu[], REAL Dvu[], REAL Dvv[]) const;
-
-    void pointClear(REAL point[], int size) const;
-    void pointCopy( REAL point[], int size, REAL const src[]) const;
-    void pointSet(  REAL point[], int size, REAL const src[], REAL w) const;
-    void pointAdd(  REAL point[], int size, REAL const src[], REAL w) const;
-
-private:
-    //  Internal evaluation methods for basis functions and contributing
-    //  patch points (implicit for a regular patch) and limit stencils:
-    typedef Vtr::ConstArray<int> PatchPointArray;
 
     void evalRegularPatchBasis(REAL u, REAL v, REAL wP[],
         REAL wDu[], REAL wDv[], REAL wDuu[], REAL wDuv[], REAL wDvv[]) const;
@@ -194,14 +181,18 @@ private:
     int evalMultiLinearPatchStencils(REAL u, REAL v, REAL sP[], 
         REAL sDu[], REAL sDv[], REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
 
-private:
-    //  Access to necessary details of the irregular patch representation,
-    //  hidden to avoid publicly exposing that representation:
-    //  WIP - some of this is now unnecessary as inline use no longer needed
-    bool hasIrregPatch() const { return _data.hasIrregPatch(); }
-    int  getNumIrregPatchPoints() const;
+    //  Internal methods to compute patch points:
+    void computeLinearPatchPoints(REAL * points, int size, int stride) const;
+    void computeIrregularPatchPoints(REAL * points, int size, int stride) const;
 
-    REAL const * getIrregPatchPointMatrix() const;
+private:
+    //  Simple member accessors for internal use:
+    bool isValid() const   { return _data.isValid(); }
+    bool isRegular() const { return _data.isRegular(); }
+    bool isLinear() const  { return _data.isLinear(); }
+
+    unsigned char getRegPatchType() const { return _data.getRegPatchType(); }
+    unsigned char getRegPatchMask() const { return _data.getRegPatchMask(); }
 
     internal::IrregularPatchType const & getIrregPatch() const;
 
@@ -213,182 +204,25 @@ private:
     internal::SurfaceData const & getSurfaceData() const { return _data; }
 
 private:
-    //  Additional simple member accessors for internal use:
-    bool isValid() const   { return _data.isValid(); }
-    bool isRegular() const { return _data.isRegular(); }
-    bool isLinear() const  { return _data.isLinear(); }
-
-    unsigned char getRegPatchType() const { return _data.getRegPatchType(); }
-    unsigned char getRegPatchMask() const { return _data.getRegPatchMask(); }
-
-private:
     //  All member variables encapsulated in a single class:
     internal::SurfaceData _data;
 };
 
+
 //
-//  WIP - inline methods for points -- to be moved to source file later
-//      * serious performance degradation with arbitrary size vs old <T,U>
-//          - so optimization for 3D points included 
+//  Simple inline methods invoking other methods:
 //
 template <typename REAL>
 inline void
-Surface<REAL>::pointClear(REAL p[], int size) const {
+Surface<REAL>::ComputePatchPoints(REAL * points, int size, int stride) const {
 
-    if (size == 3) {
-        p[0] = 0.0f;
-        p[1] = 0.0f;
-        p[2] = 0.0f;
-    } else {
-        for (int i = 0; i < size; ++i) {
-            p[i] = 0.0f;
-        }
-    }
-}
+    if (!isRegular()) {
+        if (stride == 0) stride = size;
 
-template <typename REAL>
-inline void
-Surface<REAL>::pointCopy(REAL p[], int size, REAL const src[]) const {
-
-    if (size == 3) {
-        p[0] = src[0];
-        p[1] = src[1];
-        p[2] = src[2];
-    } else {
-        for (int i = 0; i < size; ++i) {
-            p[i] = src[i];
-        }
-    }
-}
-
-template <typename REAL>
-inline void
-Surface<REAL>::pointSet(REAL p[], int size, REAL const src[], REAL w) const {
-
-    if (size == 3) {
-        p[0] = w * src[0];
-        p[1] = w * src[1];
-        p[2] = w * src[2];
-    } else {
-        for (int i = 0; i < size; ++i) {
-            p[i] = w * src[i];
-        }
-    }
-}
-
-template <typename REAL>
-inline void
-Surface<REAL>::pointAdd(REAL p[], int size, REAL const src[], REAL w) const {
-
-    if (size == 3) {
-        p[0] += w * src[0];
-        p[1] += w * src[1];
-        p[2] += w * src[2];
-    } else {
-        for (int i = 0; i < size; ++i) {
-            p[i] += w * src[i];
-        }
-    }
-}
-
-//
-//  Inline methods and templates for gathering control points:
-//
-template <typename REAL>
-inline int
-Surface<REAL>::GetNumControlPoints() const {
-    return _data.getNumCVs();
-}
-
-template <typename REAL>
-inline int
-Surface<REAL>::GetControlPointIndices(Index cvs[]) const {
-    std::memcpy(cvs, _data.getCVIndices(), _data.getNumCVs() * sizeof(Index));
-    return _data.getNumCVs();
-}
-
-template <typename REAL>
-void
-Surface<REAL>::GatherControlPoints(PointBuffer const & meshPoints,
-        REAL * controlPoints, int controlPointStride) const {
-
-    if (controlPointStride == 0) controlPointStride = meshPoints.size;
-
-    Index const * index = _data.getCVIndices();
-    for (int i = 0; i < GetNumControlPoints(); ++i) {
-        REAL const * meshPoint = meshPoints.data + meshPoints.stride * index[i];
-        REAL       * controlPoint = controlPoints + controlPointStride * i;
-
-        pointCopy(controlPoint, meshPoints.size, meshPoint);
-    }
-}
-
-template <typename REAL>
-inline int
-Surface<REAL>::GetNumPatchPoints() const {
-    return isRegular() ? GetNumControlPoints() :
-                (isLinear() ? (2*GetNumControlPoints() + 1) :
-                                getNumIrregPatchPoints());
-}
-
-template <typename REAL>
-inline internal::IrregularPatchType const &
-Surface<REAL>::getIrregPatch() const {
-    return _data.getIrregPatch();
-}
-
-template <typename REAL>
-void
-Surface<REAL>::ComputePatchPoints(REAL * patchPoints,
-        int patchPointSize, int patchPointStride) const {
-
-    if (patchPointStride == 0) patchPointStride = patchPointSize;
-
-    int numControlPoints = GetNumControlPoints();
-    int numPatchPoints   = GetNumPatchPoints();
-
-    if (numPatchPoints == numControlPoints) return;
-
-    if (isLinear()) {
-        //  Following the N control points, compute patch points for the
-        //  midpoint of the face followed by the midpoint of the N edges:
-        int N = numControlPoints;
-
-        REAL * facePoint = patchPoints + patchPointStride * N;
-        REAL   facePointWeight = 1.0f / (REAL) N;
-        pointClear(facePoint, patchPointSize);
-
-        for (int i = 0; i < N; ++i) {
-            int iNext = (i < (N - 1)) ? (i + 1) : 0;
-
-            REAL * v0Point = patchPoints + patchPointStride * i;
-            REAL * v1Point = patchPoints + patchPointStride * iNext;
-
-            REAL * edgePoint = patchPoints + patchPointStride * (N + 1 + i);
-            pointSet(edgePoint, patchPointSize, v0Point, 0.5f);
-            pointAdd(edgePoint, patchPointSize, v1Point, 0.5f);
-
-            pointAdd(facePoint, patchPointSize, v0Point, facePointWeight);
-        }
-    } else {
-        //  Apply the coefficient matrix to compute any patch points
-        //  in addition to the control points gathered previously:
-        REAL const * matrixRow       = getIrregPatchPointMatrix();
-        int          matrixRowStride = numControlPoints;
-
-        REAL * patchPoint = patchPoints + patchPointStride * numControlPoints;
-
-        for (int i = numControlPoints; i < numPatchPoints; ++i) {
-            pointClear(patchPoint, patchPointSize);
-
-            REAL * controlPoint = patchPoints;
-            for (int j = 0; j < numControlPoints; ++j) {
-                pointAdd(patchPoint, patchPointSize, controlPoint,matrixRow[j]);
-                controlPoint += patchPointStride;
-            }
-
-            patchPoint += patchPointStride;
-            matrixRow  += matrixRowStride;
+        if (isLinear()) {
+            computeLinearPatchPoints(points, size, stride);
+        } else {
+            computeIrregularPatchPoints(points, size, stride);
         }
     }
 }
@@ -402,224 +236,18 @@ Surface<REAL>::PreparePatchPoints(PointBuffer const & meshPoints,
 
     GatherControlPoints(meshPoints, patchPoints, patchPointStride);
 
-    if (!isRegular()) {
-        ComputePatchPoints(patchPoints, meshPoints.size, patchPointStride);
-    }
+    ComputePatchPoints(patchPoints, meshPoints.size, patchPointStride);
 }
 
 //
-//  Evaluation method templates:
+//  Inline invokations of more general methods for derivative overloads:
 //
-template <typename REAL>
-void
-Surface<REAL>::evalRegularPatch(REAL u, REAL v, PointBuffer const & points,
-    REAL * P, REAL * Du, REAL * Dv, REAL * Duu, REAL * Duv, REAL * Dvv) const {
-
-    //
-    //  Regular basis evaluation simply returns weights for use with
-    //  the entire set of patch control points:
-    //
-    bool eval1stDerivs = (Du && Dv);
-    bool eval2ndDerivs = eval1stDerivs && (Duu && Duv && Dvv);
-
-    REAL wP[20], wDu[20], wDv[20], wDuu[20], wDuv[20], wDvv[20];
-    if (!eval1stDerivs) {
-        evalRegularPatchBasis(u, v, wP, 0, 0, 0, 0, 0);
-    } else if (!eval2ndDerivs) {
-        evalRegularPatchBasis(u, v, wP, wDu, wDv, 0, 0, 0);
-    } else {
-        evalRegularPatchBasis(u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
-    }
-
-    //
-    //  Apply each successive control point to all derivatives at once,
-    //  rather than computing each derivate independently:
-    //
-    int size = points.size;
-
-    REAL const * controlPoint = points.data;
-
-    pointSet(P, size, points.data, wP[0]);
-    if (eval1stDerivs) {
-        pointSet(Du, size, points.data, wDu[0]);
-        pointSet(Dv, size, points.data, wDv[0]);
-        if (eval2ndDerivs) {
-            pointSet(Duu, size, points.data, wDuu[0]);
-            pointSet(Duv, size, points.data, wDuv[0]);
-            pointSet(Dvv, size, points.data, wDvv[0]);
-        }
-    }
-
-    for (int i = 1; i < GetNumControlPoints(); ++i) {
-        controlPoint += points.stride;
-
-        pointAdd(P, size, controlPoint, wP[i]);
-        if (eval1stDerivs) {
-            pointAdd(Du, size, controlPoint, wDu[i]);
-            pointAdd(Dv, size, controlPoint, wDv[i]);
-            if (eval2ndDerivs) {
-                pointAdd(Duu, size, controlPoint, wDuu[i]);
-                pointAdd(Duv, size, controlPoint, wDuv[i]);
-                pointAdd(Dvv, size, controlPoint, wDvv[i]);
-            }
-        }
-    }
-}
-
-template <typename REAL>
-void
-Surface<REAL>::evalIrregularPatch(REAL u, REAL v, PointBuffer const & points,
-    REAL * P, REAL * Du, REAL * Dv, REAL * Duu, REAL * Duv, REAL * Dvv) const {
-
-    //
-    //  Non-linear irregular basis evaluation returns both the weights
-    //  and the corresponding points of a sub-patch defined by a subset
-    //  of the given patch points:
-    //
-    bool eval1stDerivs = (Du && Dv);
-    bool eval2ndDerivs = eval1stDerivs && (Duu && Duv && Dvv);
-
-    REAL wP[20], wDu[20], wDv[20], wDuu[20], wDuv[20], wDvv[20];
-    PatchPointArray subPatchPoints;
-
-    if (!eval1stDerivs) {
-        subPatchPoints = evalIrregularPatchBasis(u, v, wP, 0, 0, 0, 0, 0);
-    } else if (!eval2ndDerivs) {
-        subPatchPoints = evalIrregularPatchBasis(u, v, wP, wDu, wDv, 0, 0, 0);
-    } else {
-        subPatchPoints = evalIrregularPatchBasis(u, v, wP, wDu, wDv,
-                                                       wDuu, wDuv, wDvv);
-    }
-
-    //
-    //  Apply each successive control point to all derivatives at once,
-    //  rather than computing each derivate independently:
-    //
-    int size = points.size;
-
-    REAL const * patchPoint = points.data + points.stride * subPatchPoints[0];
-
-    pointSet(P, size, patchPoint, wP[0]);
-    if (eval1stDerivs) {
-        pointSet(Du, size, patchPoint, wDu[0]);
-        pointSet(Dv, size, patchPoint, wDv[0]);
-        if (eval2ndDerivs) {
-            pointSet(Duu, size, patchPoint, wDuu[0]);
-            pointSet(Duv, size, patchPoint, wDuv[0]);
-            pointSet(Dvv, size, patchPoint, wDvv[0]);
-        }
-    }
-
-    for (int i = 1; i < subPatchPoints.size(); ++i) {
-        patchPoint = points.data + points.stride * subPatchPoints[i];
-
-        pointAdd(P, size, patchPoint, wP[i]);
-        if (eval1stDerivs) {
-            pointAdd(Du, size, patchPoint, wDu[i]);
-            pointAdd(Dv, size, patchPoint, wDv[i]);
-            if (eval2ndDerivs) {
-                pointAdd(Duu, size, patchPoint, wDuu[i]);
-                pointAdd(Duv, size, patchPoint, wDuv[i]);
-                pointAdd(Dvv, size, patchPoint, wDvv[i]);
-            }
-        }
-    }
-}
-
-
-template <typename REAL>
-void
-Surface<REAL>::evalMultiLinearPatch(REAL u, REAL v, PointBuffer const &points,
-    REAL * P, REAL * Du, REAL * Dv, REAL * Duu, REAL * Duv, REAL * Dvv) const {
-    //
-    //  Linear evaluation of irregular N-sided faces (usually for varying
-    //  or linear face-varying cases) quadrangulates the face implicitly
-    //  as part of evaluation.  The control point that is the origin of
-    //  the sub-face is returned along with the weights adjusted to apply
-    //  to the full set of control points:
-    //
-    bool eval1stDerivs = (Du && Dv);
-    bool eval2ndDerivs = eval1stDerivs && (Duu && Duv && Dvv);
-
-    REAL wP[4], wDu[4], wDv[4], wDuu[4], wDuv[4], wDvv[4];
-
-    int subQuad = -1;
-    if (!eval1stDerivs) {
-        subQuad = evalMultiLinearPatchBasis(u, v, wP, 0, 0, 0, 0, 0);
-    } else if (!eval2ndDerivs) {
-        subQuad = evalMultiLinearPatchBasis(u, v, wP, wDu, wDv, 0, 0, 0);
-    } else {
-        subQuad = evalMultiLinearPatchBasis(u, v, wP, wDu, wDv,
-                                                  wDuu, wDuv, wDvv);
-    }
-
-    int N = GetNumControlPoints();
-
-    int quadIndices[4];
-    quadIndices[0] = subQuad;
-    quadIndices[1] = N + 1 + subQuad;
-    quadIndices[2] = N;
-    quadIndices[3] = N + 1 + (subQuad + N - 1) % N;
-
-    int size = points.size;
-
-    REAL const * quadPoint = points.data + points.stride * quadIndices[0];
-
-    pointSet(P, size, quadPoint, wP[0]);
-    if (eval1stDerivs) {
-        pointSet(Du, size, quadPoint, wDu[0]);
-        pointSet(Dv, size, quadPoint, wDv[0]);
-        if (eval2ndDerivs) {
-            pointSet(Duu, size, quadPoint, wDuu[0]);
-            pointSet(Duv, size, quadPoint, wDuv[0]);
-            pointSet(Dvv, size, quadPoint, wDvv[0]);
-        }
-    }
-
-    for (int i = 1; i < 4; ++i) {
-        quadPoint = points.data + points.stride * quadIndices[i];
-
-        pointAdd(P, size, quadPoint, wP[i]);
-        if (eval1stDerivs) {
-            pointAdd(Du, size, quadPoint, wDu[i]);
-            pointAdd(Dv, size, quadPoint, wDv[i]);
-            if (eval2ndDerivs) {
-                pointAdd(Duu, size, quadPoint, wDuu[i]);
-                pointAdd(Duv, size, quadPoint, wDuv[i]);
-                pointAdd(Dvv, size, quadPoint, wDvv[i]);
-            }
-        }
-    }
-}
-
-template <typename REAL>
-inline void
-Surface<REAL>::evaluate(REAL u, REAL v, PointBuffer const & points,
-    REAL * P, REAL * Du, REAL * Dv, REAL * Duu, REAL * Duv, REAL * Dvv) const{
-
-    if (isRegular()) {
-        evalRegularPatch(u, v, points, P, Du, Dv, Duu, Duv, Dvv);
-    } else if (isLinear()) {
-        evalMultiLinearPatch(u, v, points, P, Du, Dv, Duu, Duv, Dvv);
-    } else {
-        evalIrregularPatch(u, v, points, P, Du, Dv, Duu, Duv, Dvv);
-    }
-}
-
-template <typename REAL>
-inline void
-Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
-    REAL * P, REAL * Du, REAL * Dv, REAL * Duu, REAL * Duv, REAL * Dvv) const{
-
-    evaluate(uv[0], uv[1], patchPoints, P, Du, Dv, Duu, Duv, Dvv);
-}
-
 template <typename REAL>
 inline void
 Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
                         REAL * P, REAL * Du, REAL * Dv) const {
 
-    evaluate(uv[0], uv[1], patchPoints, P, Du, Dv, 0, 0, 0);
+    Evaluate(uv, patchPoints, P, Du, Dv, 0, 0, 0);
 }
 
 template <typename REAL>
@@ -627,52 +255,21 @@ inline void
 Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
                         REAL * P) const {
 
-    evaluate(uv[0], uv[1], patchPoints, P, 0, 0, 0, 0, 0);
+    Evaluate(uv, patchPoints, P, 0, 0, 0, 0, 0);
 }
 
-//
-//  Inline stencil evaluation methods for derivative overloads:
-//
 template <typename REAL>
 inline int
 Surface<REAL>::EvaluateStencils(REAL const uv[2],
                           REAL sP[], REAL sDu[], REAL sDv[]) const {
+
     return EvaluateStencils(uv, sP, sDu, sDv, 0, 0, 0);
 }
 template <typename REAL>
 inline int
 Surface<REAL>::EvaluateStencils(REAL const uv[2], REAL sP[]) const {
+
     return EvaluateStencils(uv, sP, 0, 0, 0, 0, 0);
-}
-
-template <typename REAL>
-void
-Surface<REAL>::ApplyStencil(REAL const s[],
-        PointBuffer const & meshPoints, REAL result[]) const {
-
-    Index const * index = _data.getCVIndices();
-
-    REAL const * meshPoint = meshPoints.data + meshPoints.stride * index[0];
-    pointSet(result, meshPoints.size, meshPoint, s[0]);
-
-    for (int i = 1; i < GetNumControlPoints(); ++i) {
-        meshPoint = meshPoints.data + meshPoints.stride * index[i];
-        pointAdd(result, meshPoints.size, meshPoint, s[i]);
-    }
-}
-
-template <typename REAL>
-void
-Surface<REAL>::ApplyStencilGathered(REAL const s[],
-        PointBuffer const & controlPoints, REAL result[]) const {
-
-    REAL const * controlPoint = controlPoints.data;
-    pointSet(result, controlPoints.size, controlPoint, s[0]);
-
-    for (int i = 1; i < GetNumControlPoints(); ++i) {
-        controlPoint += controlPoints.stride;
-        pointAdd(result, controlPoints.size, controlPoint, s[i]);
-    }
 }
 
 } // end namespace Bfr
