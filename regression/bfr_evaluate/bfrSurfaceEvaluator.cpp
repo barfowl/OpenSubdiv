@@ -95,31 +95,36 @@ BfrSurfaceEvaluator<REAL>::evaluateDirectly(
     if (results.evalPosition) {
         Vec3Vector baseFacePos(pSurface.GetNumPatchPoints());
 
-        pSurface.PreparePatchPoints(_baseMeshPos, baseFacePos);
+        SurfacePoints meshPoints(&_baseMeshPos[0][0], 3);
+        SurfacePoints facePoints(&baseFacePos[0][0], 3);
+
+        pSurface.PreparePatchPoints(meshPoints, &baseFacePos[0][0]);
 
         REAL const * st = &tessCoords[0];
         for (int i = 0; i < numCoords; ++i, st += 2) {
             if (!results.eval1stDeriv) {
-                pSurface.Evaluate(st, baseFacePos,
-                        &results.p[i]);
+                pSurface.Evaluate(st, facePoints, &results.p[i][0]);
             } else if (!results.eval2ndDeriv) {
-                pSurface.Evaluate(st, baseFacePos,
-                        &results.p[i], &results.du[i], &results.dv[i]);
+                pSurface.Evaluate(st, facePoints,
+                    &results.p[i][0], &results.du[i][0], &results.dv[i][0]);
             } else {
-                pSurface.Evaluate(st, baseFacePos,
-                        &results.p[i], &results.du[i], &results.dv[i],
-                        &results.duu[i], &results.duv[i], &results.dvv[i]);
+                pSurface.Evaluate(st, facePoints,
+                    &results.p[i][0], &results.du[i][0], &results.dv[i][0],
+                    &results.duu[i][0], &results.duv[i][0], &results.dvv[i][0]);
             }
         }
     }
     if (results.evalUV) {
         Vec3Vector baseFaceUVs(uvSurface.GetNumPatchPoints());
 
-        uvSurface.PreparePatchPoints(_baseMeshUVs, baseFaceUVs);
+        SurfacePoints meshPoints(&_baseMeshUVs[0][0], 3);
+        SurfacePoints facePoints(&baseFaceUVs[0][0], 3);
+
+        uvSurface.PreparePatchPoints(meshPoints, &baseFaceUVs[0][0]);
 
         REAL const * st = &tessCoords[0];
         for (int i = 0; i < numCoords; ++i, st += 2) {
-            uvSurface.Evaluate(st, baseFaceUVs, &results.uv[i]);
+            uvSurface.Evaluate(st, facePoints, &results.uv[i][0]);
         }
     }
 }
@@ -146,6 +151,8 @@ BfrSurfaceEvaluator<REAL>::evaluateByStencils(
 
         REAL const * st = &tessCoords[0];
         for (int i = 0; i < numCoords; ++i, st += 2) {
+            SurfacePoints meshPoints(&_baseMeshPos[0][0], 3);
+
             if (!results.eval1stDeriv) {
                 pSurface.EvaluateStencils(st, &sP[0]);
             } else if (!results.eval2ndDeriv) {
@@ -156,20 +163,22 @@ BfrSurfaceEvaluator<REAL>::evaluateByStencils(
             }
 
             if (results.evalPosition) {
-                pSurface.ApplyStencil(&sP[0],  _baseMeshPos, &results.p[i]);
+                pSurface.ApplyStencil(&sP[0],  meshPoints, &results.p[i][0]);
             }
             if (results.eval1stDeriv) {
-                pSurface.ApplyStencil(&sDu[0], _baseMeshPos, &results.du[i]);
-                pSurface.ApplyStencil(&sDv[0], _baseMeshPos, &results.dv[i]);
+                pSurface.ApplyStencil(&sDu[0], meshPoints, &results.du[i][0]);
+                pSurface.ApplyStencil(&sDv[0], meshPoints, &results.dv[i][0]);
             }
             if (results.eval2ndDeriv) {
-                pSurface.ApplyStencil(&sDuu[0], _baseMeshPos, &results.duu[i]);
-                pSurface.ApplyStencil(&sDuv[0], _baseMeshPos, &results.duv[i]);
-                pSurface.ApplyStencil(&sDvv[0], _baseMeshPos, &results.dvv[i]);
+                pSurface.ApplyStencil(&sDuu[0], meshPoints, &results.duu[i][0]);
+                pSurface.ApplyStencil(&sDuv[0], meshPoints, &results.duv[i][0]);
+                pSurface.ApplyStencil(&sDvv[0], meshPoints, &results.dvv[i][0]);
             }
         }
     }
     if (results.evalUV) {
+        SurfacePoints meshPoints(&_baseMeshUVs[0][0], 3);
+
         stencilWeights.resize(uvSurface.GetNumControlPoints());
 
         REAL * sUV = &stencilWeights[0];
@@ -178,7 +187,7 @@ BfrSurfaceEvaluator<REAL>::evaluateByStencils(
         for (int i = 0; i < numCoords; ++i, st += 2) {
             uvSurface.EvaluateStencils(st, &sUV[0]);
 
-            uvSurface.ApplyStencil(&sUV[0], _baseMeshUVs, &results.uv[i]);
+            uvSurface.ApplyStencil(&sUV[0], meshPoints, &results.uv[i][0]);
         }
     }
 }

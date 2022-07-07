@@ -74,34 +74,49 @@ public:
     int GetFaceSize() const  { return GetParameterization().GetFaceSize(); }
 
     //
+    //  Data from both the mesh and the Surface are managed in arrays of
+    //  floating point values with variable size and stride. PointBuffer
+    //  provides a simple struct to reference a const set of such data:
+    //
+    struct PointBuffer {
+        PointBuffer(const REAL * aData, int aSize, int aStride = 0) :
+                data(aData), size(aSize), stride(aStride ? aStride : aSize) { }
+
+        REAL const * data;
+        int          size;
+        int          stride;
+    };
+
+    //
     //  A Surface is evaluated by preparing a set of "patch points"
     //  required for subsequent evaluation methods.  The patch points
     //  consist of a subset of the control vertices of the mesh in the
     //  neighborhood of the face plus any additional points derived from
     //  them that may be required to represent the limit surface as one
-    //  or more parametric patches. If the control points are already
-    //  gathered as part of a larger collection of patch points, the
-    //  remaining patch points can be computed with a separate method.
+    //  or more parametric patches.
+    //
+    //  If the control points are already or must be separate gathered
+    //  as part of a larger collection of patch points, the remaining
+    //  patch points can be computed with a separate method.
     //
     int GetNumPatchPoints() const;
 
-    template <class T, class U>
-    void PreparePatchPoints(T const & meshPoints, U & patchPoints) const;
+    void PreparePatchPoints(PointBuffer const & meshPoints,
+                            REAL * patchPoints,
+                            int    patchPointStride = 0) const;
 
-    template <class T>
-    void ComputePatchPoints(T & patchPoints) const;
+    void ComputePatchPoints(REAL * patchPoints, int patchPointSize,
+                            int    patchPointStride = 0) const;
 
-    //  Primary evaluation methods:
-    template <class T, class U>
-    void Evaluate(REAL const uv[2], T const & patchPoints, U * P) const;
+    void Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
+                                    REAL * P) const;
 
-    template <class T, class U>
-    void Evaluate(REAL const uv[2], T const & patchPoints, U * P,
-                                    U * Du, U * Dv) const;
-    template <class T, class U>
-    void Evaluate(REAL const uv[2], T const & patchPoints, U * P,
-                                    U * Du,  U * Dv,
-                                    U * Duu, U * Duv, U * Dvv) const;
+    void Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
+                                    REAL * P, REAL * Du, REAL * Dv) const;
+
+    void Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
+                                    REAL * P, REAL * Du,  REAL * Dv,
+                                    REAL * Duu, REAL * Duv, REAL * Dvv) const;
 
     //
     //  The "control points" identify the subset of vertices of the
@@ -128,35 +143,37 @@ public:
                          REAL sDu[],  REAL sDv[],
                          REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
 
-    template <class T, class U>
-    void ApplyStencil(REAL const stencil[], T const & meshPoints,
-                                            U * result) const;
+    //  WIP - with "mesh points" and "control points" more clearly defined,
+    //        consider their use in naming of the two ApplyStencil methods
+    void ApplyStencil(REAL const s[], PointBuffer const & meshPoints,
+                      REAL result[]) const;
 
     //  Convenience methods to gather control points and apply stencil
     //  to the resulting local array of control points:
-    template <class T, class U>
-    void GatherControlPoints(T const & meshPoints, U & controlPoints) const;
+    void GatherControlPoints(PointBuffer const & meshPoints,
+                             REAL * controlPoints,
+                             int    controlPointStride = 0) const;
 
-    template <class T, class U>
-    void ApplyStencilGathered(REAL const stencil[], T const & controlPoints,
-                                                    U * result) const;
+    void ApplyStencilGathered(REAL const s[], PointBuffer const & controlPoints,
+                              REAL result[]) const;
 
 private:
     //  Internal evaluation methods applying weighted combinations of client
-    //  type <T>, and so inlined below
-    template <class T, class U>
-    void evaluate(REAL u, REAL v, T const & patchPoints,
-            U * P, U * Du,  U * Dv, U * Duu, U * Duv, U * Dvv) const;
+    //  point data:
+    void evaluate(REAL u, REAL v, PointBuffer const & pts, REAL P[],
+        REAL Du[], REAL Dv[], REAL Duu[], REAL Dvu[], REAL Dvv[]) const;
 
-    template <class T, class U>
-    void evalRegularPatch(REAL u, REAL v, T const & patchPoints,
-            U * P, U * Du, U * Dv, U * Duu, U * Dvu, U * Dvv) const;
-    template <class T, class U>
-    void evalIrregularPatch(REAL u, REAL v, T const & patchPoints,
-            U * P, U * Du, U * Dv, U * Duu, U * Dvu, U * Dvv) const;
-    template <class T, class U>
-    void evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
-            U * P, U * Du, U * Dv, U * Duu, U * Dvu, U * Dvv) const;
+    void evalRegularPatch(REAL u, REAL v, PointBuffer const & pts, REAL P[],
+        REAL Du[], REAL Dv[], REAL Duu[], REAL Dvu[], REAL Dvv[]) const;
+    void evalIrregularPatch(REAL u, REAL v, PointBuffer const & pts, REAL P[],
+        REAL Du[], REAL Dv[], REAL Duu[], REAL Dvu[], REAL Dvv[]) const;
+    void evalMultiLinearPatch(REAL u, REAL v, PointBuffer const & pts, REAL P[],
+        REAL Du[], REAL Dv[], REAL Duu[], REAL Dvu[], REAL Dvv[]) const;
+
+    void pointClear(REAL point[], int size) const;
+    void pointCopy( REAL point[], int size, REAL const src[]) const;
+    void pointSet(  REAL point[], int size, REAL const src[], REAL w) const;
+    void pointAdd(  REAL point[], int size, REAL const src[], REAL w) const;
 
 private:
     //  Internal evaluation methods for basis functions and contributing
@@ -180,6 +197,7 @@ private:
 private:
     //  Access to necessary details of the irregular patch representation,
     //  hidden to avoid publicly exposing that representation:
+    //  WIP - some of this is now unnecessary as inline use no longer needed
     bool hasIrregPatch() const { return _data.hasIrregPatch(); }
     int  getNumIrregPatchPoints() const;
 
@@ -209,6 +227,71 @@ private:
 };
 
 //
+//  WIP - inline methods for points -- to be moved to source file later
+//      * serious performance degradation with arbitrary size vs old <T,U>
+//          - so optimization for 3D points included 
+//
+template <typename REAL>
+inline void
+Surface<REAL>::pointClear(REAL p[], int size) const {
+
+    if (size == 3) {
+        p[0] = 0.0f;
+        p[1] = 0.0f;
+        p[2] = 0.0f;
+    } else {
+        for (int i = 0; i < size; ++i) {
+            p[i] = 0.0f;
+        }
+    }
+}
+
+template <typename REAL>
+inline void
+Surface<REAL>::pointCopy(REAL p[], int size, REAL const src[]) const {
+
+    if (size == 3) {
+        p[0] = src[0];
+        p[1] = src[1];
+        p[2] = src[2];
+    } else {
+        for (int i = 0; i < size; ++i) {
+            p[i] = src[i];
+        }
+    }
+}
+
+template <typename REAL>
+inline void
+Surface<REAL>::pointSet(REAL p[], int size, REAL const src[], REAL w) const {
+
+    if (size == 3) {
+        p[0] = w * src[0];
+        p[1] = w * src[1];
+        p[2] = w * src[2];
+    } else {
+        for (int i = 0; i < size; ++i) {
+            p[i] = w * src[i];
+        }
+    }
+}
+
+template <typename REAL>
+inline void
+Surface<REAL>::pointAdd(REAL p[], int size, REAL const src[], REAL w) const {
+
+    if (size == 3) {
+        p[0] += w * src[0];
+        p[1] += w * src[1];
+        p[2] += w * src[2];
+    } else {
+        for (int i = 0; i < size; ++i) {
+            p[i] += w * src[i];
+        }
+    }
+}
+
+//
 //  Inline methods and templates for gathering control points:
 //
 template <typename REAL>
@@ -225,16 +308,18 @@ Surface<REAL>::GetControlPointIndices(Index cvs[]) const {
 }
 
 template <typename REAL>
-template <class T, class U>
 void
-Surface<REAL>::GatherControlPoints(T const & meshPoints,
-                                         U       & controlPoints) const {
-    Index const * cvs = _data.getCVIndices();
+Surface<REAL>::GatherControlPoints(PointBuffer const & meshPoints,
+        REAL * controlPoints, int controlPointStride) const {
+
+    if (controlPointStride == 0) controlPointStride = meshPoints.size;
+
+    Index const * index = _data.getCVIndices();
     for (int i = 0; i < GetNumControlPoints(); ++i) {
-        //  WIP - cannot guarantee that type T is copyable here, so must
-        //        use Clear() and AddWithWeight():
-        controlPoints[i].Clear();
-        controlPoints[i].AddWithWeight(meshPoints[cvs[i]], 1.0f);
+        REAL const * meshPoint = meshPoints.data + meshPoints.stride * index[i];
+        REAL       * controlPoint = controlPoints + controlPointStride * i;
+
+        pointCopy(controlPoint, meshPoints.size, meshPoint);
     }
 }
 
@@ -253,9 +338,11 @@ Surface<REAL>::getIrregPatch() const {
 }
 
 template <typename REAL>
-template <class T>
 void
-Surface<REAL>::ComputePatchPoints(T & patchPoints) const {
+Surface<REAL>::ComputePatchPoints(REAL * patchPoints,
+        int patchPointSize, int patchPointStride) const {
+
+    if (patchPointStride == 0) patchPointStride = patchPointSize;
 
     int numControlPoints = GetNumControlPoints();
     int numPatchPoints   = GetNumPatchPoints();
@@ -266,41 +353,57 @@ Surface<REAL>::ComputePatchPoints(T & patchPoints) const {
         //  Following the N control points, compute patch points for the
         //  midpoint of the face followed by the midpoint of the N edges:
         int N = numControlPoints;
-        REAL vertWeight = 1.0f / (REAL) N;
 
-        patchPoints[N].Clear();
+        REAL * facePoint = patchPoints + patchPointStride * N;
+        REAL   facePointWeight = 1.0f / (REAL) N;
+        pointClear(facePoint, patchPointSize);
+
         for (int i = 0; i < N; ++i) {
-            patchPoints[N].AddWithWeight(patchPoints[i], vertWeight);
-
             int iNext = (i < (N - 1)) ? (i + 1) : 0;
-            patchPoints[N+1+i].Clear();
-            patchPoints[N+1+i].AddWithWeight(patchPoints[i],     0.5f);
-            patchPoints[N+1+i].AddWithWeight(patchPoints[iNext], 0.5f);
+
+            REAL * v0Point = patchPoints + patchPointStride * i;
+            REAL * v1Point = patchPoints + patchPointStride * iNext;
+
+            REAL * edgePoint = patchPoints + patchPointStride * (N + 1 + i);
+            pointSet(edgePoint, patchPointSize, v0Point, 0.5f);
+            pointAdd(edgePoint, patchPointSize, v1Point, 0.5f);
+
+            pointAdd(facePoint, patchPointSize, v0Point, facePointWeight);
         }
     } else {
         //  Apply the coefficient matrix to compute any patch points
         //  in addition to the control points gathered previously:
-        REAL const * matrixRow = getIrregPatchPointMatrix();
+        REAL const * matrixRow       = getIrregPatchPointMatrix();
+        int          matrixRowStride = numControlPoints;
+
+        REAL * patchPoint = patchPoints + patchPointStride * numControlPoints;
 
         for (int i = numControlPoints; i < numPatchPoints; ++i) {
-            patchPoints[i].Clear();
+            pointClear(patchPoint, patchPointSize);
+
+            REAL * controlPoint = patchPoints;
             for (int j = 0; j < numControlPoints; ++j) {
-                patchPoints[i].AddWithWeight(patchPoints[j], matrixRow[j]);
+                pointAdd(patchPoint, patchPointSize, controlPoint,matrixRow[j]);
+                controlPoint += patchPointStride;
             }
-            matrixRow += numControlPoints;
+
+            patchPoint += patchPointStride;
+            matrixRow  += matrixRowStride;
         }
     }
 }
 
 template <typename REAL>
-template <class T, class U>
-void
-Surface<REAL>::PreparePatchPoints(T const & meshPoints, U & patchPoints) const {
+inline void
+Surface<REAL>::PreparePatchPoints(PointBuffer const & meshPoints,
+        REAL * patchPoints, int patchPointStride) const {
 
-    GatherControlPoints(meshPoints, patchPoints);
+    if (patchPointStride == 0) patchPointStride = meshPoints.size;
 
-    if (GetNumPatchPoints() > GetNumControlPoints()) {
-        ComputePatchPoints(patchPoints);
+    GatherControlPoints(meshPoints, patchPoints, patchPointStride);
+
+    if (!isRegular()) {
+        ComputePatchPoints(patchPoints, meshPoints.size, patchPointStride);
     }
 }
 
@@ -308,11 +411,10 @@ Surface<REAL>::PreparePatchPoints(T const & meshPoints, U & patchPoints) const {
 //  Evaluation method templates:
 //
 template <typename REAL>
-template <class T, class U>
 void
-Surface<REAL>::evalRegularPatch(REAL u, REAL v, T const & patchPoints,
-                          U * P,   U * Du,  U * Dv,
-                          U * Duu, U * Duv, U * Dvv) const {
+Surface<REAL>::evalRegularPatch(REAL u, REAL v, PointBuffer const & points,
+    REAL * P, REAL * Du, REAL * Dv, REAL * Duu, REAL * Duv, REAL * Dvv) const {
+
     //
     //  Regular basis evaluation simply returns weights for use with
     //  the entire set of patch control points:
@@ -329,37 +431,46 @@ Surface<REAL>::evalRegularPatch(REAL u, REAL v, T const & patchPoints,
         evalRegularPatchBasis(u, v, wP, wDu, wDv, wDuu, wDuv, wDvv);
     }
 
-    P->Clear();
+    //
+    //  Apply each successive control point to all derivatives at once,
+    //  rather than computing each derivate independently:
+    //
+    int size = points.size;
+
+    REAL const * controlPoint = points.data;
+
+    pointSet(P, size, points.data, wP[0]);
     if (eval1stDerivs) {
-        Du->Clear();
-        Dv->Clear();
+        pointSet(Du, size, points.data, wDu[0]);
+        pointSet(Dv, size, points.data, wDv[0]);
         if (eval2ndDerivs) {
-            Duu->Clear();
-            Duv->Clear();
-            Dvv->Clear();
+            pointSet(Duu, size, points.data, wDuu[0]);
+            pointSet(Duv, size, points.data, wDuv[0]);
+            pointSet(Dvv, size, points.data, wDvv[0]);
         }
     }
 
-    for (int i = 0; i < GetNumControlPoints(); ++i) {
-        P->AddWithWeight(patchPoints[i], wP[i]);
+    for (int i = 1; i < GetNumControlPoints(); ++i) {
+        controlPoint += points.stride;
+
+        pointAdd(P, size, controlPoint, wP[i]);
         if (eval1stDerivs) {
-            Du->AddWithWeight(patchPoints[i], wDu[i]);
-            Dv->AddWithWeight(patchPoints[i], wDv[i]);
+            pointAdd(Du, size, controlPoint, wDu[i]);
+            pointAdd(Dv, size, controlPoint, wDv[i]);
             if (eval2ndDerivs) {
-                Duu->AddWithWeight(patchPoints[i], wDuu[i]);
-                Duv->AddWithWeight(patchPoints[i], wDuv[i]);
-                Dvv->AddWithWeight(patchPoints[i], wDvv[i]);
+                pointAdd(Duu, size, controlPoint, wDuu[i]);
+                pointAdd(Duv, size, controlPoint, wDuv[i]);
+                pointAdd(Dvv, size, controlPoint, wDvv[i]);
             }
         }
     }
 }
 
 template <typename REAL>
-template <class T, class U>
 void
-Surface<REAL>::evalIrregularPatch(REAL u, REAL v, T const & patchPoints,
-                            U * P,   U * Du,  U * Dv,
-                            U * Duu, U * Duv, U * Dvv) const {
+Surface<REAL>::evalIrregularPatch(REAL u, REAL v, PointBuffer const & points,
+    REAL * P, REAL * Du, REAL * Dv, REAL * Duu, REAL * Duv, REAL * Dvv) const {
+
     //
     //  Non-linear irregular basis evaluation returns both the weights
     //  and the corresponding points of a sub-patch defined by a subset
@@ -372,47 +483,54 @@ Surface<REAL>::evalIrregularPatch(REAL u, REAL v, T const & patchPoints,
     PatchPointArray subPatchPoints;
 
     if (!eval1stDerivs) {
-        subPatchPoints = evalIrregularPatchBasis(u, v,
-                wP, 0, 0, 0, 0, 0);
+        subPatchPoints = evalIrregularPatchBasis(u, v, wP, 0, 0, 0, 0, 0);
     } else if (!eval2ndDerivs) {
-        subPatchPoints = evalIrregularPatchBasis(u, v,
-                wP, wDu, wDv, 0, 0, 0);
+        subPatchPoints = evalIrregularPatchBasis(u, v, wP, wDu, wDv, 0, 0, 0);
     } else {
-        subPatchPoints = evalIrregularPatchBasis(u, v,
-                wP, wDu, wDv, wDuu, wDuv, wDvv);
+        subPatchPoints = evalIrregularPatchBasis(u, v, wP, wDu, wDv,
+                                                       wDuu, wDuv, wDvv);
     }
 
-    P->Clear();
+    //
+    //  Apply each successive control point to all derivatives at once,
+    //  rather than computing each derivate independently:
+    //
+    int size = points.size;
+
+    REAL const * patchPoint = points.data + points.stride * subPatchPoints[0];
+
+    pointSet(P, size, patchPoint, wP[0]);
     if (eval1stDerivs) {
-        Du->Clear();
-        Dv->Clear();
+        pointSet(Du, size, patchPoint, wDu[0]);
+        pointSet(Dv, size, patchPoint, wDv[0]);
         if (eval2ndDerivs) {
-            Duu->Clear();
-            Duv->Clear();
-            Dvv->Clear();
+            pointSet(Duu, size, patchPoint, wDuu[0]);
+            pointSet(Duv, size, patchPoint, wDuv[0]);
+            pointSet(Dvv, size, patchPoint, wDvv[0]);
         }
     }
 
-    for (int i = 0; i < subPatchPoints.size(); ++i) {
-        P->AddWithWeight( patchPoints[subPatchPoints[i]], wP[i]);
+    for (int i = 1; i < subPatchPoints.size(); ++i) {
+        patchPoint = points.data + points.stride * subPatchPoints[i];
+
+        pointAdd(P, size, patchPoint, wP[i]);
         if (eval1stDerivs) {
-            Du->AddWithWeight(patchPoints[subPatchPoints[i]], wDu[i]);
-            Dv->AddWithWeight(patchPoints[subPatchPoints[i]], wDv[i]);
+            pointAdd(Du, size, patchPoint, wDu[i]);
+            pointAdd(Dv, size, patchPoint, wDv[i]);
             if (eval2ndDerivs) {
-                Duu->AddWithWeight(patchPoints[subPatchPoints[i]], wDuu[i]);
-                Duv->AddWithWeight(patchPoints[subPatchPoints[i]], wDuv[i]);
-                Dvv->AddWithWeight(patchPoints[subPatchPoints[i]], wDvv[i]);
+                pointAdd(Duu, size, patchPoint, wDuu[i]);
+                pointAdd(Duv, size, patchPoint, wDuv[i]);
+                pointAdd(Dvv, size, patchPoint, wDvv[i]);
             }
         }
     }
 }
 
+
 template <typename REAL>
-template <class T, class U>
 void
-Surface<REAL>::evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
-                              U * P,   U * Du,  U * Dv,
-                              U * Duu, U * Duv, U * Dvv) const {
+Surface<REAL>::evalMultiLinearPatch(REAL u, REAL v, PointBuffer const &points,
+    REAL * P, REAL * Du, REAL * Dv, REAL * Duu, REAL * Duv, REAL * Dvv) const {
     //
     //  Linear evaluation of irregular N-sided faces (usually for varying
     //  or linear face-varying cases) quadrangulates the face implicitly
@@ -432,7 +550,7 @@ Surface<REAL>::evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
         subQuad = evalMultiLinearPatchBasis(u, v, wP, wDu, wDv, 0, 0, 0);
     } else {
         subQuad = evalMultiLinearPatchBasis(u, v, wP, wDu, wDv,
-                                                        wDuu, wDuv, wDvv);
+                                                  wDuu, wDuv, wDvv);
     }
 
     int N = GetNumControlPoints();
@@ -443,111 +561,117 @@ Surface<REAL>::evalMultiLinearPatch(REAL u, REAL v, T const & patchPoints,
     quadIndices[2] = N;
     quadIndices[3] = N + 1 + (subQuad + N - 1) % N;
 
-    P->Clear();
+    int size = points.size;
+
+    REAL const * quadPoint = points.data + points.stride * quadIndices[0];
+
+    pointSet(P, size, quadPoint, wP[0]);
     if (eval1stDerivs) {
-        Du->Clear();
-        Dv->Clear();
+        pointSet(Du, size, quadPoint, wDu[0]);
+        pointSet(Dv, size, quadPoint, wDv[0]);
         if (eval2ndDerivs) {
-            Duu->Clear();
-            Duv->Clear();
-            Dvv->Clear();
+            pointSet(Duu, size, quadPoint, wDuu[0]);
+            pointSet(Duv, size, quadPoint, wDuv[0]);
+            pointSet(Dvv, size, quadPoint, wDvv[0]);
         }
     }
 
-    for (int i = 0; i < 4; ++i) {
-        int pIndex = quadIndices[i];
+    for (int i = 1; i < 4; ++i) {
+        quadPoint = points.data + points.stride * quadIndices[i];
 
-        P->AddWithWeight( patchPoints[pIndex], wP[i]);
+        pointAdd(P, size, quadPoint, wP[i]);
         if (eval1stDerivs) {
-            Du->AddWithWeight(patchPoints[pIndex], wDu[i]);
-            Dv->AddWithWeight(patchPoints[pIndex], wDv[i]);
+            pointAdd(Du, size, quadPoint, wDu[i]);
+            pointAdd(Dv, size, quadPoint, wDv[i]);
             if (eval2ndDerivs) {
-                Duu->AddWithWeight(patchPoints[pIndex], wDuu[i]);
-                Duv->AddWithWeight(patchPoints[pIndex], wDuv[i]);
-                Dvv->AddWithWeight(patchPoints[pIndex], wDvv[i]);
+                pointAdd(Duu, size, quadPoint, wDuu[i]);
+                pointAdd(Duv, size, quadPoint, wDuv[i]);
+                pointAdd(Dvv, size, quadPoint, wDvv[i]);
             }
         }
     }
 }
 
 template <typename REAL>
-template <class T, class U>
 inline void
-Surface<REAL>::evaluate(REAL u, REAL v, T const & patchPoints,
-                  U * P, U * Du, U * Dv, U * Duu, U * Duv, U * Dvv) const {
+Surface<REAL>::evaluate(REAL u, REAL v, PointBuffer const & points,
+    REAL * P, REAL * Du, REAL * Dv, REAL * Duu, REAL * Duv, REAL * Dvv) const{
 
     if (isRegular()) {
-        evalRegularPatch<T,U>(u, v, patchPoints,
-                                   P, Du, Dv, Duu, Duv, Dvv);
+        evalRegularPatch(u, v, points, P, Du, Dv, Duu, Duv, Dvv);
     } else if (isLinear()) {
-        evalMultiLinearPatch<T,U>(u, v, patchPoints,
-                                       P, Du, Dv, Duu, Duv, Dvv);
+        evalMultiLinearPatch(u, v, points, P, Du, Dv, Duu, Duv, Dvv);
     } else {
-        evalIrregularPatch<T,U>(u, v, patchPoints,
-                                     P, Du, Dv, Duu, Duv, Dvv);
+        evalIrregularPatch(u, v, points, P, Du, Dv, Duu, Duv, Dvv);
     }
 }
 
 template <typename REAL>
-template <class T, class U>
 inline void
-Surface<REAL>::Evaluate(REAL const uv[2], T const & patchPoints,
-                  U * P, U * Du, U * Dv, U * Duu, U * Duv, U * Dvv) const {
+Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
+    REAL * P, REAL * Du, REAL * Dv, REAL * Duu, REAL * Duv, REAL * Dvv) const{
 
-    evaluate<T,U>(uv[0], uv[1], patchPoints, P, Du, Dv, Duu, Duv, Dvv);
+    evaluate(uv[0], uv[1], patchPoints, P, Du, Dv, Duu, Duv, Dvv);
 }
 
 template <typename REAL>
-template <class T, class U>
 inline void
-Surface<REAL>::Evaluate(REAL const uv[2], T const & patchPoints,
-                  U * P, U * Du, U * Dv) const {
+Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
+                        REAL * P, REAL * Du, REAL * Dv) const {
 
-    evaluate<T,U>(uv[0], uv[1], patchPoints, P, Du, Dv, 0, 0, 0);
+    evaluate(uv[0], uv[1], patchPoints, P, Du, Dv, 0, 0, 0);
 }
 
 template <typename REAL>
-template <class T, class U>
 inline void
-Surface<REAL>::Evaluate(REAL const uv[2], T const & patchPoints, U * P) const {
+Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
+                        REAL * P) const {
 
-    evaluate<T,U>(uv[0], uv[1], patchPoints, P, 0, 0, 0, 0, 0);
+    evaluate(uv[0], uv[1], patchPoints, P, 0, 0, 0, 0, 0);
 }
 
+//
+//  Inline stencil evaluation methods for derivative overloads:
+//
 template <typename REAL>
 inline int
 Surface<REAL>::EvaluateStencils(REAL const uv[2],
                           REAL sP[], REAL sDu[], REAL sDv[]) const {
-
     return EvaluateStencils(uv, sP, sDu, sDv, 0, 0, 0);
 }
-
 template <typename REAL>
 inline int
 Surface<REAL>::EvaluateStencils(REAL const uv[2], REAL sP[]) const {
-
     return EvaluateStencils(uv, sP, 0, 0, 0, 0, 0);
 }
 
 template <typename REAL>
-template <class T, class U>
 void
-Surface<REAL>::ApplyStencil(REAL const sD[], T const & meshPoints, U * D) const {
+Surface<REAL>::ApplyStencil(REAL const s[],
+        PointBuffer const & meshPoints, REAL result[]) const {
 
-    D->Clear();
-    Index const * meshIndices = _data.getCVIndices();
-    for (int i = 0; i < GetNumControlPoints(); ++i) {
-        D->AddWithWeight(meshPoints[meshIndices[i]], sD[i]);
+    Index const * index = _data.getCVIndices();
+
+    REAL const * meshPoint = meshPoints.data + meshPoints.stride * index[0];
+    pointSet(result, meshPoints.size, meshPoint, s[0]);
+
+    for (int i = 1; i < GetNumControlPoints(); ++i) {
+        meshPoint = meshPoints.data + meshPoints.stride * index[i];
+        pointAdd(result, meshPoints.size, meshPoint, s[i]);
     }
 }
-template <typename REAL>
-template <class T, class U>
-void
-Surface<REAL>::ApplyStencilGathered(REAL const sD[], T const & cvs, U * D) const {
 
-    D->Clear();
-    for (int i = 0; i < GetNumControlPoints(); ++i) {
-        D->AddWithWeight(cvs[i], sD[i]);
+template <typename REAL>
+void
+Surface<REAL>::ApplyStencilGathered(REAL const s[],
+        PointBuffer const & controlPoints, REAL result[]) const {
+
+    REAL const * controlPoint = controlPoints.data;
+    pointSet(result, controlPoints.size, controlPoint, s[0]);
+
+    for (int i = 1; i < GetNumControlPoints(); ++i) {
+        controlPoint += controlPoints.stride;
+        pointAdd(result, controlPoints.size, controlPoint, s[i]);
     }
 }
 
