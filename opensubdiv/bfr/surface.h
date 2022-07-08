@@ -156,34 +156,42 @@ public:
                               REAL result[]) const;
 
 private:
-    //  Internal evaluation methods supporting regular, irregular linear
-    //  and irregular non-linear patches:
-    typedef Vtr::ConstArray<int> PatchPointArray;
+    //  Internal methods for evaluating derivatives, basis weights and
+    //  stencils for regular, irregular and irregular linear patches:
+    typedef Vtr::ConstArray<int> IndexArray;
 
-    void evalRegularPatch(REAL u, REAL v, PointBuffer const & pts, REAL P[],
-        REAL Du[], REAL Dv[], REAL Duu[], REAL Dvu[], REAL Dvv[]) const;
-    void evalIrregularPatch(REAL u, REAL v, PointBuffer const & pts, REAL P[],
-        REAL Du[], REAL Dv[], REAL Duu[], REAL Dvu[], REAL Dvv[]) const;
-    void evalMultiLinearPatch(REAL u, REAL v, PointBuffer const & pts, REAL P[],
-        REAL Du[], REAL Dv[], REAL Duu[], REAL Dvu[], REAL Dvv[]) const;
+    void evaluateDerivs(REAL const uv[2],
+                        PointBuffer const & pts, REAL * deriv[]) const;
+    void evalRegularDerivs(REAL const uv[2],
+                           PointBuffer const & pts, REAL * deriv[]) const;
+    void evalIrregularDerivs(REAL const uv[2],
+                             PointBuffer const & pts, REAL * deriv[]) const;
+    void evalMultiLinearDerivs(REAL const uv[2],
+                               PointBuffer const & pts, REAL * deriv[]) const;
 
-    void evalRegularPatchBasis(REAL u, REAL v, REAL wP[],
-        REAL wDu[], REAL wDv[], REAL wDuu[], REAL wDuv[], REAL wDvv[]) const;
-    PatchPointArray evalIrregularPatchBasis(REAL u, REAL v, REAL wP[],
-        REAL wDu[], REAL wDv[], REAL wDuu[], REAL wDuv[], REAL wDvv[]) const;
-    int evalMultiLinearPatchBasis(REAL u, REAL v, REAL wP[],
-        REAL wDu[], REAL wDv[], REAL wDuu[], REAL wDuv[], REAL wDvv[]) const;
+    void       evalRegularBasis(REAL const uv[2], REAL * wDeriv[]) const;
+    IndexArray evalIrregularBasis(REAL const uv[2], REAL * wDeriv[]) const;
+    int        evalMultiLinearBasis(REAL const uv[2], REAL * wDeriv[]) const;
 
-    int evalRegularPatchStencils(REAL u, REAL v, REAL sP[],
-        REAL sDu[], REAL sDv[], REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
-    int evalIrregularPatchStencils(REAL u, REAL v, REAL sP[],
-        REAL sDu[], REAL sDv[], REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
-    int evalMultiLinearPatchStencils(REAL u, REAL v, REAL sP[], 
-        REAL sDu[], REAL sDv[], REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
+    int evaluateStencils(REAL const uv[2], REAL * sDeriv[]) const;
+    int evalRegularStencils(REAL const uv[2], REAL * sDeriv[]) const;
+    int evalIrregularStencils(REAL const uv[2], REAL * sDeriv[]) const;
+    int evalMultiLinearStencils(REAL const uv[2], REAL * sDeriv[]) const;
 
     //  Internal methods to compute patch points:
     void computeLinearPatchPoints(REAL * points, int size, int stride) const;
     void computeIrregularPatchPoints(REAL * points, int size, int stride) const;
+
+    //  Internal methods for combining patch points:
+    void combinePoints(PointBuffer const & patchPoints,
+                       int numIndices, int const indices[],
+                       REAL const weights[], REAL * result) const;
+    void combinePoints(PointBuffer const & patchPoints,
+                       int numIndices, int const indices[],
+                       REAL * const wDeriv[], REAL * deriv[]) const;
+
+    int assignWeights(REAL * const deriv[], int wSize, REAL wBuffer[],
+                      REAL *       wDeriv[]) const;
 
 private:
     //  Simple member accessors for internal use:
@@ -244,32 +252,77 @@ Surface<REAL>::PreparePatchPoints(PointBuffer const & meshPoints,
 //
 template <typename REAL>
 inline void
-Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
-                        REAL * P, REAL * Du, REAL * Dv) const {
-
-    Evaluate(uv, patchPoints, P, Du, Dv, 0, 0, 0);
+Surface<REAL>::evaluateDerivs(REAL const uv[2], PointBuffer const & points,
+                              REAL * deriv[]) const {
+    if (isRegular()) {
+        evalRegularDerivs(uv, points, deriv);
+    } else if (isLinear()) {
+        evalMultiLinearDerivs(uv, points, deriv);
+    } else {
+        evalIrregularDerivs(uv, points, deriv);
+    }
 }
-
 template <typename REAL>
 inline void
 Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
                         REAL * P) const {
 
-    Evaluate(uv, patchPoints, P, 0, 0, 0, 0, 0);
+    REAL * derivatives[6] = { P, 0, 0, 0, 0, 0 };
+    evaluateDerivs(uv, patchPoints, derivatives);
+}
+template <typename REAL>
+inline void
+Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
+                        REAL * P, REAL * Du, REAL * Dv) const {
+
+    REAL * derivatives[6] = { P, Du, Dv, 0, 0, 0 };
+    evaluateDerivs(uv, patchPoints, derivatives);
+}
+template <typename REAL>
+inline void
+Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
+                        REAL * P,   REAL * Du,  REAL * Dv,
+                        REAL * Duu, REAL * Duv, REAL * Dvv) const {
+
+    REAL * derivatives[6] = { P, Du, Dv, Duu, Duv, Dvv };
+    evaluateDerivs(uv, patchPoints, derivatives);
 }
 
 template <typename REAL>
 inline int
-Surface<REAL>::EvaluateStencils(REAL const uv[2],
-                          REAL sP[], REAL sDu[], REAL sDv[]) const {
+Surface<REAL>::evaluateStencils(REAL const uv[2], REAL * sDeriv[]) const {
 
-    return EvaluateStencils(uv, sP, sDu, sDv, 0, 0, 0);
+    if (isRegular()) {
+        return evalRegularStencils(uv, sDeriv);
+    } else if (isLinear()) {
+        return evalMultiLinearStencils(uv, sDeriv);
+    } else {
+        return evalIrregularStencils(uv, sDeriv);
+    }
 }
 template <typename REAL>
 inline int
 Surface<REAL>::EvaluateStencils(REAL const uv[2], REAL sP[]) const {
 
-    return EvaluateStencils(uv, sP, 0, 0, 0, 0, 0);
+    REAL * derivativeStencils[6] = { sP, 0, 0, 0, 0, 0 };
+    return evaluateStencils(uv, derivativeStencils);
+}
+template <typename REAL>
+inline int
+Surface<REAL>::EvaluateStencils(REAL const uv[2],
+                          REAL sP[], REAL sDu[], REAL sDv[]) const {
+
+    REAL * derivativeStencils[6] = { sP, sDu, sDv, 0, 0, 0 };
+    return evaluateStencils(uv, derivativeStencils);
+}
+template <typename REAL>
+inline int
+Surface<REAL>::EvaluateStencils(REAL const uv[2],
+                          REAL sP[],   REAL sDu[],  REAL sDv[],
+                          REAL sDuu[], REAL sDuv[], REAL sDvv[]) const {
+
+    REAL * derivativeStencils[6] = { sP, sDu, sDv, sDuu, sDuv, sDvv };
+    return evaluateStencils(uv, derivativeStencils);
 }
 
 } // end namespace Bfr
