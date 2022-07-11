@@ -182,17 +182,6 @@ private:
     void computeLinearPatchPoints(REAL * points, int size, int stride) const;
     void computeIrregularPatchPoints(REAL * points, int size, int stride) const;
 
-    //  Internal methods for combining patch points:
-    void combinePoints(PointBuffer const & patchPoints,
-                       int numIndices, int const indices[],
-                       REAL const weights[], REAL * result) const;
-    void combinePoints(PointBuffer const & patchPoints,
-                       int numIndices, int const indices[],
-                       REAL * const wDeriv[], REAL * deriv[]) const;
-
-    int assignWeights(REAL * const deriv[], int wSize, REAL wBuffer[],
-                      REAL *       wDeriv[]) const;
-
 private:
     //  Simple member accessors for internal use:
     bool isValid() const   { return _data.isValid(); }
