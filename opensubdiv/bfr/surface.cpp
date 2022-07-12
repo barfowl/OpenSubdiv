@@ -49,7 +49,7 @@ namespace points {
     //  functions -- since template functions do not support the desired
     //  partial specialization.
     //
-    template <typename REAL, int SIZE = 0>
+    template <typename REAL, int SIZE>
     struct Point {
         static void Set(REAL p[], REAL w, REAL const src[], int size) {
             for (int i = 0; i < size; ++i) {
@@ -272,9 +272,9 @@ namespace points {
                 REAL const * pSrc = args.pointData;
                 Point<REAL,SIZE>::Set(p, w[0], pSrc, pSize);
 
-                for (int i = 1; i < args.numSrcPoints; ++i) {
+                for (int j = 1; j < args.numSrcPoints; ++j) {
                     pSrc += pStride;
-                    Point<REAL,SIZE>::Add(p, w[i], pSrc, pSize);
+                    Point<REAL,SIZE>::Add(p, w[j], pSrc, pSize);
                 }
 
                 p += pStride;
@@ -413,8 +413,8 @@ Surface<REAL>::GatherControlPoints(
         REAL            * pDst = controlPoints + controlDesc.stride * i;
 
         //  WIP - consider specializing REAL_MESH == REAL with std::memcpy...
-        for (int i = 0; i < meshDesc.size; ++i) {
-            pDst[i] = (REAL) pSrc[i];
+        for (int j = 0; j < meshDesc.size; ++j) {
+            pDst[j] = (REAL) pSrc[j];
         }
     }
 }
