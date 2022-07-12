@@ -360,7 +360,6 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  Use simpler type names locally for the Surface and its factory:
     typedef Bfr::RefinerSurfaceFactory<> SurfaceFactory;
     typedef Bfr::Surface<float>          Surface;
-    typedef Surface::PointBuffer         SurfacePoints;
 
     //
     //  Declare buffers required by use of instances of Surface during
@@ -371,9 +370,6 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
     std::vector<Vec3f> surfaceXYZPoints;
     std::vector<Vec3f> surfaceUVPoints;
-
-    SurfacePoints meshPointsXYZ(&baseMeshVertexXYZs[0][0], 3);
-    SurfacePoints meshPointsUVW(meshHasUVs ? &baseMeshFVarUVs[0][0] : 0, 3);
 
     //
     //  Initialize tessellation options (use 4 indices per facet to
@@ -484,9 +480,10 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         {
             surfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
 
-            posSurface.PreparePatchPoints(meshPointsXYZ, &surfaceXYZPoints[0][0]);
+            float const * meshPoints  = &baseMeshVertexXYZs[0][0];
+            float       * patchPoints = &surfaceXYZPoints[0][0];
 
-            SurfacePoints patchPointsXYZ(&surfaceXYZPoints[0][0], 3);
+            posSurface.PreparePatchPoints(meshPoints, 3, patchPoints, 3);
 
             tessXYZ.resize(numTessCoords);
             tessDu.resize(numTessCoords);
@@ -494,7 +491,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
             float const * coordPair = &tessCoordPairs[0];
             for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
-                posSurface.Evaluate(coordPair, patchPointsXYZ,
+                posSurface.Evaluate(coordPair, patchPoints, 3,
                                 &tessXYZ[i][0], &tessDu[i][0], &tessDv[i][0]);
             }
         }
@@ -503,15 +500,16 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         if (meshHasUVs) {
             surfaceUVPoints.resize(uvSurface.GetNumPatchPoints());
 
-            uvSurface.PreparePatchPoints(meshPointsUVW, &surfaceUVPoints[0][0]);
+            float const * meshPoints  = &baseMeshFVarUVs[0][0];
+            float       * patchPoints = &surfaceUVPoints[0][0];
 
-            SurfacePoints patchPointsUVW(&surfaceUVPoints[0][0], 3);
+            uvSurface.PreparePatchPoints(meshPoints, 3, patchPoints, 3);
 
             tessUV.resize(numTessCoords);
 
             float const * coordPair = &tessCoordPairs[0];
             for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
-                uvSurface.Evaluate(coordPair, patchPointsUVW,
+                uvSurface.Evaluate(coordPair, patchPoints, 3,
                                &tessUV[i][0]);
             }
         }

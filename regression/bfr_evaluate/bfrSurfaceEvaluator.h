@@ -39,8 +39,6 @@ using namespace OpenSubdiv::OPENSUBDIV_VERSION;
 template <typename REAL>
 class BfrSurfaceEvaluator {
 public:
-    typedef typename Bfr::Surface<REAL>::PointBuffer SurfacePoints;
-
     typedef Bfr::Surface<REAL>           SurfaceType;
 
     typedef Bfr::RefinerSurfaceFactory<> SurfaceFactory;

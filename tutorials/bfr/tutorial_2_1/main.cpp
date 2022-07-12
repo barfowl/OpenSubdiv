@@ -348,9 +348,6 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  Use simpler type names locally for the Surface and its factory:
     typedef SubclassOfSurfaceFactory     SurfaceFactory;
     typedef Bfr::Surface<float>          Surface;
-    typedef Surface::PointBuffer         SurfacePoints;
-
-    SurfacePoints meshPointsXYZ(&baseMeshVertexXYZs[0][0], 3);
 
     //
     //  Initialize specified evaluation options (none explicit here) and
@@ -432,9 +429,10 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //
         surfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
 
-        posSurface.PreparePatchPoints(meshPointsXYZ, &surfaceXYZPoints[0][0]);
+        float const * meshPoints = &baseMeshVertexXYZs[0][0];
+        float       * patchPoints = &surfaceXYZPoints[0][0];
 
-        SurfacePoints patchPointsXYZ(&surfaceXYZPoints[0][0], 3);
+        posSurface.PreparePatchPoints(meshPoints, 3, patchPoints, 3);
 
         tessXYZ.resize(numTessCoords);
         tessDu.resize(numTessCoords);
@@ -445,7 +443,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //
         float const * coordPair = &tessCoordPairs[0];
         for (int i = 0; i < numTessCoords; ++i, coordPair += 2) {
-            posSurface.Evaluate(coordPair, patchPointsXYZ,
+            posSurface.Evaluate(coordPair, patchPoints, 3,
                                 &tessXYZ[i][0], &tessDu[i][0], &tessDv[i][0]);
         }
 

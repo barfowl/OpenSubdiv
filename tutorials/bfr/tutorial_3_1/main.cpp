@@ -372,9 +372,6 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     //  Use simpler type names locally for the Surface and its factory:
     typedef Bfr::RefinerSurfaceFactory<> SurfaceFactory;
     typedef Bfr::Surface<float>          Surface;
-    typedef Surface::PointBuffer         SurfacePoints;
-
-    SurfacePoints meshPointsXYZ(&baseMeshVertexXYZs[0][0], 3);
 
     //
     //  Initialize specified evaluation options (none explicit here) and
@@ -471,9 +468,10 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //
         surfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
 
-        posSurface.PreparePatchPoints(meshPointsXYZ, &surfaceXYZPoints[0][0]);
+        float const * meshPoints  = &baseMeshVertexXYZs[0][0];
+        float       * patchPoints = &surfaceXYZPoints[0][0];
 
-        SurfacePoints patchPointsXYZ(&surfaceXYZPoints[0][0], 3);
+        posSurface.PreparePatchPoints(meshPoints, 3, patchPoints, 3);
 
         //  Resize these buffers for all points now, but the actual number
         //  of new points evaulated may be less -- remember to trim later:
@@ -520,7 +518,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
                     float const * uv = &tessBoundaryCoords[boundaryIndex*2];
 
                     int index = numFacePointsEvaluated ++;
-                    posSurface.Evaluate(uv, patchPointsXYZ,
+                    posSurface.Evaluate(uv, patchPoints, 3,
                             &tessXYZ[index][0],
                             &tessDu[index][0], &tessDv[index][0]);
                 }
@@ -545,7 +543,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
                     int iNext = numFacePointsEvaluated + iOffset;
                     for (int j = 0; j < N; ++j, iNext += iDelta, uv += 2) {
-                        posSurface.Evaluate(uv, patchPointsXYZ,
+                        posSurface.Evaluate(uv, patchPoints, 3,
                                 &tessXYZ[iNext][0],
                                 &tessDu[iNext][0], &tessDv[iNext][0]);
                     }
@@ -568,7 +566,7 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
             int iLast = numFacePointsEvaluated + numInteriorCoords;
             for (int i = numFacePointsEvaluated; i < iLast; ++i, uv += 2) {
-                posSurface.Evaluate(uv, patchPointsXYZ,
+                posSurface.Evaluate(uv, patchPoints, 3,
                                 &tessXYZ[i][0], &tessDu[i][0], &tessDv[i][0]);
             }
             numFacePointsEvaluated += numInteriorCoords;

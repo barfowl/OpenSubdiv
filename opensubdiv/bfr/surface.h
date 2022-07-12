@@ -73,16 +73,15 @@ public:
 
     //
     //  Data from both the mesh and the Surface are managed in arrays of
-    //  floating point values with variable size and stride. PointBuffer
-    //  provides a simple struct to reference a const set of such data:
+    //  floating point values with variable size and stride. The simple
+    //  PointDescriptor struct is used to encapsulate those parameters:
     //
-    struct PointBuffer {
-        PointBuffer(const REAL * aData, int aSize, int aStride = 0) :
-                data(aData), size(aSize), stride(aStride ? aStride : aSize) { }
+    struct PointDescriptor {
+        PointDescriptor() : size(0), stride(0) { }
+        PointDescriptor(int n) : size(n), stride(n) { }
+        PointDescriptor(int n, int m) : size(n), stride(m) { }
 
-        REAL const * data;
-        int          size;
-        int          stride;
+        int size, stride;
     };
 
     //
@@ -99,22 +98,26 @@ public:
     //
     int GetNumPatchPoints() const;
 
-    void PreparePatchPoints(PointBuffer const & meshPoints,
-                            REAL * patchPoints,
-                            int    patchPointStride = 0) const;
+    void PreparePatchPoints(REAL            const   meshPoints[],
+                            PointDescriptor const & meshPointDesc,
+                            REAL                  * patchPoints,
+                            PointDescriptor const & patchPointDesc) const;
 
-    void ComputePatchPoints(REAL * patchPoints, int patchPointSize,
-                            int    patchPointStride = 0) const;
+    void ComputePatchPoints(REAL                  * patchPoints,
+                            PointDescriptor const & patchPointDesc) const;
 
-    void Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
-                                    REAL * P) const;
+    void Evaluate(REAL const uv[2],
+                  REAL const patchPoints[], PointDescriptor const & pointDesc,
+                  REAL * P) const;
 
-    void Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
-                                    REAL * P, REAL * Du, REAL * Dv) const;
+    void Evaluate(REAL const uv[2],
+                  REAL const patchPoints[], PointDescriptor const & pointDesc,
+                  REAL * P, REAL * Du, REAL * Dv) const;
 
-    void Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
-                                    REAL * P, REAL * Du,  REAL * Dv,
-                                    REAL * Duu, REAL * Duv, REAL * Dvv) const;
+    void Evaluate(REAL const uv[2],
+                  REAL const patchPoints[], PointDescriptor const & pointDesc,
+                  REAL * P, REAL * Du,  REAL * Dv,
+                  REAL * Duu, REAL * Duv, REAL * Dvv) const;
 
     //
     //  The "control points" identify the subset of vertices of the
@@ -143,31 +146,34 @@ public:
 
     //  WIP - with "mesh points" and "control points" more clearly defined,
     //        consider their use in naming of the two ApplyStencil methods
-    void ApplyStencil(REAL const s[], PointBuffer const & meshPoints,
+    void ApplyStencil(REAL const stencil[],
+                      REAL const meshPoints[], PointDescriptor const &,
                       REAL result[]) const;
 
     //  Convenience methods to gather control points and apply stencil
     //  to the resulting local array of control points:
-    void GatherControlPoints(PointBuffer const & meshPoints,
-                             REAL * controlPoints,
-                             int    controlPointStride = 0) const;
+    void GatherControlPoints(REAL            const   meshPoints[],
+                             PointDescriptor const & meshPointDesc,
+                             REAL                  * controlPoints,
+                             PointDescriptor const & controlPointDesc) const;
 
-    void ApplyStencilGathered(REAL const s[], PointBuffer const & controlPoints,
-                              REAL result[]) const;
+    void ApplyStencilGathered(REAL const stencil[],
+                            REAL const controlPoints[], PointDescriptor const &,
+                            REAL result[]) const;
 
 private:
     //  Internal methods for evaluating derivatives, basis weights and
     //  stencils for regular, irregular and irregular linear patches:
     typedef Vtr::ConstArray<int> IndexArray;
 
-    void evaluateDerivs(REAL const uv[2],
-                        PointBuffer const & pts, REAL * deriv[]) const;
-    void evalRegularDerivs(REAL const uv[2],
-                           PointBuffer const & pts, REAL * deriv[]) const;
-    void evalIrregularDerivs(REAL const uv[2],
-                             PointBuffer const & pts, REAL * deriv[]) const;
-    void evalMultiLinearDerivs(REAL const uv[2],
-                               PointBuffer const & pts, REAL * deriv[]) const;
+    void evaluateDerivs(REAL const uv[2], REAL const patchPoints[],
+                        PointDescriptor const &, REAL * derivs[]) const;
+    void evalRegularDerivs(REAL const uv[2], REAL const patchPoints[],
+                           PointDescriptor const &, REAL * derivs[]) const;
+    void evalIrregularDerivs(REAL const uv[2], REAL const patchPoints[],
+                             PointDescriptor const &, REAL * derivs[]) const;
+    void evalMultiLinearDerivs(REAL const uv[2], REAL const patchPoints[],
+                               PointDescriptor const &, REAL * derivs[]) const;
 
     void       evalRegularBasis(REAL const uv[2], REAL * wDeriv[]) const;
     IndexArray evalIrregularBasis(REAL const uv[2], REAL * wDeriv[]) const;
@@ -179,8 +185,8 @@ private:
     int evalMultiLinearStencils(REAL const uv[2], REAL * sDeriv[]) const;
 
     //  Internal methods to compute patch points:
-    void computeLinearPatchPoints(REAL * points, int size, int stride) const;
-    void computeIrregularPatchPoints(REAL * points, int size, int stride) const;
+    void computeLinearPatchPoints(REAL * p, PointDescriptor const &) const;
+    void computeIrregularPatchPoints(REAL * p, PointDescriptor const &) const;
 
 private:
     //  Simple member accessors for internal use:
@@ -207,33 +213,30 @@ private:
 
 
 //
-//  Simple inline methods invoking other methods:
+//  Simple inline methods composed of other methods:
 //
 template <typename REAL>
 inline void
-Surface<REAL>::ComputePatchPoints(REAL * points, int size, int stride) const {
+Surface<REAL>::ComputePatchPoints(REAL * points,
+                                  PointDescriptor const & pointDesc) const {
 
     if (!isRegular()) {
-        if (stride == 0) stride = size;
-
         if (isLinear()) {
-            computeLinearPatchPoints(points, size, stride);
+            computeLinearPatchPoints(points, pointDesc);
         } else {
-            computeIrregularPatchPoints(points, size, stride);
+            computeIrregularPatchPoints(points, pointDesc);
         }
     }
 }
 
 template <typename REAL>
 inline void
-Surface<REAL>::PreparePatchPoints(PointBuffer const & meshPoints,
-        REAL * patchPoints, int patchPointStride) const {
+Surface<REAL>::PreparePatchPoints(
+        REAL const meshPoints[], PointDescriptor const & meshPointDesc,
+        REAL     * patchPoints,  PointDescriptor const & patchPointDesc) const {
 
-    if (patchPointStride == 0) patchPointStride = meshPoints.size;
-
-    GatherControlPoints(meshPoints, patchPoints, patchPointStride);
-
-    ComputePatchPoints(patchPoints, meshPoints.size, patchPointStride);
+    GatherControlPoints(meshPoints, meshPointDesc, patchPoints, patchPointDesc);
+    ComputePatchPoints(patchPoints, patchPointDesc);
 }
 
 //
@@ -241,40 +244,48 @@ Surface<REAL>::PreparePatchPoints(PointBuffer const & meshPoints,
 //
 template <typename REAL>
 inline void
-Surface<REAL>::evaluateDerivs(REAL const uv[2], PointBuffer const & points,
-                              REAL * deriv[]) const {
+Surface<REAL>::evaluateDerivs(REAL const uv[2],
+                              REAL const patchPoints[],
+                              PointDescriptor const & pointDesc,
+                              REAL * derivatives[]) const {
     if (isRegular()) {
-        evalRegularDerivs(uv, points, deriv);
+        evalRegularDerivs(uv, patchPoints, pointDesc, derivatives);
     } else if (isLinear()) {
-        evalMultiLinearDerivs(uv, points, deriv);
+        evalMultiLinearDerivs(uv, patchPoints, pointDesc, derivatives);
     } else {
-        evalIrregularDerivs(uv, points, deriv);
+        evalIrregularDerivs(uv, patchPoints, pointDesc, derivatives);
     }
 }
 template <typename REAL>
 inline void
-Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
+Surface<REAL>::Evaluate(REAL const uv[2],
+                        REAL const patchPoints[],
+                        PointDescriptor const & pointDesc,
                         REAL * P) const {
 
     REAL * derivatives[6] = { P, 0, 0, 0, 0, 0 };
-    evaluateDerivs(uv, patchPoints, derivatives);
+    evaluateDerivs(uv, patchPoints, pointDesc, derivatives);
 }
 template <typename REAL>
 inline void
-Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
+Surface<REAL>::Evaluate(REAL const uv[2],
+                        REAL const patchPoints[],
+                        PointDescriptor const & pointDesc,
                         REAL * P, REAL * Du, REAL * Dv) const {
 
     REAL * derivatives[6] = { P, Du, Dv, 0, 0, 0 };
-    evaluateDerivs(uv, patchPoints, derivatives);
+    evaluateDerivs(uv, patchPoints, pointDesc, derivatives);
 }
 template <typename REAL>
 inline void
-Surface<REAL>::Evaluate(REAL const uv[2], PointBuffer const & patchPoints,
+Surface<REAL>::Evaluate(REAL const uv[2],
+                        REAL const patchPoints[],
+                        PointDescriptor const & pointDesc,
                         REAL * P,   REAL * Du,  REAL * Dv,
                         REAL * Duu, REAL * Duv, REAL * Dvv) const {
 
     REAL * derivatives[6] = { P, Du, Dv, Duu, Duv, Dvv };
-    evaluateDerivs(uv, patchPoints, derivatives);
+    evaluateDerivs(uv, patchPoints, pointDesc, derivatives);
 }
 
 template <typename REAL>

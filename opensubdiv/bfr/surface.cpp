@@ -399,35 +399,34 @@ Surface<REAL>::GetControlPointIndices(Index cvs[]) const {
 //
 template <typename REAL>
 void
-Surface<REAL>::GatherControlPoints(PointBuffer const & meshPoints,
-        REAL * controlPoints, int controlPointStride) const {
+Surface<REAL>::GatherControlPoints(
+        REAL const meshPoints[],  PointDescriptor const & meshDesc,
+        REAL     * controlPoints, PointDescriptor const & controlDesc) const {
 
-    if (controlPointStride == 0) controlPointStride = meshPoints.size;
-
-    Index const * index = _data.getCVIndices();
+    Index const * meshIndices = _data.getCVIndices();
     for (int i = 0; i < GetNumControlPoints(); ++i) {
-        REAL const * meshPoint = meshPoints.data + meshPoints.stride * index[i];
-        REAL       * controlPoint = controlPoints + controlPointStride * i;
+        REAL const * pSrc = meshPoints    + meshDesc.stride * meshIndices[i];
+        REAL       * pDst = controlPoints + controlDesc.stride * i;
 
-        std::memcpy(controlPoint, meshPoint, meshPoints.size * sizeof(REAL));
+        std::memcpy(pDst, pSrc, meshDesc.size * sizeof(REAL));
     }
 }
 
 template <typename REAL>
 void
-Surface<REAL>::computeLinearPatchPoints(REAL * patchPointData,
-        int pointSize, int pointStride) const {
+Surface<REAL>::computeLinearPatchPoints(REAL * patchPoints,
+        PointDescriptor const & pointDesc) const {
 
     //
     //  Following the N control points, compute patch points for the
     //  midpoint of the face followed by the midpoint of the N edges:
     //
-    REAL * P      = patchPointData;
     int    N      = GetNumControlPoints();
-    int    size   = pointSize;
-    int    stride = pointStride;
+    REAL * P      = patchPoints;
+    int    size   = pointDesc.size;
+    int    stride = pointDesc.stride;
 
-    switch (pointSize) {
+    switch (size) {
     case 1:  points::Operations<REAL,1>::SplitFace(P, N, size, stride); break;
     case 2:  points::Operations<REAL,2>::SplitFace(P, N, size, stride); break;
     case 3:  points::Operations<REAL,3>::SplitFace(P, N, size, stride); break;
@@ -438,8 +437,8 @@ Surface<REAL>::computeLinearPatchPoints(REAL * patchPointData,
 
 template <typename REAL>
 void
-Surface<REAL>::computeIrregularPatchPoints(REAL * patchPointData,
-        int pointSize, int pointStride) const {
+Surface<REAL>::computeIrregularPatchPoints(REAL * allPatchPoints,
+        PointDescriptor const & pointDesc) const {
 
     //
     //  An "irregular patch" may be represented by a regular patch in
@@ -456,18 +455,18 @@ Surface<REAL>::computeIrregularPatchPoints(REAL * patchPointData,
     //  Identify the control points, the stencil matrix with coefficients
     //  to compute remaining patch points, and the target patch points:
     //
-    REAL const * controlPoints = patchPointData;
+    REAL const * controlPoints = allPatchPoints;
     REAL const * stencilMatrix = irregPatch.GetStencilMatrix<REAL>();
 
-    REAL * patchPoints = patchPointData + pointStride * numControlPoints;
+    REAL * patchPoints = allPatchPoints + pointDesc.stride * numControlPoints;
 
     //
     //  Assemble arguments used by methods to combine points and apply:
     //
     points::CombinationDescriptor<REAL> combineArgs;
     combineArgs.pointData   = controlPoints;
-    combineArgs.pointSize   = pointSize;
-    combineArgs.pointStride = pointStride;
+    combineArgs.pointSize   = pointDesc.size;
+    combineArgs.pointStride = pointDesc.stride;
 
     combineArgs.numSrcPoints    = numControlPoints;
     combineArgs.srcPointIndices = 0;
@@ -476,7 +475,7 @@ Surface<REAL>::computeIrregularPatchPoints(REAL * patchPointData,
     combineArgs.resultWeights = &stencilMatrix;
     combineArgs.resultData    = &patchPoints;
 
-    switch (pointSize) {
+    switch (combineArgs.pointSize) {
     case 1:  points::Operations<REAL,1>::CombineConsecutive(combineArgs); break;
     case 2:  points::Operations<REAL,2>::CombineConsecutive(combineArgs); break;
     case 3:  points::Operations<REAL,3>::CombineConsecutive(combineArgs); break;
@@ -549,7 +548,8 @@ Surface<REAL>::evalRegularStencils(REAL const uv[2], REAL * sDeriv[]) const {
 template <typename REAL>
 void
 Surface<REAL>::evalRegularDerivs(REAL const uv[2],
-        PointBuffer const & patchPoints, REAL * deriv[]) const {
+        REAL const patchPoints[], PointDescriptor const & pointDesc,
+        REAL * deriv[]) const {
 
     //
     //  Regular basis evaluation simply returns weights for use with
@@ -566,9 +566,9 @@ Surface<REAL>::evalRegularDerivs(REAL const uv[2],
 
     //  Assemble the combination parameters and apply:
     points::CombinationDescriptor<REAL> combineArgs;
-    combineArgs.pointData   = patchPoints.data;
-    combineArgs.pointSize   = patchPoints.size;
-    combineArgs.pointStride = patchPoints.stride;
+    combineArgs.pointData   = patchPoints;
+    combineArgs.pointSize   = pointDesc.size;
+    combineArgs.pointStride = pointDesc.stride;
 
     combineArgs.numSrcPoints    = GetNumControlPoints();
     combineArgs.srcPointIndices = 0;
@@ -623,7 +623,8 @@ Surface<REAL>::evalIrregularStencils(REAL const UV[2], REAL * sDeriv[]) const {
 template <typename REAL>
 void
 Surface<REAL>::evalIrregularDerivs(REAL const uv[2],
-        PointBuffer const & patchPoints, REAL * deriv[]) const {
+        REAL const patchPoints[], PointDescriptor const & pointDesc,
+        REAL * deriv[]) const {
 
     //
     //  Non-linear irregular basis evaluation returns both the weights
@@ -641,9 +642,9 @@ Surface<REAL>::evalIrregularDerivs(REAL const uv[2],
 
     //  Assemble the combination parameters and apply:
     points::CombinationDescriptor<REAL> combineArgs;
-    combineArgs.pointData   = patchPoints.data;
-    combineArgs.pointSize   = patchPoints.size;
-    combineArgs.pointStride = patchPoints.stride;
+    combineArgs.pointData   = patchPoints;
+    combineArgs.pointSize   = pointDesc.size;
+    combineArgs.pointStride = pointDesc.stride;
 
     combineArgs.numSrcPoints    = indices.size();
     combineArgs.srcPointIndices = &indices[0];
@@ -793,7 +794,8 @@ Surface<REAL>::evalMultiLinearStencils(REAL const uv[2], REAL *sDeriv[]) const {
 template <typename REAL>
 void
 Surface<REAL>::evalMultiLinearDerivs(REAL const uv[],
-        PointBuffer const & patchPoints, REAL * deriv[]) const {
+        REAL const patchPoints[], PointDescriptor const & pointDesc,
+        REAL * deriv[]) const {
 
     //
     //  Linear evaluation of irregular N-sided faces evaluates one of N
@@ -821,9 +823,9 @@ Surface<REAL>::evalMultiLinearDerivs(REAL const uv[],
 
     //  Assemble the combination parameters and apply:
     points::CombinationDescriptor<REAL> combineArgs;
-    combineArgs.pointData   = patchPoints.data;
-    combineArgs.pointSize   = patchPoints.size;
-    combineArgs.pointStride = patchPoints.stride;
+    combineArgs.pointData   = patchPoints;
+    combineArgs.pointSize   = pointDesc.size;
+    combineArgs.pointStride = pointDesc.stride;
 
     combineArgs.numSrcPoints    = 4;
     combineArgs.srcPointIndices = quadIndices;
@@ -842,12 +844,13 @@ Surface<REAL>::evalMultiLinearDerivs(REAL const uv[],
 template <typename REAL>
 void
 Surface<REAL>::ApplyStencil(REAL const stencil[],
-        PointBuffer const & meshPoints, REAL result[]) const {
+        REAL const meshPoints[], PointDescriptor const & pointDesc,
+        REAL result[]) const {
 
     points::CombinationDescriptor<REAL> combineArgs;
-    combineArgs.pointData   = meshPoints.data;
-    combineArgs.pointSize   = meshPoints.size;
-    combineArgs.pointStride = meshPoints.stride;
+    combineArgs.pointData   = meshPoints;
+    combineArgs.pointSize   = pointDesc.size;
+    combineArgs.pointStride = pointDesc.stride;
 
     combineArgs.numSrcPoints    = GetNumControlPoints();
     combineArgs.srcPointIndices = _data.getCVIndices();
@@ -862,12 +865,13 @@ Surface<REAL>::ApplyStencil(REAL const stencil[],
 template <typename REAL>
 void
 Surface<REAL>::ApplyStencilGathered(REAL const stencil[],
-        PointBuffer const & controlPoints, REAL result[]) const {
+        REAL const controlPoints[], PointDescriptor const & pointDesc,
+        REAL result[]) const {
 
     points::CombinationDescriptor<REAL> combineArgs;
-    combineArgs.pointData   = controlPoints.data;
-    combineArgs.pointSize   = controlPoints.size;
-    combineArgs.pointStride = controlPoints.stride;
+    combineArgs.pointData   = controlPoints;
+    combineArgs.pointSize   = pointDesc.size;
+    combineArgs.pointStride = pointDesc.stride;
 
     combineArgs.numSrcPoints    = GetNumControlPoints();
     combineArgs.srcPointIndices = 0;
