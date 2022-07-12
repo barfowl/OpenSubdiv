@@ -98,10 +98,12 @@ public:
     //
     int GetNumPatchPoints() const;
 
-    void PreparePatchPoints(REAL            const   meshPoints[],
+    template <typename REAL_MESH>
+    void PreparePatchPoints(REAL_MESH       const   meshPoints[],
                             PointDescriptor const & meshPointDesc,
                             REAL                  * patchPoints,
-                            PointDescriptor const & patchPointDesc) const;
+                            PointDescriptor const & patchPointDesc =
+                                                    PointDescriptor()) const;
 
     void ComputePatchPoints(REAL                  * patchPoints,
                             PointDescriptor const & patchPointDesc) const;
@@ -152,10 +154,12 @@ public:
 
     //  Convenience methods to gather control points and apply stencil
     //  to the resulting local array of control points:
-    void GatherControlPoints(REAL            const   meshPoints[],
+    template <typename REAL_MESH>
+    void GatherControlPoints(REAL_MESH       const   meshPoints[],
                              PointDescriptor const & meshPointDesc,
                              REAL                  * controlPoints,
-                             PointDescriptor const & controlPointDesc) const;
+                             PointDescriptor const & controlPointDesc = 
+                                                     PointDescriptor()) const;
 
     void ApplyStencilGathered(REAL const stencil[],
                             REAL const controlPoints[], PointDescriptor const &,
@@ -230,10 +234,14 @@ Surface<REAL>::ComputePatchPoints(REAL * points,
 }
 
 template <typename REAL>
+template <typename REAL_MESH>
 inline void
 Surface<REAL>::PreparePatchPoints(
-        REAL const meshPoints[], PointDescriptor const & meshPointDesc,
-        REAL     * patchPoints,  PointDescriptor const & patchPointDesc) const {
+        REAL_MESH const meshPoints[], PointDescriptor const & meshPointDesc,
+        REAL * patchPoints,  PointDescriptor const & optPointDesc) const {
+
+    PointDescriptor const & patchPointDesc = optPointDesc.size
+                                           ? optPointDesc : meshPointDesc;
 
     GatherControlPoints(meshPoints, meshPointDesc, patchPoints, patchPointDesc);
     ComputePatchPoints(patchPoints, patchPointDesc);

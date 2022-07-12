@@ -398,17 +398,24 @@ Surface<REAL>::GetControlPointIndices(Index cvs[]) const {
 //  Methods for gathering and computing control and patch points:
 //
 template <typename REAL>
+template <typename REAL_MESH>
 void
 Surface<REAL>::GatherControlPoints(
-        REAL const meshPoints[],  PointDescriptor const & meshDesc,
-        REAL     * controlPoints, PointDescriptor const & controlDesc) const {
+        REAL_MESH const meshPoints[], PointDescriptor const & meshDesc,
+        REAL * controlPoints, PointDescriptor const & optionalDesc) const {
+
+    PointDescriptor const & controlDesc = optionalDesc.size
+                                        ? optionalDesc : meshDesc;
 
     Index const * meshIndices = _data.getCVIndices();
     for (int i = 0; i < GetNumControlPoints(); ++i) {
-        REAL const * pSrc = meshPoints    + meshDesc.stride * meshIndices[i];
-        REAL       * pDst = controlPoints + controlDesc.stride * i;
+        REAL_MESH const * pSrc = meshPoints + meshDesc.stride * meshIndices[i];
+        REAL            * pDst = controlPoints + controlDesc.stride * i;
 
-        std::memcpy(pDst, pSrc, meshDesc.size * sizeof(REAL));
+        //  WIP - consider specializing REAL_MESH == REAL with std::memcpy...
+        for (int i = 0; i < meshDesc.size; ++i) {
+            pDst[i] = (REAL) pSrc[i];
+        }
     }
 }
 
@@ -889,6 +896,23 @@ Surface<REAL>::ApplyStencilGathered(REAL const stencil[],
 //
 template class Surface<float>;
 template class Surface<double>;
+
+//
+//  Explicitly instantiate template methods for converting precision:
+//
+template void Surface<float>::GatherControlPoints(
+                      float const *, PointDescriptor const &,
+                      float       *, PointDescriptor const &) const;
+template void Surface<float>::GatherControlPoints(
+                      double const *, PointDescriptor const &,
+                      float        *, PointDescriptor const &) const;
+
+template void Surface<double>::GatherControlPoints(
+                      double const *, PointDescriptor const &,
+                      double       *, PointDescriptor const &) const;
+template void Surface<double>::GatherControlPoints(
+                      float const *, PointDescriptor const &,
+                      double      *, PointDescriptor const &) const;
 
 } // end namespace Bfr
 
