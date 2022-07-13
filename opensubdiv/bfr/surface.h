@@ -102,8 +102,7 @@ public:
     void PreparePatchPoints(REAL_MESH       const   meshPoints[],
                             PointDescriptor const & meshPointDesc,
                             REAL                  * patchPoints,
-                            PointDescriptor const & patchPointDesc =
-                                                    PointDescriptor()) const;
+                            PointDescriptor const & patchPointDesc) const;
 
     void ComputePatchPoints(REAL                  * patchPoints,
                             PointDescriptor const & patchPointDesc) const;
@@ -158,8 +157,7 @@ public:
     void GatherControlPoints(REAL_MESH       const   meshPoints[],
                              PointDescriptor const & meshPointDesc,
                              REAL                  * controlPoints,
-                             PointDescriptor const & controlPointDesc = 
-                                                     PointDescriptor()) const;
+                             PointDescriptor const & controlPointDesc) const;
 
     void ApplyStencilGathered(REAL const stencil[],
                             REAL const controlPoints[], PointDescriptor const &,
@@ -238,10 +236,7 @@ template <typename REAL_MESH>
 inline void
 Surface<REAL>::PreparePatchPoints(
         REAL_MESH const meshPoints[], PointDescriptor const & meshPointDesc,
-        REAL * patchPoints,  PointDescriptor const & optPointDesc) const {
-
-    PointDescriptor const & patchPointDesc = optPointDesc.size
-                                           ? optPointDesc : meshPointDesc;
+        REAL * patchPoints,  PointDescriptor const & patchPointDesc) const {
 
     GatherControlPoints(meshPoints, meshPointDesc, patchPoints, patchPointDesc);
     ComputePatchPoints(patchPoints, patchPointDesc);

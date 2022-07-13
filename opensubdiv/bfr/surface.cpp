@@ -197,17 +197,15 @@ namespace points {
             //  Apply each successive control point to all derivatives at once,
             //  rather than computing each derivate independently:
             //
-            REAL const * pSrc = srcIndices ? (srcData + pStride * srcIndices[0])
-                                           : srcData;
-
+            REAL const * pSrc = (srcIndices == 0) ? srcData :
+                                (srcData + pStride * srcIndices[0]);
             Point<REAL,SIZE>::Set(pArray[0], wArray[0][0], pSrc, pSize);
             Point<REAL,SIZE>::Set(pArray[1], wArray[1][0], pSrc, pSize);
             Point<REAL,SIZE>::Set(pArray[2], wArray[2][0], pSrc, pSize);
 
             for (int i = 1; i < args.numSrcPoints; ++i) {
-                pSrc = srcIndices ? (srcData + pStride * srcIndices[i]) :
-                                    (pSrc + pStride);
-
+                pSrc = (srcIndices == 0) ? (pSrc + pStride) :
+                       (srcData + pStride * srcIndices[i]);
                 Point<REAL,SIZE>::Add(pArray[0], wArray[0][i], pSrc, pSize);
                 Point<REAL,SIZE>::Add(pArray[1], wArray[1][i], pSrc, pSize);
                 Point<REAL,SIZE>::Add(pArray[2], wArray[2][i], pSrc, pSize);
@@ -234,15 +232,15 @@ namespace points {
             //  Apply each successive control point to all derivatives at once,
             //  rather than computing each derivate independently:
             //
-            REAL const * pSrc = srcIndices ? (srcData + pStride * srcIndices[0])
-                                           : srcData;
+            REAL const * pSrc = (srcIndices == 0) ? srcData :
+                                (srcData + pStride * srcIndices[0]);
             for (int j = 0; j < args.numResults; ++j) {
                 Point<REAL,SIZE>::Set(pArray[j], wArray[j][0], pSrc, pSize);
             }
 
             for (int i = 1; i < args.numSrcPoints; ++i) {
-                pSrc = srcIndices ? (srcData + pStride * srcIndices[i]) :
-                                    (pSrc + pStride);
+                pSrc = (srcIndices == 0) ? (pSrc + pStride) :
+                       (srcData + pStride * srcIndices[i]);
                 for (int j = 0; j < args.numResults; ++j) {
                     Point<REAL,SIZE>::Add(pArray[j], wArray[j][i], pSrc, pSize);
                 }
@@ -402,17 +400,17 @@ template <typename REAL_MESH>
 void
 Surface<REAL>::GatherControlPoints(
         REAL_MESH const meshPoints[], PointDescriptor const & meshDesc,
-        REAL * controlPoints, PointDescriptor const & optionalDesc) const {
-
-    PointDescriptor const & controlDesc = optionalDesc.size
-                                        ? optionalDesc : meshDesc;
+        REAL * controlPoints, PointDescriptor const & controlDesc) const {
 
     Index const * meshIndices = _data.getCVIndices();
     for (int i = 0; i < GetNumControlPoints(); ++i) {
         REAL_MESH const * pSrc = meshPoints + meshDesc.stride * meshIndices[i];
         REAL            * pDst = controlPoints + controlDesc.stride * i;
 
-        //  WIP - consider specializing REAL_MESH == REAL with std::memcpy...
+        //  WIP - consider specializing for SIZE when REAL_MESH == REAL
+        //      - observations indicate significant benefit over both the
+        //        following general loop and std::memcpy()
+        //      - most noticeable with regular meshes and low eval rates
         for (int j = 0; j < meshDesc.size; ++j) {
             pDst[j] = (REAL) pSrc[j];
         }
