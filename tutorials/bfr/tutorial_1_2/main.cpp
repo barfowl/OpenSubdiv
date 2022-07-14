@@ -110,7 +110,7 @@ private:
 void
 tessellateToObj(Far::TopologyRefiner const & meshTopology,
                 std::vector<float>   const & meshVertexPositions,
-                Args                 const & args) {
+                Args                 const & options) {
 
     //
     //  Use simpler local type names for the Surface and its factory:
@@ -156,16 +156,16 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
     //  allow the creating of either 3- or 4-sided faces -- both of which
     //  are supported here via a command line option:
     //
-    int const tessFacetSize = 3 + args.tessQuadsFlag;
+    int const tessFacetSize = 3 + options.tessQuadsFlag;
 
     Bfr::Tessellation::Options tessOptions;
     tessOptions.SetFacetSize(tessFacetSize);
-    tessOptions.PreserveQuads(args.tessQuadsFlag);
+    tessOptions.PreserveQuads(options.tessQuadsFlag);
 
     //
     //  Process each face, writing the output of each in Obj format:
     //
-    tutorial::ObjWriter objWriter(args.outputObjFile);
+    tutorial::ObjWriter objWriter(options.outputObjFile);
 
     int numFaces = meshSurfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
@@ -179,10 +179,10 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
 
         //
         //  Declare a simple uniform Tessellation for the Parameterization
-        //  of this face:
+        //  of this face and identify coordinates of the points to evaluate:
         //
         Bfr::Tessellation tessPattern(faceSurface.GetParameterization(),
-                                      args.tessUniformRate, tessOptions);
+                                      options.tessUniformRate, tessOptions);
 
         int numOutCoords = tessPattern.GetNumCoords();
 

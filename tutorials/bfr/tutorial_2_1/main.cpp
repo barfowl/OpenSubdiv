@@ -24,18 +24,21 @@
 
 //
 //  Description:
-//      This tutorial illustrates the definition of a subclass of
-//      Bfr::SurfaceFactory -- providing a class with the SurfaceFactory
-//      interface adapted to a connected mesh representation.
+//      This tutorial builds on the previous tutorial that makes use of the
+//      SurfaceFactory, Surface and Tessellation classes by illustrating the
+//      use of non-uniform tessellation parameters with Tessellation.
 //
-//      The bulk of this code is therefore identical to tutorial 1.2,
-//      which illustrates simple use of a Bfr::Surface factory. The only
-//      difference here lies in the explicit local definition of the
-//      subclass of Bfr::SurfaceFactory for Far::TopologyRefiner -- named
-//      SubclassOfSurfaceFactory in this case.
+//      Tessellation rates for the edges of a face are determined by a
+//      length associated with each edge. That length may be computed using
+//      either the control hull or the limit surface. The length of a
+//      tessellation interval is required and will be inferred if not
+//      explicitly specified (as a command line option).
 //
-
-#include "subclassOfSurfaceFactory.h"
+//      The tessellation rate for an edge is computed as its length divided
+//      by the length of the tessellation interval. A maximum tessellation
+//      rate is imposed to prevent accidental unbounded tessellation, but
+//      can easily be raised as needed.
+//
 
 #include "meshLoader.h"
 #include "objWriter.h"
@@ -43,6 +46,7 @@
 #include "../../../regression/common/far_utils.h"
 
 #include <opensubdiv/far/topologyRefiner.h>
+#include <opensubdiv/bfr/refinerSurfaceFactory.h>
 #include <opensubdiv/bfr/surface.h>
 #include <opensubdiv/bfr/tessellation.h>
 
@@ -50,6 +54,8 @@
 #include <string>
 #include <cstring>
 #include <cstdio>
+#include <cmath>
+#include <algorithm>
 
 using namespace OpenSubdiv;
 
@@ -61,7 +67,9 @@ public:
     std::string     inputObjFile;
     std::string     outputObjFile;
     Sdc::SchemeType schemeType;
-    int             tessUniformRate;
+    float           tessInterval;
+    int             tessRateMax;
+    bool            useHullFlag;
     bool            tessQuadsFlag;
 
 public:
@@ -69,7 +77,9 @@ public:
         inputObjFile(),
         outputObjFile(),
         schemeType(Sdc::SCHEME_CATMARK),
-        tessUniformRate(5),
+        tessInterval(0.0f),
+        tessRateMax(10),
+        useHullFlag(false),
         tessQuadsFlag(false) {
 
         for (int i = 1; i < argc; ++i) {
@@ -88,8 +98,12 @@ public:
                 schemeType = Sdc::SCHEME_CATMARK;
             } else if (!strcmp(argv[i], "-loop")) {
                 schemeType = Sdc::SCHEME_LOOP;
-            } else if (!strcmp(argv[i], "-res")) {
-                if (++i < argc) tessUniformRate = atoi(argv[i]);
+            } else if (!strcmp(argv[i], "-length")) {
+                if (++i < argc) tessInterval = (float) atof(argv[i]);
+            } else if (!strcmp(argv[i], "-max")) {
+                if (++i < argc) tessRateMax = atoi(argv[i]);
+            } else if (!strcmp(argv[i], "-hull")) {
+                useHullFlag = true;
             } else if (!strcmp(argv[i], "-quads")) {
                 tessQuadsFlag = true;
             } else {
@@ -104,18 +118,67 @@ private:
 };
 
 //
+//  Local trivial functions for simple edge length calculations and the
+//  determination of associated tessellation rates:
+//
+inline float
+EdgeLength(float const * v0, float const * v1) {
+
+    float dv[3];
+    dv[0] = std::abs(v0[0] - v1[0]);
+    dv[1] = std::abs(v0[1] - v1[1]);
+    dv[2] = std::abs(v0[2] - v1[2]);
+    return std::sqrt(dv[0]*dv[0] + dv[1]*dv[1] + dv[2]*dv[2]);
+}
+
+float
+FindLongestEdge(Far::TopologyRefiner const & mesh,
+                std::vector<float>   const & vertPos, int pointSize) {
+
+    float maxLength = 0.0f;
+
+    int numEdges = mesh.GetLevel(0).GetNumEdges();
+    for (int i = 0; i < numEdges; ++i) {
+        Far::ConstIndexArray edgeVerts = mesh.GetLevel(0).GetEdgeVertices(i);
+
+        float edgeLength = EdgeLength(&vertPos[edgeVerts[0] * pointSize],
+                                      &vertPos[edgeVerts[1] * pointSize]);
+
+        maxLength = std::max(maxLength, edgeLength);
+    }
+    return maxLength;
+}
+
+void
+GetEdgeTessRates(std::vector<float> const & vertPos, int pointSize,
+                 Args               const & options,
+                 int                      * edgeRates) {
+
+    int numEdges = (int) vertPos.size() / pointSize;
+    for (int i = 0; i < numEdges; ++i) {
+        int j = (i + 1) % numEdges;
+
+        float edgeLength = EdgeLength(&vertPos[i * pointSize],
+                                      &vertPos[j * pointSize]);
+
+        edgeRates[i] = 1 + (int)(edgeLength / options.tessInterval);
+        edgeRates[i] = std::min(edgeRates[i], options.tessRateMax);
+    }
+}
+
+//
 //  The main tessellation function:  given a mesh and vertex positions,
 //  tessellate each face -- writing results in Obj format.
 //
 void
 tessellateToObj(Far::TopologyRefiner const & meshTopology,
                 std::vector<float>   const & meshVertexPositions,
-                Args                 const & args) {
+                Args                 const & options) {
 
     //
     //  Use simpler local type names for the Surface and its factory:
     //
-    typedef SubclassOfSurfaceFactory     SurfaceFactory;
+    typedef Bfr::RefinerSurfaceFactory<> SurfaceFactory;
     typedef Bfr::Surface<float>          Surface;
 
     //
@@ -146,6 +209,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
     Surface faceSurface;
 
     std::vector<float> facePatchPoints;
+    std::vector<int>   faceTessRates;
 
     std::vector<float> outCoords;
     std::vector<float> outPos, outDu, outDv;
@@ -156,16 +220,16 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
     //  allow the creating of either 3- or 4-sided faces -- both of which
     //  are supported here via a command line option:
     //
-    int const tessFacetSize = 3 + args.tessQuadsFlag;
+    int const tessFacetSize = 3 + options.tessQuadsFlag;
 
     Bfr::Tessellation::Options tessOptions;
     tessOptions.SetFacetSize(tessFacetSize);
-    tessOptions.PreserveQuads(args.tessQuadsFlag);
+    tessOptions.PreserveQuads(options.tessQuadsFlag);
 
     //
     //  Process each face, writing the output of each in Obj format:
     //
-    tutorial::ObjWriter objWriter(args.outputObjFile);
+    tutorial::ObjWriter objWriter(options.outputObjFile);
 
     int numFaces = meshSurfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
@@ -178,11 +242,68 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
         }
 
         //
-        //  Declare a simple uniform Tessellation for the Parameterization
-        //  of this face:
+        //  Prepare the Surface patch points first as it may be evaluated
+        //  to determine suitable edge-rates for Tessellation:
+        //
+        int pointSize = 3;
+
+        facePatchPoints.resize(faceSurface.GetNumPatchPoints() * pointSize);
+
+        faceSurface.PreparePatchPoints(meshVertexPositions.data(), pointSize,
+                                       facePatchPoints.data(), pointSize);
+
+        //
+        //  For each of the N edges of the face, a tessellation rate is
+        //  determined to initialize a non-uniform Tessellation pattern.
+        //
+        //  Many metrics are possible -- some based on the geometry itself
+        //  (size, curvature), others dependent on viewpoint (screen space
+        //  size, center of view, etc.) and many more. Simple techniques
+        //  are chosen here for illustration and can easily be replaced.
+        //
+        //  Here two methods are shown using lengths between the corners of
+        //  the face -- the first using the vertex positions of the face and
+        //  the second using points evaluated at the corners of its limit
+        //  surface. Use of the control hull is more efficient (avoiding the
+        //  evaluation) but may prove less effective in some cases (though
+        //  both estimates have their limitations).
+        //
+        int N = faceSurface.GetFaceSize();
+
+        //  Use the output array temporarily to hold the N positions:
+        outPos.resize(N * pointSize);
+
+        if (options.useHullFlag) {
+            Far::ConstIndexArray verts =
+                    meshTopology.GetLevel(0).GetFaceVertices(faceIndex);
+
+            for (int i = 0, j = 0; i < N; ++i, j += pointSize) {
+                float const * vPos = &meshVertexPositions[verts[i] * pointSize];
+                std::copy(vPos, vPos + 3, &outPos[j]);
+            }
+        } else {
+            Bfr::Parameterization faceParam = faceSurface.GetParameterization();
+
+            for (int i = 0, j = 0; i < N; ++i, j += pointSize) {
+                float uv[2];
+                faceParam.GetVertexCoord(i, uv);
+                faceSurface.Evaluate(uv, facePatchPoints.data(), pointSize,
+                                     &outPos[j]);
+            }
+        }
+
+        faceTessRates.resize(N);
+        GetEdgeTessRates(outPos, pointSize, options, faceTessRates.data());
+
+        //
+        //  Declare a non-uniform Tessellation using the rates for each
+        //  edge and identify coordinates of the points to evaluate:
+        //
+        //  Additional interior rates can be optionally provided (2 for
+        //  quads, 1 for others) but will be inferred in their absence.
         //
         Bfr::Tessellation tessPattern(faceSurface.GetParameterization(),
-                                      args.tessUniformRate, tessOptions);
+                                      N, faceTessRates.data(), tessOptions);
 
         int numOutCoords = tessPattern.GetNumCoords();
 
@@ -191,21 +312,11 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
         tessPattern.GetCoords(outCoords.data());
 
         //
-        //  Prepare the patch points for the Surface, then use them to
-        //  evaluate output points for all identified coordinates:
+        //  Resize the output arrays and evaluate:
         //
-        //  Resize patch point and output arrays:
-        int pointSize = 3;
-
-        facePatchPoints.resize(faceSurface.GetNumPatchPoints() * pointSize);
-
         outPos.resize(numOutCoords * pointSize);
         outDu.resize(numOutCoords * pointSize);
         outDv.resize(numOutCoords * pointSize);
-
-        //  Populate patch point and output arrays:
-        faceSurface.PreparePatchPoints(meshVertexPositions.data(), pointSize,
-                                       facePatchPoints.data(), pointSize);
 
         for (int i = 0, j = 0; i < numOutCoords; ++i, j += pointSize) {
             faceSurface.Evaluate(&outCoords[i*2],
@@ -258,6 +369,15 @@ main(int argc, char **argv) {
             args.inputObjFile, args.schemeType, meshVtxPositions, meshFVarUVs);
     if (meshTopology == 0) {
         return EXIT_FAILURE;
+    }
+
+    //
+    //  If no interval length was specified, set one by finding the longest
+    //  edge of the mesh and dividing it by the maximum tessellation rate:
+    //
+    if (args.tessInterval <= 0.0f) {
+        args.tessInterval = FindLongestEdge(*meshTopology, meshVtxPositions, 3)
+                          / (float) args.tessRateMax;
     }
 
     tessellateToObj(*meshTopology, meshVtxPositions, args);

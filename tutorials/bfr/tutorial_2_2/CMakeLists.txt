@@ -24,10 +24,9 @@
 
 set(SOURCE_FILES
     main.cpp
-    subclassOfSurfaceFactory.cpp
 )
 
-osd_add_executable(bfr_tutorial_3_1 "tutorials/bfr"
+osd_add_executable(bfr_tutorial_2_2 "tutorials/bfr"
     ${SOURCE_FILES}
     $<TARGET_OBJECTS:sdc_obj>
     $<TARGET_OBJECTS:vtr_obj>
@@ -36,5 +35,5 @@ osd_add_executable(bfr_tutorial_3_1 "tutorials/bfr"
     $<TARGET_OBJECTS:regression_common_obj>
 )
 
-install(TARGETS bfr_tutorial_3_1 DESTINATION "${CMAKE_BINDIR_BASE}/tutorials")
+install(TARGETS bfr_tutorial_2_2 DESTINATION "${CMAKE_BINDIR_BASE}/tutorials")
 

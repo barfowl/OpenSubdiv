@@ -42,6 +42,7 @@ set(TUTORIALS
     tutorial_1_3
     tutorial_1_4
     tutorial_2_1
+    tutorial_2_2
     tutorial_3_1
 )
 

@@ -24,19 +24,18 @@
 
 //
 //  Description:
-//      This tutorial builds on others using the SurfaceFactory, Surface
-//      and Tessellation classes by using more of the functionality of the
-//      Tessellation class to construct a tessellation of the mesh that is
-//      topologically watertight, i.e. resulting points evaluated along
-//      shared edges or vertices are shared and not duplicated.
+//      This tutorial illustrates the definition of a subclass of
+//      Bfr::SurfaceFactory -- providing a class with the SurfaceFactory
+//      interface adapted to a connected mesh representation.
 //
-//      Since Tessellation provides points around its boundary first, the
-//      evaluated points for shared vertices and edges are identified when
-//      constructed and reused when shared later. The boundary of the
-//      tessellation of a face is therefore a collection of shared points
-//      and methods of Tessellation help to remap the faces generated to
-//      the shared set of points.
+//      The bulk of this code is therefore identical to tutorial 1.2,
+//      which illustrates simple use of a Bfr::Surface factory. The only
+//      difference here lies in the explicit local definition of the
+//      subclass of Bfr::SurfaceFactory for Far::TopologyRefiner -- named
+//      SubclassOfSurfaceFactory in this case.
 //
+
+#include "subclassOfSurfaceFactory.h"
 
 #include "meshLoader.h"
 #include "objWriter.h"
@@ -44,7 +43,6 @@
 #include "../../../regression/common/far_utils.h"
 
 #include <opensubdiv/far/topologyRefiner.h>
-#include <opensubdiv/bfr/refinerSurfaceFactory.h>
 #include <opensubdiv/bfr/surface.h>
 #include <opensubdiv/bfr/tessellation.h>
 
@@ -54,10 +52,6 @@
 #include <cstdio>
 
 using namespace OpenSubdiv;
-
-using Far::Index;
-using Far::IndexArray;
-using Far::ConstIndexArray;
 
 //
 //  Command line arguments parsed to provide run-time options:
@@ -110,42 +104,18 @@ private:
 };
 
 //
-//  Local helpers for the main tessellation function that follows:
-//
-namespace {
-    inline bool
-    DoEdgeVertexIndicesIncrease(int edgeInFace, ConstIndexArray & faceVerts) {
-
-        int v0InFace = edgeInFace;
-        int v1InFace = (v0InFace == (faceVerts.size()-1)) ? 0 : (v0InFace+1);
-
-        return (faceVerts[v0InFace] < faceVerts[v1InFace]);
-    }
-} // end namespace
-
-//
 //  The main tessellation function:  given a mesh and vertex positions,
 //  tessellate each face -- writing results in Obj format.
-//
-//  This tessellation function differs from earlier tutorials in that it
-//  computes and used shared points at vertices and edges of the mesh.
-//  These are computed and used as encountered by the faces -- rather than
-//  computing all shared vertex and edge points at once (which is more
-//  amenable to threading).
-//
-//  This method has the advantage of only constructing face Surfaces once
-//  per face, but requires additional book-keeping, and accesses memory
-//  less coherently (making threading more difficult).
 //
 void
 tessellateToObj(Far::TopologyRefiner const & meshTopology,
                 std::vector<float>   const & meshVertexPositions,
-                Args                 const & args) {
+                Args                 const & options) {
 
     //
     //  Use simpler local type names for the Surface and its factory:
     //
-    typedef Bfr::RefinerSurfaceFactory<> SurfaceFactory;
+    typedef SubclassOfSurfaceFactory     SurfaceFactory;
     typedef Bfr::Surface<float>          Surface;
 
     //
@@ -173,7 +143,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
     //  memory is involved with these variables, it is preferred to declare
     //  them outside that loop to preserve and reuse that dynamic memory.
     //
-    Surface posSurface;
+    Surface faceSurface;
 
     std::vector<float> facePatchPoints;
 
@@ -186,29 +156,16 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
     //  allow the creating of either 3- or 4-sided faces -- both of which
     //  are supported here via a command line option:
     //
-    int const tessFacetSize = 3 + args.tessQuadsFlag;
+    int const tessFacetSize = 3 + options.tessQuadsFlag;
 
     Bfr::Tessellation::Options tessOptions;
     tessOptions.SetFacetSize(tessFacetSize);
-    tessOptions.PreserveQuads(args.tessQuadsFlag);
-
-    //
-    //  Vectors to identify shared tessellation points at vertices and
-    //  edges and their indices around the boundary of a face:
-    //
-    Far::TopologyLevel const & baseLevel = meshTopology.GetLevel(0);
-
-    std::vector<int> sharedVertexPointIndex(baseLevel.GetNumVertices(), -1);
-    std::vector<int> sharedEdgePointIndex(baseLevel.GetNumEdges(), -1);
-
-    std::vector<int> tessBoundaryIndices;
+    tessOptions.PreserveQuads(options.tessQuadsFlag);
 
     //
     //  Process each face, writing the output of each in Obj format:
     //
-    tutorial::ObjWriter objWriter(args.outputObjFile);
-
-    int numMeshPointsEvaluated = 0;
+    tutorial::ObjWriter objWriter(options.outputObjFile);
 
     int numFaces = meshSurfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
@@ -216,20 +173,20 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
         //  Initialize the Surface for this face -- if valid (skipping
         //  holes and boundary faces in some rare cases):
         //
-        if (!meshSurfaceFactory.InitVertexSurface(faceIndex, &posSurface)) {
+        if (!meshSurfaceFactory.InitVertexSurface(faceIndex, &faceSurface)) {
             continue;
         }
 
         //
         //  Declare a simple uniform Tessellation for the Parameterization
-        //  of this face:
+        //  of this face and identify coordinates of the points to evaluate:
         //
-        Bfr::Tessellation tessPattern(posSurface.GetParameterization(),
-                                      args.tessUniformRate, tessOptions);
+        Bfr::Tessellation tessPattern(faceSurface.GetParameterization(),
+                                      options.tessUniformRate, tessOptions);
 
-        int numTessCoords = tessPattern.GetNumCoords();
+        int numOutCoords = tessPattern.GetNumCoords();
 
-        outCoords.resize(numTessCoords * 2);
+        outCoords.resize(numOutCoords * 2);
 
         tessPattern.GetCoords(outCoords.data());
 
@@ -240,145 +197,38 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
         //  Resize patch point and output arrays:
         int pointSize = 3;
 
-        facePatchPoints.resize(posSurface.GetNumPatchPoints() * pointSize);
+        facePatchPoints.resize(faceSurface.GetNumPatchPoints() * pointSize);
 
-        outPos.resize(numTessCoords * pointSize);
-        outDu.resize(numTessCoords * pointSize);
-        outDv.resize(numTessCoords * pointSize);
+        outPos.resize(numOutCoords * pointSize);
+        outDu.resize(numOutCoords * pointSize);
+        outDv.resize(numOutCoords * pointSize);
 
-        posSurface.PreparePatchPoints(meshVertexPositions.data(), pointSize,
-                                      facePatchPoints.data(), pointSize);
+        //  Populate patch point and output arrays:
+        faceSurface.PreparePatchPoints(meshVertexPositions.data(), pointSize,
+                                       facePatchPoints.data(), pointSize);
 
-        //
-        //  Evaluate the sample points of the Tessellation:
-        //
-        //  First we traverse the boundary of the face to determine whether
-        //  to evaluate or share points on vertices and edges of the face.
-        //  Both pre-existing and new boundary points are identified by
-        //  index in an index buffer for later use.  The interior points
-        //  are trivially computed after the boundary is dealt with.
-        //
-        //  Identify the boundary and interior coords and initialize the
-        //  buffer for the potentially shared boundary points:
-        //
-        int numBoundaryCoords = tessPattern.GetNumBoundaryCoords();
-        int numInteriorCoords = numTessCoords - numBoundaryCoords;
-
-        float const * tessBoundaryCoords = &outCoords[0];
-        float const * tessInteriorCoords = &outCoords[numBoundaryCoords*2];
-
-        ConstIndexArray fVerts = baseLevel.GetFaceVertices(faceIndex);
-        ConstIndexArray fEdges = baseLevel.GetFaceEdges(faceIndex);
-
-        tessBoundaryIndices.resize(numBoundaryCoords);
-
-        //
-        //  Walk around the face, inspecting each vertex and outgoing edge,
-        //  and populating the boundary index buffer in the process:
-        //
-        float * patchPointData = facePatchPoints.data();
-
-        int boundaryIndex = 0;
-        int numFacePointsEvaluated = 0;
-        for (int i = 0; i < fVerts.size(); ++i) {
-            //  Evaluate and/or retrieve the shared point for the vertex:
-            {
-                int & vertPointIndex = sharedVertexPointIndex[fVerts[i]];
-                if (vertPointIndex < 0) {
-                    vertPointIndex = numMeshPointsEvaluated ++;
-
-                    float const * uv = &tessBoundaryCoords[boundaryIndex*2];
-
-                    int k = (numFacePointsEvaluated ++) * pointSize;
-                    posSurface.Evaluate(uv, patchPointData, pointSize,
-                                        &outPos[k], &outDu[k], &outDv[k]);
-                }
-                tessBoundaryIndices[boundaryIndex++] = vertPointIndex;
-            }
-
-            //  Evaluate and/or retrieve all shared points for the edge:
-            int N = args.tessUniformRate - 1;
-            if (N) {
-                //  Be careful to respect ordering of the edge and its
-                //  points when both evaluating and identifying indices:
-                bool edgeIsNotReversed = DoEdgeVertexIndicesIncrease(i, fVerts);
-
-                int iOffset = edgeIsNotReversed ? 0 : (N - 1);
-                int iDelta  = edgeIsNotReversed ? 1 : -1;
-
-                int & edgePointIndex = sharedEdgePointIndex[fEdges[i]];
-                if (edgePointIndex < 0) {
-                    edgePointIndex = numMeshPointsEvaluated;
-
-                    float const * uv = &tessBoundaryCoords[boundaryIndex*2];
-
-                    int iNext = numFacePointsEvaluated + iOffset;
-                    for (int j = 0; j < N; ++j, iNext += iDelta, uv += 2) {
-                        int k = iNext * pointSize;
-                        posSurface.Evaluate(uv, patchPointData, pointSize,
-                                            &outPos[k], &outDu[k], &outDv[k]);
-                    }
-                    numFacePointsEvaluated += N;
-                    numMeshPointsEvaluated += N;
-                }
-                int iNext = edgePointIndex + iOffset;
-                for (int j = 0; j < N; ++j, iNext += iDelta) {
-                    tessBoundaryIndices[boundaryIndex++] = iNext;
-                }
-            }
+        for (int i = 0, j = 0; i < numOutCoords; ++i, j += pointSize) {
+            faceSurface.Evaluate(&outCoords[i*2],
+                                 facePatchPoints.data(), pointSize,
+                                 &outPos[j], &outDu[j], &outDv[j]);
         }
-
-        //
-        //  Evaluate any interior points unique to this face -- appending
-        //  them to those shared points computed above for the boundary:
-        //
-        if (numInteriorCoords) {
-            float const * uv = tessInteriorCoords;
-
-            int iLast = numFacePointsEvaluated + numInteriorCoords;
-            for (int i = numFacePointsEvaluated; i < iLast; ++i, uv += 2) {
-                int k = i * pointSize;
-                posSurface.Evaluate(uv, patchPointData, pointSize,
-                                    &outPos[k], &outDu[k], &outDv[k]);
-            }
-            numFacePointsEvaluated += numInteriorCoords;
-            numMeshPointsEvaluated += numInteriorCoords;
-        }
-
-        //
-        //  Remember to trim/resize the buffers storing evaluation results
-        //  for new points to reflect the size actually populated.
-        //
-        outPos.resize(numFacePointsEvaluated * pointSize);
-        outDu.resize(numFacePointsEvaluated * pointSize);
-        outDv.resize(numFacePointsEvaluated * pointSize);
 
         //
         //  Identify the faces of the Tessellation:
         //
-        //  Note that the coordinate indices used by the facets are local
-        //  to the face (i.e. they range from [0..N-1], where N is the
-        //  number of coordinates in the pattern) and so need to be offset
-        //  when writing to Obj format.
+        //  Note the need to offset vertex indices for the output faces --
+        //  using the number of vertices generated prior to this face. One
+        //  of several Tessellation methods to transform the facet indices
+        //  simply translates all indices by the desired offset.
         //
-        //  For more advanced use, the coordinates associated with the
-        //  boundary and interior of the pattern are distinguishable so
-        //  that those on the boundary can be easily remapped to refer to
-        //  shared edge or corner points, while those in the interior can
-        //  be separately offset or similarly remapped.
-        //
-        //  So transform the indices of the facets here as needed using
-        //  the indices of shared boundary points assembled above and a
-        //  suitable offset for the new interior points added:
-        //
-        int tessInteriorOffset = numMeshPointsEvaluated - numTessCoords;
+        int objVertexIndexOffset = objWriter.GetNumVertices();
 
         int numFacets = tessPattern.GetNumFacets();
         outFacets.resize(numFacets * tessFacetSize);
         tessPattern.GetFacets(outFacets.data());
 
         tessPattern.TransformFacetIndices(outFacets.data(),
-                        tessBoundaryIndices.data(), tessInteriorOffset);
+                                          objVertexIndexOffset);
 
         //
         //  Write the evaluated points and faces connecting them as Obj:

@@ -106,7 +106,7 @@ private:
 void
 tessellateToObj(Far::TopologyRefiner const & meshTopology,
                 std::vector<float>   const & meshVertexPositions,
-                Args                 const & args) {
+                Args                 const & options) {
 
     //
     //  Use simpler local type names for the Surface and its factory:
@@ -150,7 +150,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
     //
     //  Process each face, writing the output of each in Obj format:
     //
-    tutorial::ObjWriter objWriter(args.outputObjFile);
+    tutorial::ObjWriter objWriter(options.outputObjFile);
 
     int numFaces = meshSurfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
