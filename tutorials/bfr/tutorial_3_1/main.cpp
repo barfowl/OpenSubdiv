@@ -38,6 +38,9 @@
 //      the shared set of points.
 //
 
+#include "meshLoader.h"
+#include "objWriter.h"
+
 #include "../../../regression/common/far_utils.h"
 
 #include <opensubdiv/far/topologyRefiner.h>
@@ -45,140 +48,16 @@
 #include <opensubdiv/bfr/surface.h>
 #include <opensubdiv/bfr/tessellation.h>
 
-#include <cassert>
-#include <cstdio>
+#include <vector>
+#include <string>
 #include <cstring>
-#include <fstream>
-#include <sstream>
+#include <cstdio>
 
 using namespace OpenSubdiv;
 
 using Far::Index;
 using Far::IndexArray;
 using Far::ConstIndexArray;
-
-//
-//  Global utilities in this namespace are not relevant to the tutorial.
-//  They simply serve to construct some default geometry to be processed
-//  in the form of a TopologyRefiner and vector of vertex positions.
-//
-namespace {
-    //
-    //  Simple interpolatable struct for (x,y,z) positions and normals:
-    //
-    struct Vec3f {
-        Vec3f() { }
-        Vec3f(float x, float y, float z) { p[0] = x, p[1] = y, p[2] = z; }
-
-        //  Clear() and AddWithWeight() required for interpolation:
-        void Clear( void * =0 ) { p[0] = p[1] = p[2] = 0.0f; }
-
-        void AddWithWeight(Vec3f const & src, float weight) {
-            p[0] += weight * src.p[0];
-            p[1] += weight * src.p[1];
-            p[2] += weight * src.p[2];
-        }
-
-        //  Element access via []:
-        float const & operator[](int i) const { return p[i]; }
-        float       & operator[](int i)       { return p[i]; }
-
-        //  Additional useful mathematical operations:
-        Vec3f operator-(Vec3f const & x) const {
-            return Vec3f(p[0] - x.p[0], p[1] - x.p[1], p[2] - x.p[2]);
-        }
-        Vec3f operator+(Vec3f const & x) const {
-            return Vec3f(p[0] + x.p[0], p[1] + x.p[1], p[2] + x.p[2]);
-        }
-        Vec3f operator*(float s) const {
-            return Vec3f(p[0] * s, p[1] * s, p[2] * s);
-        }
-        Vec3f Cross(Vec3f const & x) const {
-            return Vec3f(p[1]*x.p[2] - p[2]*x.p[1],
-                         p[2]*x.p[0] - p[0]*x.p[2],
-                         p[0]*x.p[1] - p[1]*x.p[0]);
-        }
-        float Dot(Vec3f const & x) const {
-            return p[0]*x.p[0] + p[1]*x.p[1] + p[2]*x.p[2];
-        }
-        float Length() const {
-            return std::sqrt(this->Dot(*this));
-        }
-
-        //  Static method to compute normal vector:
-        static
-        Vec3f ComputeNormal(Vec3f const & Du, Vec3f const & Dv, float eps = 0) {
-            Vec3f N = Du.Cross(Dv);
-            float lenSqrd = N.Dot(N);
-            if (lenSqrd <= eps) return Vec3f(0.0f, 0.0f, 0.0f);
-            return N * (1.0f / std::sqrt(lenSqrd));
-        }
-
-        //  Member variables (XYZ coordinates):
-        float p[3];
-    };
-
-    //
-    //  Create a TopologyRefiner from a specified Obj file:
-    //
-    Far::TopologyRefiner *
-    createTopologyRefinerFromObj(std::string const & objFileName,
-                                 Sdc::SchemeType schemeType,
-                                 std::vector<Vec3f> & posVector,
-                                 std::vector<Vec3f> & uvVector) {
-
-        const char *  filename = objFileName.c_str();
-        const Shape * shape = 0;
-
-        std::ifstream ifs(filename);
-        if (ifs) {
-            std::stringstream ss;
-            ss << ifs.rdbuf();
-            ifs.close();
-            std::string shapeString = ss.str();
-
-            shape = Shape::parseObj(
-                shapeString.c_str(), ConvertSdcTypeToShapeScheme(schemeType), false);
-            if (shape == 0) {
-                fprintf(stderr,
-                    "Error:  Cannot create Shape from Obj file '%s'\n", filename);
-                return 0;
-            }
-        } else {
-            fprintf(stderr, "Error:  Cannot open Obj file '%s'\n", filename);
-            return 0;
-        }
-
-        Sdc::SchemeType sdcType    = GetSdcType(*shape);
-        Sdc::Options    sdcOptions = GetSdcOptions(*shape);
-
-        Far::TopologyRefiner * refiner = Far::TopologyRefinerFactory<Shape>::Create(
-            *shape, Far::TopologyRefinerFactory<Shape>::Options(sdcType, sdcOptions));
-        if (refiner == 0) {
-            fprintf(stderr,
-                "Error:  Unable to construct TopologyRefiner from Obj file '%s'\n",
-                filename);
-            return 0;
-        }
-
-        int numVertices = refiner->GetNumVerticesTotal();
-        posVector.resize(numVertices);
-        std::memcpy(&posVector[0], &shape->verts[0], numVertices * 3 * sizeof(float));
-
-        uvVector.resize(0);
-        if (refiner->GetNumFVarChannels()) {
-            int numUVs = refiner->GetNumFVarValuesTotal(0);
-            uvVector.resize(numUVs);
-            for (int i = 0; i < numUVs; ++i) {
-                uvVector[i] = Vec3f(shape->uvs[i*2], shape->uvs[i*2+1], 0.0f);
-            }
-        }
-
-        delete shape;
-        return refiner;
-    }
-} // end namespace
-
 
 //
 //  Command line arguments parsed to provide run-time options:
@@ -204,7 +83,8 @@ public:
                 if (inputObjFile.empty()) {
                     inputObjFile = std::string(argv[i]);
                 } else {
-                    fprintf(stderr, "Warning: Obj file '%s' ignored\n", argv[i]);
+                    fprintf(stderr,
+                        "Warning: Extra Obj file '%s' ignored\n", argv[i]);
                 }
             } else if (!strcmp(argv[i], "-o")) {
                 if (++i < argc) outputObjFile = std::string(argv[i]);
@@ -219,7 +99,8 @@ public:
             } else if (!strcmp(argv[i], "-quads")) {
                 tessQuadsFlag = true;
             } else {
-                fprintf(stderr, "Warning: Argument '%s' ignored\n", argv[i]);
+                fprintf(stderr,
+                    "Warning: Unrecognized argument '%s' ignored\n", argv[i]);
             }
         }
     }
@@ -228,114 +109,9 @@ private:
     Args() { }
 };
 
-class ObjWriter {
-public:
-    ObjWriter(std::string const &filename = 0);
-    ~ObjWriter();
-
-    int GetNumVertices() const { return _numVertices; }
-    int GetNumFaces()    const { return _numFaces; }
-
-    void writeVertexPositions(std::vector<Vec3f> const & p);
-    void writeVertexNormals(std::vector<Vec3f> const & du,
-                            std::vector<Vec3f> const & dv);
-
-    void writeFaces(std::vector<int> const & faceVertices, int faceSize,
-                    bool writeNormalIndices = false,
-                    bool writeUVIndices = false);
-
-    void writeGroupName(char const * prefix, int index);
-
-private:
-    std::string _filename;
-    FILE *      _fptr;
-
-    int _numVertices;
-    int _numNormals;
-    int _numFaces;
-};
-
-ObjWriter::ObjWriter(std::string const &filename) :
-        _fptr(0), _numVertices(0), _numNormals(0), _numFaces(0) {
-
-    if (filename != std::string()) {
-        _fptr = fopen(filename.c_str(), "w");
-        if (_fptr == 0) {
-            fprintf(stderr, "Error:  ObjWriter cannot open Obj file '%s'\n",
-                filename.c_str());
-        }
-    }
-    if (_fptr == 0) _fptr = stdout;
-}
-
-ObjWriter::~ObjWriter() {
-
-    if (_fptr != stdout) fclose(_fptr);
-}
-
-void
-ObjWriter::writeVertexPositions(std::vector<Vec3f> const & positions) {
-
-    int numNewVerts = (int)positions.size();
-
-    for (int i = 0; i < numNewVerts; ++i) {
-        Vec3f const & P = positions[i];
-        fprintf(_fptr, "v %f %f %f\n", P[0], P[1], P[2]);
-    }
-    _numVertices += numNewVerts;
-}
-
-void
-ObjWriter::writeVertexNormals(std::vector<Vec3f> const & du,
-                              std::vector<Vec3f> const & dv) {
-
-    assert(du.size() == dv.size());
-    int numNewNormals = (int)du.size();
-
-    for (int i = 0; i < numNewNormals; ++i) {
-        Vec3f N = Vec3f::ComputeNormal(du[i], dv[i]);
-        fprintf(_fptr, "vn %f %f %f\n", N[0], N[1], N[2]);
-    }
-    _numNormals += numNewNormals;
-}
-
-void
-ObjWriter::writeFaces(std::vector<int> const & faceVertices, int faceSize,
-                      bool includeNormalIndices, bool includeUVIndices) {
-
-    int numNewFaces = (int)faceVertices.size() / faceSize;
-
-    int const * v = &faceVertices[0];
-    for (int i = 0; i < numNewFaces; ++i, v += faceSize) {
-        fprintf(_fptr, "f ");
-        for (int j = 0; j < faceSize; ++j) {
-            if (v[j] >= 0) {
-                //  Remember Obj indices start with 1:
-                int vIndex = 1 + v[j];
-
-                if (includeNormalIndices && includeUVIndices) {
-                    fprintf(_fptr, " %d/%d/%d", vIndex, vIndex, vIndex);
-                } else if (includeNormalIndices) {
-                    fprintf(_fptr, " %d//%d", vIndex, vIndex);
-                } else if (includeUVIndices) {
-                    fprintf(_fptr, " %d/%d", vIndex, vIndex);
-                } else {
-                    fprintf(_fptr, " %d", vIndex);
-                } 
-            }
-        }
-        fprintf(_fptr, "\n");
-    }
-    _numFaces += numNewFaces;
-}
-
-void
-ObjWriter::writeGroupName(char const * prefix, int index) {
-
-    fprintf(_fptr, "g %s%d\n", prefix ? prefix : "", index);
-}
-
+//
 //  Local helpers for the main tessellation function that follows:
+//
 namespace {
     inline bool
     DoEdgeVertexIndicesIncrease(int edgeInFace, ConstIndexArray & faceVerts) {
@@ -362,60 +138,65 @@ namespace {
 //  less coherently (making threading more difficult).
 //
 void
-tessellateToObj(Far::TopologyRefiner const & baseMesh,
-                std::vector<Vec3f> const &   baseMeshVertexXYZs,
-                Args const &                 args) {
+tessellateToObj(Far::TopologyRefiner const & meshTopology,
+                std::vector<float>   const & meshVertexPositions,
+                Args                 const & args) {
 
-    //  Initialize an Obj writer locally for this mesh:
-    ObjWriter objWriter(args.outputObjFile);
-
-    //  Use simpler type names locally for the Surface and its factory:
+    //
+    //  Use simpler local type names for the Surface and its factory:
+    //
     typedef Bfr::RefinerSurfaceFactory<> SurfaceFactory;
     typedef Bfr::Surface<float>          Surface;
 
     //
-    //  Initialize specified evaluation options (none explicit here) and
-    //  declare buffers required by use of instances of Surface during
-    //  evaluation (declared here to reuse memory for each face):
+    //  Initialize the SurfaceFactory for the given base mesh (very low
+    //  cost in terms of both time and space) and tessellate each face
+    //  independently (i.e. no shared vertices):
+    //
+    //  Note that the SurfaceFactory is not thread-safe by default due to
+    //  use of an internal cache.  Creating a separate instance of the
+    //  SurfaceFactory for each thread is one way to safely parallelize
+    //  this loop.  Another (preferred) is to assign a thread-safe cache
+    //  to the single instance.
+    //
+    //  First declare any evaluation options when initializing (though
+    //  none are used in this simple case):
     //
     SurfaceFactory::Options surfaceOptions;
 
-    std::vector<Vec3f> surfaceXYZPoints;
+    SurfaceFactory meshSurfaceFactory(meshTopology, surfaceOptions);
 
     //
-    //  Initialize tessellation options (use 4 indices per facet to
-    //  accomodate quads), declare buffers required for evaluation of
-    //  Bfr::Tessellation patterns (declared here to reuse memory for
-    //  each face):
+    //  The Surface to be constructed and evaluated for each face -- as
+    //  well as the intermediate and output data associated with it -- can
+    //  be declared in the scope local to each face. But since dynamic
+    //  memory is involved with these variables, it is preferred to declare
+    //  them outside that loop to preserve and reuse that dynamic memory.
     //
-    int const FacetSize = 3 + args.tessQuadsFlag;
+    Surface posSurface;
+
+    std::vector<float> facePatchPoints;
+
+    std::vector<float> outCoords;
+    std::vector<float> outPos, outDu, outDv;
+    std::vector<int>   outFacets;
+
+    //
+    //  Assign Tessellation Options applied for all faces.  Tessellations
+    //  allow the creating of either 3- or 4-sided faces -- both of which
+    //  are supported here via a command line option:
+    //
+    int const tessFacetSize = 3 + args.tessQuadsFlag;
 
     Bfr::Tessellation::Options tessOptions;
-    tessOptions.SetFacetSize(FacetSize);
+    tessOptions.SetFacetSize(tessFacetSize);
     tessOptions.PreserveQuads(args.tessQuadsFlag);
-
-    std::vector<float> tessCoordPairs;
-    std::vector<int>   tessFacetIndices;
-    std::vector<Vec3f> tessXYZ, tessDu, tessDv;
-
-    //
-    //  Initialize the SurfaceFactory for the given base mesh (very
-    //  low cost in terms of time and space) and tessellate each
-    //  face independently (i.e. no shared vertices):
-    //
-    //  Note that the SurfaceFactory is not thread-safe by default
-    //  due to use of an internal cache.  Creating a separate instance
-    //  of the SurfaceFactory for each thread is one way to safely
-    //  parallelize this loop.  Another (preferred) is to assign a
-    //  thread-safe cache to the single instance.
-    //
-    SurfaceFactory surfaceFactory(baseMesh, surfaceOptions);
 
     //
     //  Vectors to identify shared tessellation points at vertices and
     //  edges and their indices around the boundary of a face:
     //
-    Far::TopologyLevel const & baseLevel = baseMesh.GetLevel(0);
+    Far::TopologyLevel const & baseLevel = meshTopology.GetLevel(0);
 
     std::vector<int> sharedVertexPointIndex(baseLevel.GetNumVertices(), -1);
     std::vector<int> sharedEdgePointIndex(baseLevel.GetNumEdges(), -1);
@@ -423,61 +204,50 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
     std::vector<int> tessBoundaryIndices;
 
     //
-    //  Tessellate each face -- writing all points and facets to the Obj
-    //  file in a group designated for this face:
+    //  Process each face, writing the output of each in Obj format:
     //
+    tutorial::ObjWriter objWriter(args.outputObjFile);
+
     int numMeshPointsEvaluated = 0;
 
-    int numFaces = surfaceFactory.GetNumFaces();
+    int numFaces = meshSurfaceFactory.GetNumFaces();
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
         //
-        //  Create/populate the Surface for this face (if present, i.e.
-        //  skipping holes and designated boundary faces) and declare
-        //  the simple uniform Tessellation using its Parameterization:
+        //  Initialize the Surface for this face -- if valid (skipping
+        //  holes and boundary faces in some rare cases):
         //
-        //  (The position Surface can also first be used to evaluate points
-        //  that may then determine non-uniform Tessellation parameters per
-        //  edge, e.g. evaluating positions and normals at corners of the
-        //  face to assess curvature, etc.  Note that invalid tessellation
-        //  parameters can cause Tessellation construction to fail, so use
-        //  an assert to catch programming errors.)
-        //
-        Surface posSurface;
-
-        if (!surfaceFactory.InitVertexSurface(faceIndex, &posSurface)) {
+        if (!meshSurfaceFactory.InitVertexSurface(faceIndex, &posSurface)) {
             continue;
         }
 
-        Bfr::Tessellation tessPattern(posSurface.GetParameterization(),
-                                      args.tessUniformRate,
-                                      tessOptions);
-        assert(tessPattern.IsValid());
-
         //
-        //  Identify coordinates of the sample points of the Tessellation
-        //  pattern -- in this case, separating boundary and interior points:
+        //  Declare a simple uniform Tessellation for the Parameterization
+        //  of this face:
+        //
+        Bfr::Tessellation tessPattern(posSurface.GetParameterization(),
+                                      args.tessUniformRate, tessOptions);
+
         int numTessCoords = tessPattern.GetNumCoords();
 
-        tessCoordPairs.resize(numTessCoords * 2);
+        outCoords.resize(numTessCoords * 2);
 
-        tessPattern.GetCoords(&tessCoordPairs[0]);
+        tessPattern.GetCoords(outCoords.data());
 
         //
-        //  Assemble/resize the local buffer of points for the Surface
-        //  evaluation and resize buffers for the evaluated points:
+        //  Prepare the patch points for the Surface, then use them to
+        //  evaluate output points for all identified coordinates:
         //
-        surfaceXYZPoints.resize(posSurface.GetNumPatchPoints());
+        //  Resize patch point and output arrays:
+        int pointSize = 3;
 
-        float const * meshPoints  = &baseMeshVertexXYZs[0][0];
-        float       * patchPoints = &surfaceXYZPoints[0][0];
+        facePatchPoints.resize(posSurface.GetNumPatchPoints() * pointSize);
 
-        posSurface.PreparePatchPoints(meshPoints, 3, patchPoints, 3);
+        outPos.resize(numTessCoords * pointSize);
+        outDu.resize(numTessCoords * pointSize);
+        outDv.resize(numTessCoords * pointSize);
 
-        //  Resize these buffers for all points now, but the actual number
-        //  of new points evaulated may be less -- remember to trim later:
-        tessXYZ.resize(numTessCoords);
-        tessDu.resize(numTessCoords);
-        tessDv.resize(numTessCoords);
+        posSurface.PreparePatchPoints(meshVertexPositions.data(), pointSize,
+                                      facePatchPoints.data(), pointSize);
 
         //
         //  Evaluate the sample points of the Tessellation:
@@ -494,8 +264,8 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         int numBoundaryCoords = tessPattern.GetNumBoundaryCoords();
         int numInteriorCoords = numTessCoords - numBoundaryCoords;
 
-        float const * tessBoundaryCoords = &tessCoordPairs[0];
-        float const * tessInteriorCoords = &tessCoordPairs[numBoundaryCoords*2];
+        float const * tessBoundaryCoords = &outCoords[0];
+        float const * tessInteriorCoords = &outCoords[numBoundaryCoords*2];
 
         ConstIndexArray fVerts = baseLevel.GetFaceVertices(faceIndex);
         ConstIndexArray fEdges = baseLevel.GetFaceEdges(faceIndex);
@@ -506,6 +276,8 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  Walk around the face, inspecting each vertex and outgoing edge,
         //  and populating the boundary index buffer in the process:
         //
+        float * patchPointData = facePatchPoints.data();
+
         int boundaryIndex = 0;
         int numFacePointsEvaluated = 0;
         for (int i = 0; i < fVerts.size(); ++i) {
@@ -517,10 +289,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
                     float const * uv = &tessBoundaryCoords[boundaryIndex*2];
 
-                    int index = numFacePointsEvaluated ++;
-                    posSurface.Evaluate(uv, patchPoints, 3,
-                            &tessXYZ[index][0],
-                            &tessDu[index][0], &tessDv[index][0]);
+                    int k = (numFacePointsEvaluated ++) * pointSize;
+                    posSurface.Evaluate(uv, patchPointData, pointSize,
+                                        &outPos[k], &outDu[k], &outDv[k]);
                 }
                 tessBoundaryIndices[boundaryIndex++] = vertPointIndex;
             }
@@ -543,9 +314,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
                     int iNext = numFacePointsEvaluated + iOffset;
                     for (int j = 0; j < N; ++j, iNext += iDelta, uv += 2) {
-                        posSurface.Evaluate(uv, patchPoints, 3,
-                                &tessXYZ[iNext][0],
-                                &tessDu[iNext][0], &tessDv[iNext][0]);
+                        int k = iNext * pointSize;
+                        posSurface.Evaluate(uv, patchPointData, pointSize,
+                                            &outPos[k], &outDu[k], &outDv[k]);
                     }
                     numFacePointsEvaluated += N;
                     numMeshPointsEvaluated += N;
@@ -566,8 +337,9 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
 
             int iLast = numFacePointsEvaluated + numInteriorCoords;
             for (int i = numFacePointsEvaluated; i < iLast; ++i, uv += 2) {
-                posSurface.Evaluate(uv, patchPoints, 3,
-                                &tessXYZ[i][0], &tessDu[i][0], &tessDv[i][0]);
+                int k = i * pointSize;
+                posSurface.Evaluate(uv, patchPointData, pointSize,
+                                    &outPos[k], &outDu[k], &outDv[k]);
             }
             numFacePointsEvaluated += numInteriorCoords;
             numMeshPointsEvaluated += numInteriorCoords;
@@ -577,21 +349,12 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         //  Remember to trim/resize the buffers storing evaluation results
         //  for new points to reflect the size actually populated.
         //
-        tessXYZ.resize(numFacePointsEvaluated);
-        tessDu.resize(numFacePointsEvaluated);
-        tessDv.resize(numFacePointsEvaluated);
+        outPos.resize(numFacePointsEvaluated * pointSize);
+        outDu.resize(numFacePointsEvaluated * pointSize);
+        outDv.resize(numFacePointsEvaluated * pointSize);
 
         //
-        //  Write the positions and normals of tessellated points to
-        //  the Obj file before dealing with the faces:
-        //
-        objWriter.writeGroupName("baseFace_", faceIndex);
-
-        objWriter.writeVertexPositions(tessXYZ);
-        objWriter.writeVertexNormals(tessDu, tessDv);
-
-        //
-        //  Identify facets connecting sample points of the Tessellation:
+        //  Identify the faces of the Tessellation:
         //
         //  Note that the coordinate indices used by the facets are local
         //  to the face (i.e. they range from [0..N-1], where N is the
@@ -611,54 +374,44 @@ tessellateToObj(Far::TopologyRefiner const & baseMesh,
         int tessInteriorOffset = numMeshPointsEvaluated - numTessCoords;
 
         int numFacets = tessPattern.GetNumFacets();
-        tessFacetIndices.resize(numFacets * FacetSize);
-        tessPattern.GetFacets(&tessFacetIndices[0]);
+        outFacets.resize(numFacets * tessFacetSize);
+        tessPattern.GetFacets(outFacets.data());
 
-        tessPattern.TransformFacetIndices(&tessFacetIndices[0],
-                        &tessBoundaryIndices[0], tessInteriorOffset);
+        tessPattern.TransformFacetIndices(outFacets.data(),
+                        tessBoundaryIndices.data(), tessInteriorOffset);
 
-        //  Write faces connecting tessellated points to the Obj file:
-        objWriter.writeFaces(tessFacetIndices, FacetSize, true, false);
+        //
+        //  Write the evaluated points and faces connecting them as Obj:
+        //
+        objWriter.WriteGroupName("baseFace_", faceIndex);
+
+        objWriter.WriteVertexPositions(outPos);
+        objWriter.WriteVertexNormals(outDu, outDv);
+
+        objWriter.WriteFaces(outFacets, tessFacetSize, true, false);
     }
-}
-
-int
-run(Args const & args) {
-
-    //
-    //  Load the topology, positions and UVs from the given Obj file:
-    //
-    std::vector<Vec3f> meshVtxPositions;
-    std::vector<Vec3f> meshFVarUVs;
-
-    Far::TopologyRefiner * baseRefiner = createTopologyRefinerFromObj(
-            args.inputObjFile, args.schemeType, meshVtxPositions, meshFVarUVs);
-
-    if (baseRefiner == 0) {
-        return EXIT_FAILURE;
-    }
-
-    //
-    //  Tessellate to Obj format (directed as specified in Args):
-    //
-    tessellateToObj(*baseRefiner, meshVtxPositions, args);
-
-    delete baseRefiner;
-    return EXIT_SUCCESS;
 }
 
 //
-//  Load command line arguments and guarantee minimal requirements before executing:
+//  Load command line arguments, specified or default geometry and process:
 //
 int
 main(int argc, char **argv) {
 
     Args args(argc, argv);
 
-    if (args.inputObjFile.empty()) {
-        fprintf(stderr, "Error: Expecting Obj file (.obj) as argument\n");
+    Far::TopologyRefiner * meshTopology = 0;
+    std::vector<float>     meshVtxPositions;
+    std::vector<float>     meshFVarUVs;
+
+    meshTopology = tutorial::createTopologyRefiner(
+            args.inputObjFile, args.schemeType, meshVtxPositions, meshFVarUVs);
+    if (meshTopology == 0) {
         return EXIT_FAILURE;
     }
 
-    return run(args);
+    tessellateToObj(*meshTopology, meshVtxPositions, args);
+
+    delete meshTopology;
+    return EXIT_SUCCESS;
 }
