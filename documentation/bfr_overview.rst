@@ -33,7 +33,8 @@ Base Face Representation (Bfr)
 ==============================
 
 *Bfr* is an alternate API layer that treats a subdivision mesh provided
-by a client as a piecewise parametric surface primitive (see docs).
+by a client as a `piecewise parameteric surface primitive
+<subdivision_surfaces.html#piecewise-parametric-surfaces>`__.
 
 The name *Bfr* derives from the fact that the concepts and classes of
 this interface all relate to the "base faces" of a mesh.  Concepts such
@@ -44,7 +45,7 @@ unrefined mesh.
 The *Bfr* interfaces allow the limit surface for a single face to be
 identified and evaluated independently of all other faces without any
 global pre-processing. While concepts and utilities from the *Far*
-interface are used internally, the details of their usage hidden.
+interface are used internally, the details of their usage is hidden.
 There is no need to coordinate adaptive refinement with tables of
 patches, stencils, Ptex indices, patch maps, etc.
 
@@ -99,7 +100,7 @@ are referred to in the context of *Bfr* simply as "surfaces" and
 represented by Bfr::Surface.
 
 Each face of the mesh has an implicit local 2D parameterization and
-individual coordinates of that parameterization are used to evaluate it's
+individual coordinates of that parameterization are used to evaluate its
 corresponding Surface. In general, 3- and 4-sided faces use the same
 parameterizations for quad and triangular patches used elsewhere in
 OpenSubdiv:
@@ -144,8 +145,8 @@ SurfaceFactory, but defining such a subclass is not. That more complex
 use case of SurfaceFactory will be described in detail later with other
 more advanced topics.
 
-In many cases, is not necessary to explicitly define a subclass of
-SurfaceFactory is not necessary, as the tutorials for *Bfr* illustrate.
+In many cases, it is not necessary to explicitly define a subclass of
+SurfaceFactory, as the tutorials for *Bfr* illustrate.
 If already using OpenSubdiv for other reasons, a Far::TopologyRefiner
 will have been constructed to represent the initial base mesh before
 refinement. *Bfr* provides a subclass of SurfaceFactory using
@@ -163,7 +164,7 @@ Given the different interpolation types for mesh data (i.e. "vertex",
 provides methods to construct Surfaces explicitly for all data types.
 So for positions, the methods for "vertex" data must be used to obtain
 the desired Surface, while for texture coordinates the methods for
-"face-varying" data must be used, e.g.:
+"face-varying" are usually required, e.g.:
 
 .. code:: c++
 
@@ -171,12 +172,13 @@ the desired Surface, while for texture coordinates the methods for
     Surface * CreateVaryingSurface(    Index faceIndex) const;
     Surface * CreateFaceVaryingSurface(Index faceIndex) const;
 
-These construction methods create distinct Surfaces as the underlying
-representations of the Surfaces and the indices of the data that
-defines them will often differ, e.g. the position data may require a
-bicubic patch while the face-varying texture data may be linear or
-bicubic in some variation (given separate face-varying interpolation
-rules).
+The Surfaces created by these construction methods may all be
+distinct as the underlying representations of the Surfaces and the
+indices of the data that define them will often differ.  For
+example, the position data may require a bicubic patch while the
+face-varying texture data may be linear or a different type of
+bicubic patch (given the different interpolation rules for
+face-varying and the possibility of seams).
 
 While the internal representations of the Surfaces constructed for
 different data interpolation types may differ, since they are all
@@ -188,63 +190,78 @@ Bfr::Surface
 
 The Surface class encapsulates the piece of limit surface associated
 with a particular face of the mesh. The term "surface" is used rather
-than "patch" to emphasize that the Surface itself may be composed of
-more than one patch (potentially a complex set of patches).
+than "patch" to emphasize that the Surface may itself be a piecewise
+parameteric surface composed of more than one patch (potentially
+even a complex set of patches).
+
+Surface is also a class template selected by floating point precision,
+and so typically declared as Bfr::Surface<float>. Just as a simpler
+type name is likely to be declared when used, the simple name Surface
+will be used to refer to it here. And where code fragments may be
+warranted, "float" will be substituted for the template parameter for
+clarity.
 
 Once created, there are two steps required to evaluate a Surface:
 
     * preparation of associated data points from the mesh
     * the actual calls to evaluation methods using these data points
 
-The latter is straight-forward, but the former warrants explanation.
+The latter is straight-forward, but the former warrants a little more
+explanation.
 
-The shape of the Surface for a face is influenced by the set of control
-vertices for the face itself and others in its immediate neighborhood.
-These control vertices are identified as part of Surface construction
-(and are publicly available for inspection if desired).  These control
-vertices are sufficient to define the Surface if the face and its
-neighborhood are regular, but any irregularity (an extra-ordinary
-vertex, crease, etc.) usually requires additional, intermediate points
-to be computed from those control vertices in order to evaluate the
-Surface efficiently.
+The shape of a Surface for a base face is influenced by the set of data
+points associated with both the vertices of the face and a subset of
+those in its immediate neighborhood.  These "control points" are
+identified when the Surface is initialized and are publicly available
+for inspection if desired.  The control points are sufficient to define
+the Surface if the face and its neighborhood are regular, but any
+irregularity (an extra-ordinary vertex, crease, etc.) usually requires
+additional, intermediate points to be computed from those control points
+in order to evaluate the Surface efficiently.
 
 Having previously avoided use of the term "patch" in favor of "surface",
-the points gathered or computed from the control vertices are referred
-to as "patch points". In part, this is to distinguish them from the
-control vertices of the mesh, but also because these points do ultimately
-represent the control points of the one or more patches that comprise
-the Surface. Patch points are assembled in a local array for direct
-use by a single Surface, while control vertices are indexed from
-buffers associated with the entire mesh:
+the term "patch points" is now used to refer to these intermediate points.
+Patch points always include the control points as a subset and may be
+followed by points needed for any additional patches required to represent
+a more complex Surface.  While the patch points are assembled in a local
+array for direct use by the Surface, the control points can either be
+gathered and accessed locally or indexed from buffers associated with the
+mesh for other purposes (e.g. computing a bounding box of the Surface):
 
 .. image::  images/bfr_eval_surface.png
    :align:  center
 
 Once the patch points for a Surface are prepared, they can be passed to
 the main evaluation methods with the desired parametric coordinates.
-Methods exist for evaluating 0th, 1st and/or 2nd derivatives and all are
-defined as templates to support evaluation in single or double precision,
-e.g.:
+As previously noted, since the Surface class is a template for floating
+point precision, evaluation is supported in single or double precision
+by constructing a Surface for the desired precision.  Evaluation methods
+are overloaded to obtain simply position or including all first or second
+derivatives. So preparation and evaluation can be achieved with the
+following:
 
 .. code:: c++
 
     //  Preparing patch points:
-    template <class T, class U>
-    void PreparePatchPointValues(T const & meshVertices,
-                                 U       & patchPoints) const;
+    void PreparePatchPoints(
+            float const * meshPoints,  PointDescriptor meshPointDescriptor,
+            float       * patchPoints, PointDescriptor patchPointDescriptor) const;
 
     //  Evaluating position and 1st derivatives:
-    template <typename REAL, class T, class U>
-    void Evaluate(REAL const uv[2], T const & patchPoints, U * P,
-                                                           U * Du,
-                                                           U * Dv) const;
+    void Evaluate(float const uv[2],
+            float const * patchPoints, PointDescriptor patchPointDescriptor,
+            float * P, float * dPdu, float * dPdv) const;
+
+The PointDescriptor class here is a simple struct defining the size and
+stride of the associated array of points. Any use of mesh points, control
+points or patch points generally requires an accompanying descriptor.
 
 Depending on the complexity of the limit surface, this preparation of
 patch points can be costly -- especially if only evaluating the Surface
 once or twice.  In such cases, it is worth considering evaluating
 "limit stencils", i.e. sets of coefficients that combine the original
 control vertices of the mesh without requiring the computation of
-intermediate values (*WIP - an additional figure here is useful)*.
+intermediate values.
 The cost of evaluating stencils is considerably higher than direct
 evaluation, but that added overhead is often offset by avoiding the
 use of patch points.
