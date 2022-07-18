@@ -54,6 +54,7 @@ set(PRIVATE_HEADER_FILES
      irregularPatchBuilder.h
      patchTree.h
      patchTreeBuilder.h
+     pointOperations.h
      regularPatchBuilder.h
      vertexTag.h
 )
