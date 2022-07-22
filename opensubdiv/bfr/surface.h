@@ -36,46 +36,33 @@ namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
 
+///
+/// @brief Encapsulates the limit surface for a face of a mesh
+///
+/// The Surface class encapsulates the limit surface for a face of a mesh
+/// for any data interpolation type (vertex, varying and face-varying) and
+/// provides the public interface for its evaluation. Surface is a class
+/// template parameterized to support evaluation in single or double
+/// precision.
+///
+/// @tparam REAL  Floating point precision (float or double only)
+///
+/// Instances of Surface are created or initialized by a subclass of the
+/// SurfaceFactory. Since existing instances can be re-initialized, they
+/// should be tested for validity after such re-initialization.
+///
+/// All Surfaces are assigned a Parameterization based on the subdivision
+/// scheme and the size of the face, which can then be used for evaluation
+/// and tessellation of the surface.
 //
-//  The Surface class encapsulates the limit surface of a face for any
-//  of the data interpolation types (vertex, varying and face-varying)
-//  and provides the public interface for its evaluation.
-//
-//  Instances of Surface are created or initialized by a subclass of the
-//  SurfaceFactory. Since existing instances can be re-initialized, they
-//  should be tested for validity after such re-initialization.  Surface
-//  is also non-copyable, so care should be taken when managing multiple
-//  surfaces declared for initialization by a factory.
-//
-//  All Surfaces are assigned a Parameterization based on the subdivision
-//  scheme and the size of the face, which can then be used for evaluation
-//  and tessellation of the surface.
-//
+/// Surface is also non-copyable, so care should be taken when managing
+/// multiple surfaces declared for initialization by a factory.
+///
 template <typename REAL>
 class Surface {
 public:
-    Surface();
-    ~Surface() { }
-
-private:  // non-copyable:
-    Surface(Surface const &);
-    Surface & operator=(Surface const &);
-
-public:
-    //
-    //  Simple public queries:
-    //
-    bool IsValid() const { return _data.isValid(); }
-
-    Parameterization GetParameterization() const { return _data.getParam(); }
-
-    int GetFaceSize() const  { return GetParameterization().GetFaceSize(); }
-
-    //
-    //  Data from both the mesh and the Surface are managed in arrays of
-    //  floating point values with variable size and stride. The simple
-    //  PointDescriptor struct is used to encapsulate those parameters:
-    //
+    /// @brief Simple struct defining the size and stride of points in
+    ///        arrays.
     struct PointDescriptor {
         PointDescriptor() : size(0), stride(0) { }
         PointDescriptor(int n) : size(n), stride(n) { }
@@ -84,84 +71,180 @@ public:
         int size, stride;
     };
 
-    //
-    //  A Surface is evaluated by preparing a set of "patch points"
-    //  required for subsequent evaluation methods.  The patch points
-    //  consist of a subset of the control vertices of the mesh in the
-    //  neighborhood of the face plus any additional points derived from
-    //  them that may be required to represent the limit surface as one
-    //  or more parametric patches.
-    //
-    //  If the control points are already or must be separate gathered
-    //  as part of a larger collection of patch points, the remaining
-    //  patch points can be computed with a separate method.
-    //
+    /// @brief Integer type representing a mesh index
+    typedef int Index;
+
+public:
+    //@{
+    /// @name Construction and initialization
+    ///
+    /// Instances of Surface are initialized by SurfaceFactory and so
+    /// only default construction is provided.
+    ///
+
+    Surface();
+    ~Surface() { }
+
+    /// @brief Clear a previously initialized Surface
+    void Clear() { _data.reinitialize(); }
+    //@}
+
+    //@{
+    /// @name Simple queries
+    ///
+    /// Simple queries of an initialized Surface.
+    ///
+
+    /// @brief Return if the Surface is valid
+    bool IsValid() const { return _data.isValid(); }
+
+    /// @brief Return the Parameterization
+    Parameterization GetParameterization() const { return _data.getParam(); }
+
+    /// @brief Return the size of the face
+    int GetFaceSize() const { return GetParameterization().GetFaceSize(); }
+
+    /// @brief Return if the Surface is a single regular patch
+    bool IsRegular() const { return _data.isRegular(); }
+
+    /// @brief Return if the Surface is linear
+    bool IsLinear() const { return _data.isLinear(); }
+    //@}
+
+    //@{
+    /// @name Methods dealing with control points
+    ///
+    /// Control points are the subset of points in the mesh that influence
+    /// a Surface. They can be identified as part of the mesh data by their
+    /// indices, or gathered into an array for other purposes.
+    ///       
+
+    /// @brief Return the number of control points affecting the Surface
+    int GetNumControlPoints() const { return _data.getNumCVs(); }
+
+    /// @brief Identify indices of control points in the mesh
+    int GetControlPointIndices(Index meshPointIndices[]) const;
+
+    /// @brief Gather control points in a local array
+    ///
+    /// @tparam REAL_MESH        Floating point precision of mesh points
+    ///
+    /// @param  meshPoints       Input array of mesh point data
+    /// @param  meshPointDesc    The size and stride of mesh point data
+    /// @param  controlPoints    Output array of control point data
+    /// @param  controlPointDesc The size and stride of control point data
+    ///
+    template <typename REAL_MESH>
+    void GatherControlPoints(REAL_MESH       const   meshPoints[],
+                             PointDescriptor const & meshPointDesc,
+                             REAL                  * controlPoints,
+                             PointDescriptor const & controlPointDesc) const;
+    //@}
+
+    //@{
+    /// @name Methods dealing with patch points
+    ///
+    /// Patch points are derived from the control points and are used to
+    /// evaluate the Surface. The patch points always include the control
+    /// points.
+    ///       
+
+    /// @brief Return the number of patch points representing the Surface
     int GetNumPatchPoints() const;
 
+    ///
+    /// @brief Prepare patch points in a local array for evaluation
+    ///
+    /// The patch points consist of the control points plus any additional
+    /// points derived from them that may be required to represent the
+    /// limit surface as one or more parametric patches.
+    ///
+    /// @tparam REAL_MESH      Floating point precision of mesh points
+    ///
+    /// @param  meshPoints     Input array of mesh point data
+    /// @param  meshPointDesc  The size and stride of mesh point data
+    /// @param  patchPoints    Output array of patch point data
+    /// @param  patchPointDesc The size and stride of patch point data
+    ///
     template <typename REAL_MESH>
     void PreparePatchPoints(REAL_MESH       const   meshPoints[],
                             PointDescriptor const & meshPointDesc,
                             REAL                  * patchPoints,
                             PointDescriptor const & patchPointDesc) const;
 
+    /// @brief Compute all patch points following the control points
+    ///
+    /// For cases where the control points have already been gathered into
+    /// an array allocated for the patch points, the remaining patch points
+    /// will be computed.
+    ///
+    /// @param  patchPoints    Array of patch point data to be modified
+    /// @param  patchPointDesc The size and stride of patch point data
+    ///
     void ComputePatchPoints(REAL                  * patchPoints,
                             PointDescriptor const & patchPointDesc) const;
+    //@}
 
+    //@{
+    /// @name Evaluation methods
+    ///
+    /// Patch points are derived from the control points and are used to
+    /// evaluate the Surface. The patch points always include the control
+    /// points as a subset.
+    ///       
+
+    /// @brief Evaluate position
     void Evaluate(REAL const uv[2],
                   REAL const patchPoints[], PointDescriptor const & pointDesc,
                   REAL * P) const;
 
+    /// @brief Evaluate position and 1st derivatives
     void Evaluate(REAL const uv[2],
                   REAL const patchPoints[], PointDescriptor const & pointDesc,
                   REAL * P, REAL * Du, REAL * Dv) const;
 
+    /// @brief Evaluate position, 1st and 2nd derivatives
     void Evaluate(REAL const uv[2],
                   REAL const patchPoints[], PointDescriptor const & pointDesc,
                   REAL * P, REAL * Du,  REAL * Dv,
                   REAL * Duu, REAL * Duv, REAL * Dvv) const;
+    //@}
 
-    //
-    //  The "control points" identify the subset of vertices of the
-    //  mesh that contribute to the limit surface of the face.  They
-    //  will be a subset of the patch points and are intended for
-    //  combination with "limit stencils" that can be evaluated below.
-    //
-    //  Control points can be "gathered" into a local buffer for
-    //  various purposes (e.g. repeated evaluation, computation of
-    //  bounding box, etc.) and stencils can be optionally applied to
-    //  control points in this form.
-    //
-    typedef int Index;
+    //@{
+    /// @name Stencil evaluation and application methods
+    ///
+    /// Limit stencils are sets of coefficients that express an evaluation
+    /// as a linear combination of the control points. In addition to methods
+    /// to provide limit stencils, methods are also provided to apply them
+    /// to the control points.
+    ///       
 
-    int GetNumControlPoints() const { return _data.getNumCVs(); }
-    int GetControlPointIndices(Index meshPointIndices[]) const;
-
+    /// @brief Evaluate a limit stencil for position
     int EvaluateStencils(REAL const uv[2], REAL sP[]) const;
 
+    /// @brief Evaluate limit stencils for position and 1st derivatives
     int EvaluateStencils(REAL const uv[2], REAL sP[],
                          REAL sDu[], REAL sDv[]) const;
 
+    /// @brief Evaluate limit stencils for position, 1st and 2nd derivatives
     int EvaluateStencils(REAL const uv[2], REAL sP[],
                          REAL sDu[],  REAL sDv[],
                          REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
 
-    //  WIP - with "mesh points" and "control points" more clearly defined,
-    //        consider their use in naming of the two ApplyStencil methods
+    /// @brief Apply a limit stencil to control points in the mesh
     void ApplyStencil(REAL const stencil[],
                       REAL const meshPoints[], PointDescriptor const &,
                       REAL result[]) const;
 
-    //  Convenience methods to gather control points and apply stencil
-    //  to the resulting local array of control points:
-    template <typename REAL_MESH>
-    void GatherControlPoints(REAL_MESH       const   meshPoints[],
-                             PointDescriptor const & meshPointDesc,
-                             REAL                  * controlPoints,
-                             PointDescriptor const & controlPointDesc) const;
-
+    /// @brief Apply a limit stencil to control points in a local array
     void ApplyStencilGathered(REAL const stencil[],
                             REAL const controlPoints[], PointDescriptor const &,
                             REAL result[]) const;
+    //@}
+
+private:  // non-copyable:
+    Surface(Surface const &);
+    Surface & operator=(Surface const &);
 
 private:
     //  Internal methods for evaluating derivatives, basis weights and
@@ -190,16 +273,18 @@ private:
     void computeLinearPatchPoints(REAL * p, PointDescriptor const &) const;
     void computeIrregularPatchPoints(REAL * p, PointDescriptor const &) const;
 
-private:
-    //  Simple member accessors for internal use:
-    bool isValid() const   { return _data.isValid(); }
-    bool isRegular() const { return _data.isRegular(); }
-    bool isLinear() const  { return _data.isLinear(); }
-
+    //  Internal methods specific to regular or irregular patches:
     unsigned char getRegPatchType() const { return _data.getRegPatchType(); }
     unsigned char getRegPatchMask() const { return _data.getRegPatchMask(); }
 
     internal::IrregularPatchType const & getIrregPatch() const;
+
+private:
+    //  Simple member accessors for internal use:
+    //  WIP - these are now redundant -- replaced with public versions
+    bool isValid() const   { return _data.isValid(); }
+    bool isRegular() const { return _data.isRegular(); }
+    bool isLinear() const  { return _data.isLinear(); }
 
 private:
     //  Access to the set of member variables - provided to the Factory:
@@ -243,7 +328,7 @@ Surface<REAL>::PreparePatchPoints(
 }
 
 //
-//  Inline invokations of more general methods for derivative overloads:
+//  Inline invocations of more general methods for derivative overloads:
 //
 template <typename REAL>
 inline void

@@ -36,10 +36,21 @@ namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
 
+///
+/// @brief Simple class used by SurfaceFactoryAdapter to describe a vertex
+///
+/// VertexDescriptor is a simple class used by SurfaceFactory and its
+/// subclasses to provide a complete topological description around the
+/// vertex of a face, i.e. its valence, the sizes of its incident faces,
+/// sharpness values, etc.
+///
+/// Instances are created and partially initialized by SurfaceFactory
+/// before being passed to its subclasses to be fully populated. So
+/// public construction is not available (or useful).
+///
 //
-//  VertexDescriptor is a simple class that describes the full topological
-//  neighborhood around a vertex of a mesh, i.e. its valence, the sizes
-//  of its incident faces, sharpness values, etc.
+//  WIP - need to migrate some of these comments into Doxygen
+//      - others will be moved to the external documentation
 //
 //  It is used by subclasses of SurfaceFactory to provide a complete
 //  topological description for each vertex of a face, i.e. invoked via
@@ -109,7 +120,7 @@ namespace Bfr {
 //  For each incident face, the indices for all vertices of that face are
 //  to be specified (not the one-ring or some other subset).  These indices
 //  must also be specified in an orientation relative to the vertex, i.e.
-//  for a vertex A and an indicident face with face-vertices that may be
+//  for a vertex A and an incident face with face-vertices that may be
 //  stored internally as {D, C, A, B}, they must be specified with A first
 //  as {A, B, C, D}.  This may seem a bit cumbersome, but it has clear
 //  advantages when dealing with face-varying indices and unordered faces.
@@ -121,22 +132,32 @@ namespace Bfr {
 //  
 class VertexDescriptor {
 public:
-    VertexDescriptor() { }
-    ~VertexDescriptor() { }
-
-    //  The full declarartion must be enclosed by calls to these methods:
+    //  The full declaration must be enclosed by calls to these methods:
     //
     //  Note that vertex valences or face sizes in excess of those defined
     //  in Bfr::Limits (typically 16-bits) are not valid.  When specifying
     //  values in excess of these limits, initialization will fail and/or
     //  the descriptor will be marked invalid and finalization will fail.
     //
+
+    //@{
+    /// @name Methods to begin and end specification
+    ///
+    /// Partially constructed instances are populated using a set of
+    /// methods between calls to Initialize() and Finalize()
+
+    /// @brief Initialize specification with the number of incident faces
     bool Initialize(int numIncidentFaces);
+
+    /// @brief Terminate the sequence of specifications
     bool Finalize();
 
-    //  Mainly intended for assertions if not ensuring all input is valid:
+    /// @brief Return if instance is valid
     bool IsValid() const;
+    //@}
 
+    //
+    //  WIP - need to migrate these comments into Doxygen
     //
     //  Three groups of methods describe the topology around a vertex:
     //      - simple properties (vertex is a boundary, manifold, etc.)
@@ -160,47 +181,108 @@ public:
     //  the set of incident faces from the face-vertex indices that are
     //  provided elsewhere.
     //  
+
+    //@{
+    /// @name Methods to specify topology
+    ///
+    /// Methods to specify the overall topology, the incident faces and
+    /// any assigned sharpness values.
+
+    /// @brief Declare the vertex neighborhood as manifold (ordered)
     void SetManifold(bool isManifold);
-    bool IsManifold() const;
-    bool IsOrdered() const;
 
-    //  Boundary status is ignored if not manifold:
+    /// @brief Declare the vertex neighborhood as being on a boundary
     void SetBoundary(bool isOnBoundary);
-    bool IsBoundary() const;
 
-    //  Sizes of incident faces -- must specify each if not common:
+    /// @brief Specify that all incident faces match the base face
     void SetCommonFaceSize(bool incidentFacesHaveCommonSize);
-    bool HasCommonFaceSize() const;
 
+    /// @brief Assign the size of an incident face
     void SetIncidentFaceSize(int faceIndex, int faceSize);
-    int  GetIncidentFaceSize(int faceIndex) const;
 
-    //  Optional vertex sharpness:
+    /// @brief Assign sharpness to the vertex
     void SetVertexSharpness(float sharpness);
 
-    bool  HasVertexSharpness() const;
-    float GetVertexSharpness() const;
-
-    //  Optional edge sharpness -- the more general method assigns the
-    //  sharpness to the leading and trailing edges of each face, but a
-    //  simpler method allows direct assignment to edges when manifold.
+    /// @brief Assign sharpness to the edges of an incident face
+    ///
+    /// In all cases, sharpness can be assigned to edges by associating
+    /// those edges with their incident faces. This method assigns sharpness
+    /// to the two edges incident edges of an incident face. An alternative
+    /// is available for the case of a manifold vertex.
+    ///
+    /// @param  faceIndex         Index of the incident face
+    /// @param  leadingEdgeSharp  Sharpness to assign to the leading edge
+    ///                           of the incident face, i.e. the edge of the
+    ///                           face following the vertex.
+    /// @param  trailingEdgeSharp Sharpness to assign to the trailing edge
+    ///                           of the incident face, i.e. the edge of the
+    ///                           face preceding the vertex.
+    ///
     void SetIncidentFaceEdgeSharpness(int faceIndex, float leadingEdgeSharp,
                                                      float trailingEdgeSharp);
 
+    /// @brief Assign sharpness to the edge of a manifold neighborhood
+    ///
+    /// For use with a vertex declared manifold only, assigns a given
+    /// sharpness to the indicated edge in the ordered sequence of edges
+    /// around the vertex. In the case of a boundary vertex, the number
+    /// of incident edges in this ordered sequence will exceed the number
+    /// of incident faces by one.
+    ///
+    /// @param  edgeIndex     Index of the edge in the ordered sequence
+    /// @param  edgeSharpness Sharpness to be assigned to the edge
+    ///
     void SetManifoldEdgeSharpness(int edgeIndex, float edgeSharpness);
+    //@}
 
+    //@{
+    /// @name Methods to inspect topology to confirm assignment
+    ///
+    /// While primarily intended for assignment, methods are available to
+    /// inspect results.
+    ///
+
+    /// @brief Return if vertex neighborhood is manifold
+    bool IsManifold() const;
+
+    /// @brief Return if vertex neighborhood is on a boundary
+    bool IsBoundary() const;
+
+    /// @brief Return if all incident faces match the base face
+    bool HasCommonFaceSize() const;
+
+    /// @brief Return the size of an incident face
+    int GetIncidentFaceSize(int faceIndex) const;
+
+    /// @brief Return if vertex was assigned sharpness
+    bool HasVertexSharpness() const;
+
+    /// @brief Return sharpness of the vertex
+    float GetVertexSharpness() const;
+
+    /// @brief Return if sharpness assigned to any incident edges
     bool HasEdgeSharpness() const;
 
+    /// @brief WIP - obsolete, to be removed
+    bool IsOrdered() const;
+    //@}
+
 protected:
+    /// @cond PROTECTED
     friend class FaceVertex;
+
+    VertexDescriptor() { }
+    ~VertexDescriptor() { }
 
     typedef Vtr::internal::StackBuffer<int,8,true>    IntBuffer;
     typedef Vtr::internal::StackBuffer<float,16,true> FloatBuffer;
 
     void initFaceSizes();
     void initEdgeSharpness();
+    /// @endcond
 
 protected:
+    /// @cond PROTECTED
     //  Member variables assigned through the above interface:
     unsigned short _isValid       : 1;
     unsigned short _isInitialized : 1;
@@ -218,6 +300,7 @@ protected:
 
     FloatBuffer _faceEdgeSharpness;
     IntBuffer   _faceSizeOffsets;
+    /// @endcond
 };
 
 //

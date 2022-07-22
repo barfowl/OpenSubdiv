@@ -39,39 +39,58 @@ namespace Far {
 
 namespace Bfr {
 
-//
-//  RefinerSurfaceFactoryBase is an intermediate subclass of SurfaceFactory
-//  using Far::TopologyRefiner as the connected mesh representation.
-//
-//  The SurfaceFactoryAdapter interface for TopologyRefiner is provided in
-//  full, along with some public extensions specific to TopologyRefiner.
-//
-//  Remaining virtual requirements of SurfaceFactory are NOT specified
-//  here. These are deferred to subclasses to implement different behaviors
-//  of the factory's internal caching. A template for such subclasses is 
-//  additionally provided -- allowing clients desiring a thread-safe cache
-//  to simply declare a subclass for a preferred thread-safe type.
-//
+///
+/// @brief Intermediate subclass of SurfaceFactory with Far::TopologyRefiner
+///        as the mesh
+///
+/// RefinerSurfaceFactoryBase is an intermediate subclass of SurfaceFactory
+/// using Far::TopologyRefiner as the connected mesh representation.
+///
+/// The SurfaceFactoryAdapter interface for TopologyRefiner is provided in
+/// full, along with some public extensions specific to TopologyRefiner.
+///
+/// Remaining virtual requirements of SurfaceFactory are NOT specified
+/// here. These are deferred to subclasses to implement different behaviors
+/// of the factory's internal caching. A template for such subclasses is 
+/// additionally provided -- allowing clients desiring a thread-safe cache
+/// to simply declare a subclass for a preferred thread-safe type.
+///
 class RefinerSurfaceFactoryBase : public SurfaceFactory {
 public:
-    //
-    //  Subclass-specific constructor:
-    //
+    //@{
+    /// @name Constructor and destructor
+    ///
+    /// Constructor and destructor
+    ///
+
     RefinerSurfaceFactoryBase(Far::TopologyRefiner const & mesh,
                               Options const & options);
-    virtual ~RefinerSurfaceFactoryBase();
 
-    //
-    //  Additional subclass-specific public methods:
-    //
+    virtual ~RefinerSurfaceFactoryBase();
+    //@}
+
+    //@{
+    /// @name Simple queries related to Far::TopologyRefiner
+    ///
+    /// Simple queries related to Far::TopologyRefiner
+    ///
+
+    /// @brief Return the instance of the mesh
     Far::TopologyRefiner const & GetMesh() const { return _mesh; }
 
-    //  Convenience queries to verify bounds of face indices and face-
-    //  varying channel indices:
+    /// @brief Return the number of faces
     int GetNumFaces() const { return _numFaces; }
+
+    /// @brief Return the number of face-varying channels
     int GetNumFVarChannels() const { return _numFVarChannels; }
+    //@}
 
 protected:
+    /// @cond PROTECTED
+    RefinerSurfaceFactoryBase(RefinerSurfaceFactoryBase const &) = delete;
+    RefinerSurfaceFactoryBase & operator=(
+                                RefinerSurfaceFactoryBase const &) = delete;
+
     //
     //  Virtual methods to satisfy the SurfaceFactoryAdapter interface:
     //
@@ -101,6 +120,7 @@ protected:
     virtual bool getFaceNeighborhoodFVarValueIndicesIfRegular(
                             Index faceIndex,
                             FVarID fvarID, Index fvarValueIndices[]) const;
+    /// @endcond
 
 private:
     //
@@ -124,11 +144,18 @@ private:
 
 
 //
-//  Template for concrete subclasses with the addition of management of an
-//  internal cache. This makes it possible for clients to simply declare a
-//  subclass that manages an internal thread-safe SurfaceFactoryCache using
-//  their preferred thread-safe type.
-//
+/// @brief Template for concrete subclasses of RefinerSurfaceFactoryBase
+///
+/// This class template is used to declare concrete subclasses of
+/// RefinerSurfaceFactoryBase with the required addition of management of
+/// an internal cache. With a thread-safe subclass of SurfaceFactoryCache,
+/// the resulting subclass for the factory will be thread-safe.
+///
+/// @tparam CACHE_TYPE  A subclass of SurfaceFactoryCache
+///
+/// Note a default template parameter uses the base SurfaceFactoryCache
+/// for convenience, but which is not thread-safe.
+///
 template <class CACHE_TYPE = SurfaceFactoryCache>
 class RefinerSurfaceFactory : public RefinerSurfaceFactoryBase {
 public:
@@ -139,9 +166,14 @@ public:
     virtual ~RefinerSurfaceFactory() { }
 
 protected:
+    /// @cond PROTECTED
+    RefinerSurfaceFactory(RefinerSurfaceFactory const &) = delete;
+    RefinerSurfaceFactory & operator=(RefinerSurfaceFactory const &) = delete;
+
     virtual SurfaceFactoryCache * getInternalCache() const {
         return & _localCache;
     }
+    /// @endcond
 
 private:
     CACHE_TYPE mutable _localCache;

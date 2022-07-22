@@ -46,111 +46,109 @@ class SurfaceFactoryCache;
 class FaceTopology;
 class FaceSurface;
 
-//
-//  SurfaceFactory is an abstract class that provides both the interface
-//  and the majority of the implementation for a factory that constructs
-//  instances of Surfaces for the faces of a mesh.
-//
-//  A subclasses of SurfaceFactory is written to support a specific type
-//  of connected mesh. The public interface of SurfaceFactory is both
-//  inherited by and extended by the subclasses. Expected extensions to
-//  the interface include one or more constructors (i.e. given a specific
-//  instance of the subclass' mesh type) as well as other methods that
-//  may involve the mesh's data types in their native form (potentially
-//  identifying face-varying topologies).
-//
-//  By inheriting the SurfaceFactoryAdapter interface, a subclass of
-//  SurfaceFactory is also required to implement the small suite of pure
-//  virtual methods to complete the factory's implementation for the
-//  subclass' mesh type. These methods provide the base factory with
-//  topological information about faces of that mesh -- from which it
-//  creates instances of Surface defining their limit surface.
-//
-//  The SurfaceFactory inherits rather than contains SurfaceFactoryAdapter
-//  as instances of SurfaceFactoryAdapter serve no other purpose, and the
-//  interface between the two is designed with the specific needs of the
-//  SurfaceFactory. When customizing a subclass of SurfaceFactory for a
-//  particular mesh type, it also avoids having to coordinate the subclass
-//  of SurfaceFactory with the subclass of SurfaceFactoryAdapter.
-//
-//  It must be emphasized that a subclass of SurfaceFactory is written to
-//  support a specific type of "connected" mesh -- not simply a container
-//  of data defining a mesh. The SurfaceFactoryAdapter interface describes
-//  the complete topological neighborhood around a specific face, and
-//  without any connectivity between mesh components (e.g. given a vertex,
-//  what are its incident faces?), satisfying these methods will be
-//  impossible, or, at best, extremely inefficient.
-//
-//  In addition to the virtual SurfaceFactoryAdapter interface, additional
-//  pure virtual methods are required for the subclass to choose the way
-//  its instances manage caching of internal data reused by the factory.
-//
-//  Ultimately a subclass of SurfaceFactory is expected to be a lightweight
-//  interface to a connected mesh -- lightweight in terms of both time and
-//  memory usage. It's construction is expected to be trivial, after which
-//  it can quickly and efficiently provide a Surface for one or more faces
-//  of a mesh for immediate evaluation. So construction of an instance of
-//  a subclass should involve no heavy pre-processing -- the greater the
-//  overhead of a subclass constructor, the more it violates the intention
-//  of the base class as a lightweight interface.
-//
-//  Instances of SurfaceFactory are initialized with a set of Options that
-//  form part of the state of the factory and remain fixed for its lifetime.
-//  Such options are intended to ensure that the instances of Surface that
-//  it creates are consistent, as well as to enable/disable or otherwise
-//  manage caching for construction efficiency -- either internally or
-//  between itself and other factories (advanced).
-//
+///
+/// @brief Base class providing initialization of a Surface for each face
+///        of a mesh
+///
+/// SurfaceFactory is an abstract class that provides the majority of
+/// the implementation and the interface for a factory that initializes
+/// instances of Surface for the faces of a mesh.
+///
+/// A subclass of SurfaceFactory is written to support a specific type
+/// of connected mesh. The public interface of SurfaceFactory is both
+/// inherited by and extended by the subclasses. Expected extensions to
+/// the interface include one or more constructors (i.e. given a specific
+/// instance of the subclass' mesh type) as well as other methods that
+/// may involve the mesh's data types (primvars) in their native form.
+///
+/// By inheriting the SurfaceFactoryAdapter interface, SurfaceFactory
+/// requires its subclasses to implement the small suite of pure
+/// virtual methods to complete the factory's implementation for the
+/// subclass' mesh type. These methods provide the base factory with
+/// topological information about faces of that mesh -- from which it
+/// creates instances of Surface defining their limit surface.
+///
+/// The SurfaceFactory inherits rather than contains SurfaceFactoryAdapter
+/// as instances of SurfaceFactoryAdapter serve no purpose on their own,
+/// and the interface between the two is designed with the specific needs
+/// of the SurfaceFactory. When customizing a subclass of SurfaceFactory
+/// for a particular mesh type, this inheritance also avoids the need to
+/// coordinate the subclass of SurfaceFactory with the separate subclass
+/// of SurfaceFactoryAdapter.
+///
+/// It must be emphasized that a subclass of SurfaceFactory is written to
+/// support a specific type of "connected" mesh -- not simply a container
+/// of data defining a mesh. The SurfaceFactoryAdapter interface describes
+/// the complete topological neighborhood around a specific face, and
+/// without any connectivity between mesh components (e.g. given a vertex,
+/// what are its incident faces?), satisfying these methods will be
+/// impossible, or, at best, extremely inefficient.
+///
+/// In addition to the virtual SurfaceFactoryAdapter interface, additional
+/// pure virtual methods are required for the subclass to choose the way
+/// its instances manage caching of internal data reused by the factory.
+///
+/// Ultimately a subclass of SurfaceFactory is expected to be a lightweight
+/// interface to a connected mesh -- lightweight in terms of both time and
+/// memory usage. It's construction is expected to be trivial, after which
+/// it can quickly and efficiently provide a Surface for one or more faces
+/// of a mesh for immediate evaluation. So construction of an instance of
+/// a subclass should involve no heavy pre-processing -- the greater the
+/// overhead of a subclass constructor, the more it violates the intention
+/// of the base class as a lightweight interface.
+///
+/// Instances of SurfaceFactory are initialized with a set of Options that
+/// form part of the state of the factory and remain fixed for its lifetime.
+/// Such options are intended to ensure that the instances of Surface that
+/// it creates are consistent, as well as to enable/disable or otherwise
+/// manage caching for construction efficiency -- either internally or
+/// between itself and other factories (advanced).
+///
 class SurfaceFactory : public SurfaceFactoryAdapter {
-protected: // non-copyable:
-    SurfaceFactory(SurfaceFactory const &);
-    SurfaceFactory & operator=(SurfaceFactory const &);
-
 public:
-    //
-    //  A face-varying ID is used to specifiy face-varying primvars for
-    //  evaluation so that they can be identified by the subclass for
-    //  the mesh.  It can be assigned as an integer ID or pointer -- as
-    //  dictated by the use of the subclass.
-    //
-    //  Often only one face-varying primvar is of interest, so a default
-    //  can be assigned to the factory to avoid repeated specification.
-    //
-    typedef std::intptr_t FVarID;
-
-    //
-    //  The Options class is a simple container specfying options for the
-    //  construction of the Factory that will apply to it for its lifetime.
-    //
-    //  These options currently include choices to identify a default
-    //  face-varying ID, to control caching behavior (on or off, use of
-    //  external vs internal cache), and to control the accuracy of the
-    //  resulting limit surface representations.
-    //
+    ///
+    /// @brief Simple set of options assigned to instances of SurfaceFactory
+    ///
+    /// The Options class is a simple container specifying options for the
+    /// construction of the SurfaceFactory to be applied during its lifetime.
+    ///
+    /// These options currently include choices to identify a default
+    /// face-varying ID, to control caching behavior (on or off, use of
+    /// external vs internal cache), and to control the accuracy of the
+    /// resulting limit surface representations.
+    ///
     class Options {
     public:
         Options() : _dfltFVarID(-1), _externCache(0), _enableCache(true),
                     _approxLevelSmooth(2), _approxLevelSharp(6) { }
 
-        //  Assign the default face-varying ID (no valid default):
+        /// @brief Assign the default face-varying ID (none assigned by
+        ///        default)
         Options & SetDefaultFVarID(FVarID id);
-        FVarID    GetDefaultFVarID() const { return _dfltFVarID; }
+        /// @brief Return the default face-varying ID
+        FVarID GetDefaultFVarID() const { return _dfltFVarID; }
 
-        //  Enable caching via internal or external cache (default is true):
+        /// @brief Enable or disable caching (default is true):
         Options & EnableCaching(bool on);
-        bool      IsCachingEnabled() const { return _enableCache; }
+        /// @brief Return if caching is enable
+        bool IsCachingEnabled() const { return _enableCache; }
 
-        //  Assign an external cache, potentially shared between Factories:
-        Options &             SetExternalCache(SurfaceFactoryCache * c);
+        /// @brief Assign an external cache to override the internal
+        Options & SetExternalCache(SurfaceFactoryCache * c);
+        /// @brief Return any assigned external cache
         SurfaceFactoryCache * GetExternalCache() const { return _externCache; }
 
         //  Set refinement levels used to approximate the limit surface
         //  for smooth and sharp features (reasonable defaults assigned):
+        /// @brief Assign maximum refinement level for smooth features
         Options & SetApproxLevelSmooth(int level);
-        int       GetApproxLevelSmooth() const { return _approxLevelSmooth; }
+        /// @brief Return maximum refinement level for smooth features
+        int GetApproxLevelSmooth() const { return _approxLevelSmooth; }
 
+        /// @brief Assign maximum refinement level for sharp features
         Options & SetApproxLevelSharp(int level);
-        int       GetApproxLevelSharp() const { return _approxLevelSharp; }
+        /// @brief Return maximum refinement level for sharp features
+        int GetApproxLevelSharp() const { return _approxLevelSharp; }
 
     private:
         //  Member variables:
@@ -164,124 +162,233 @@ public:
     };
 
 public:
-    //
-    //  Simple public queries of the Factory:
-    //
-    Sdc::SchemeType GetSchemeType() const    { return _schemeType; }
-    Sdc::Options    GetSchemeOptions() const { return _schemeOptions; }
+    //@{
+    /// @name Simple queries of subdivision properties
+    ///
+    /// Simple public queries to inspect subdivision properties.
+    ///
+
+    /// @brief Return the subdivision scheme
+    Sdc::SchemeType GetSchemeType() const { return _schemeType; }
+
+    /// @brief Return the set of subdivision options
+    Sdc::Options GetSchemeOptions() const { return _schemeOptions; }
+    //@}
 
 public:
-    //
-    //  Simple public queries of faces prior to Surface construction:
-    //
-    //  The "has limit surface" query can be used to determine if a face
-    //  has an associated limit surface -- usually the case except when the
-    //  face is tagged as a hole, or due to boundary interpolation options
-    //  when the face lies on a boundary (only for VTX_BOUNDARY_NONE).
-    //
-    //  Note that the Surface creation methods apply the same test and also
-    //  fail when no limit surface exists -- so there is little point
-    //  using the test purely as a pre-condition to create/populate. This
-    //  separate test exists to detemine existence of a limit surface for
-    //  pre-processing needs when the surface is not actually needed.
-    //
-    //  Similarly, the Parameterization of a face may also be useful for
-    //  processing prior to surface construction -- it assumes the face
-    //  has been tested for a limit surface and so is trivial:
-    //
-    typedef int Index;
+    //@{
+    /// @name Simple public queries influencing Surface construction
+    ///
+    /// Simple public queries of faces that might influence Surface
+    /// construction.
+    ///
+    /// A small set of methods is useful to inspect faces in order to
+    /// determine if their corresponding Surfaces should be initialized.
+    /// The Surface initialization methods will fail when a limit surface
+    /// does exist, so the methods here are intended for purposes when
+    /// that simple failure on initialization is not suitable, e.g. to
+    /// address some kind of pre-processing need prior to the initialization
+    /// of any Surfaces.
+    ///
 
+    /// @brief Return if a specified face has a limit surface
+    ///
+    /// This method determines if a face has an associated limit surface,
+    /// and so supports initialization of Surface for evaluation. This
+    /// is usually the case, except when the face is tagged as a hole, or
+    /// due to the use of uncommon boundary interpolation options (i.e.
+    /// Sdc::Options::VTX_BOUNDARY_NONE). The test of a hole is trivial,
+    /// but the boundary test is not when such uncommon options are used.
+    ///
     bool FaceHasLimitSurface(Index faceIndex) const;
 
+    /// @brief Return the Parameterization of a face with a limit surface
+    ///
+    /// This method simply returns the Parameterization of the specified
+    /// face. It is presumed the face has an existing limit surface and
+    /// so is a quick and simple accessor.
+    ///
     Parameterization GetFaceParameterization(Index faceIndex) const;
+    //@}
 
 public:
-    //
-    //  Public methods to initialize instances of the limit Surface for
-    //  a specific face:
-    //
-    //  Failure of these initialization methods is expected (and so to be
-    //  tested) when a face has no limit surface -- either due to it being
-    //  a hole or through the use of less common boundary interpolation
-    //  options. Failure is also possible if the subclass fails to provide
-    //  a valid topological description of the face. (WIP - consider more
-    //  extreme failure for these cases, e.g. possible assertions.)
-    //
-    //  Given the different interpolation types for data associated with
-    //  mesh vertices (i.e. vertex, varying and face-varying data), the
-    //  topology of the limit surface potentially (likely) differs between
-    //  them. So it is necessary to identify the type of data associated
-    //  with the Surface. Methods exist to initialize a single surface for
-    //  each of the three data types, and to initialize multiple surfaces
-    //  for different data types at once (which will avoid repeated effort
-    //  in a single-threaded context).
-    //
-    //  Methods to initialize a Surface for a specific interpolation type:
-    //
+    //@{
+    /// @name Methods to initialize Surfaces
+    ///
+    /// Public methods to initialize instances of Surface for a specific
+    /// face.
+    ///
+    /// Given the different interpolation types for data associated with
+    /// mesh vertices (i.e. vertex, varying and face-varying data), the
+    /// topology of the limit surface potentially (likely) differs between
+    /// them. So it is necessary to specify the type of data to be associated
+    /// with the Surface. Methods exist to initialize a single surface for
+    /// each of the three data types, and to initialize multiple surfaces
+    /// for different data types at once (which will avoid repeated effort
+    /// in a single-threaded context).
+    /// 
+    /// Failure of these initialization methods is expected (and so to be
+    /// tested) when a face has no limit surface -- either due to it being
+    /// a hole or through the use of less common boundary interpolation
+    /// options. Failure is also possible if the subclass fails to provide
+    /// a valid topological description of the face. (WIP - consider more
+    /// extreme failure for these cases, e.g. possible assertions.)
+    ///
+
+    /// @brief Initialize a Surface for vertex data
+    ///
+    /// @param  faceIndex Index of face with limit surface of interest
+    /// @param  surface   Surface to initialize for vertex data
+    /// @return           True if the face has a limit surface and it was
+    ///                   successfully constructed
+    ///
     template <typename REAL>
     bool InitVertexSurface(Index faceIndex, Surface<REAL> * surface) const;
 
+    /// @brief Initialize a Surface for varying data
+    ///
+    /// @param  faceIndex Index of face with limit surface of interest
+    /// @param  surface   Surface to initialize for varying data
+    /// @return           True if the face has a limit surface and it was
+    ///                   successfully constructed
+    ///
     template <typename REAL>
     bool InitVaryingSurface(Index faceIndex, Surface<REAL> * surface) const;
 
+    /// @brief Initialize a Surface for the default face-varying data
+    ///
+    /// For this variant, no explicit face-varying ID is specified. The
+    /// default is determined from the Options with which the SurfaceFactory
+    /// was created (assignment of that default is required).
+    ///
+    /// @param  faceIndex Index of face with limit surface of interest
+    /// @param  surface   Surface to initialize for face-varying data
+    /// @return           True if the face has a limit surface, the default
+    ///                   face-varying ID was valid, and its Surface was
+    ///                   successfully constructed
+    ///
     template <typename REAL>
     bool InitFaceVaryingSurface(Index faceIndex, Surface<REAL> * surface) const;
+
+    /// @brief Initialize a Surface for specified face-varying data
+    ///
+    /// @param  faceIndex Index of face with limit surface of interest
+    /// @param  surface   Surface to initialize for face-varying data
+    /// @param  fvarID    Identifier of a specific set of face-varying data
+    /// @return           True if the face has a limit surface, the given
+    ///                   face-varying ID was valid, and its Surface was
+    ///                   successfully constructed
+    ///
     template <typename REAL>
     bool InitFaceVaryingSurface(Index faceIndex, Surface<REAL> * surface,
                                                  FVarID          fvarID) const;
 
-    //
-    //  General method to initialize multiple Surfaces for any combination
-    //  of the three different data interpolation types:
-    //
+    ///
+    /// @brief Initialize multiple Surfaces at once
+    ///
+    /// This method initializes multiple Surfaces at once -- for any
+    /// combination of the three different data interpolation types.
+    /// Its use is recommended when two are more surfaces are known to
+    /// be non-linear, which will avoid the repeated effort if each 
+    /// Surface is individually initialized.
+    ///
+    /// Arguments are ordered here to satisfy common cases easily with
+    /// the use of optional arguments for less common cases.
+    ///
+    /// @param  faceIndex    Index of face with limit surfaces of interest
+    /// @param  vtxSurface   Surface to initialize for vertex data
+    /// @param  fvarSurfaces Surface array to initialize for face-varying data
+    /// @param  fvarIDs      Array of face-varying IDs corresponding to the
+    ///                      face-varying Surfaces to be initialized
+    ///                      (optional -- defaults to an integer sequence
+    ///                      [0 .. fvarCount-1] if absent)
+    /// @param  fvarCount    Size of array of face-varying Surfaces (optional)
+    /// @param  varSurface   Surface to initialize for varying data (optional)
+    /// @return              True if the face has a limit surface, any given
+    ///                      face-varying IDs were valid, and all Surfaces
+    ///                      were successfully constructed.
+    ///
     template <typename REAL>
     bool InitSurfaces(Index faceIndex, Surface<REAL> * vtxSurface,
                                        Surface<REAL> * fvarSurfaces,
                                        FVarID const    fvarIDs[] = 0,
                                        int             fvarCount = 0,
                                        Surface<REAL> * varSurface = 0) const;
+    //@}
 
+    //@{
+    /// @name Methods to construct Surfaces
+    ///
+    /// Simple convenience methods to allocate and construct Surface.
     //
-    //  Convenience methods to construct/allocate Surfaces:
     //      WIP - considering removing these since non-essential
     //
+
+    /// @brief Construct a Surface for vertex data
     template <typename REAL=float>
     Surface<REAL> * CreateVertexSurface(Index faceIndex) const;
 
+    /// @brief Construct a Surface for varying data
     template <typename REAL=float>
     Surface<REAL> * CreateVaryingSurface(Index faceIndex) const;
 
+    /// @brief Construct a Surface for the default face-varying data
     template <typename REAL=float>
     Surface<REAL> * CreateFaceVaryingSurface(Index faceIndex) const;
+
+    /// @brief Construct a Surface for specified face-varying data
     template <typename REAL=float>
     Surface<REAL> * CreateFaceVaryingSurface(Index faceIndex, FVarID id) const;
+    //@}
 
 protected:
-    //
-    //  Additional protected methods required to define a subclass:
-    //
-    //  Construction requires specification of the subdivision scheme and
-    //  options associated with the mesh (as is the case with other classes
-    //  in Far). These will typically reflect the settings in the mesh but
-    //  can also be used to override them -- as determined by the subclass.
-    //  Common uses of overrides are to assign a subdivision scheme to a
-    //  simple polygonal mesh, or to change the face-varying interpolation
-    //  for the faster linear interpolation of UVs.
-    //
-    //  The subclass is also responsible for providing a reference to a
-    //  mutable instance of a SurfaceFactoryCache for use by the base class.
-    //  The subclass is free to use any type of SurfaceFactoryCache that it
-    //  requires (e.g. one it has defined/declared for thread-safety) and
-    //  manages the lifetime of that instance. (WIP - currently this is
-    //  provided by an additional virtual method, but other means are under
-    //  consideration, e.g. a separate initializer, via Options, etc.)
-    //
+    //@{
+    /// @name Protected methods supporting subclass construction
+    ///
+    /// Protected methods supporting subclass construction.
+    ///
+
+    ///
+    /// @brief Constructor to be used by subclasses
+    ///
+    /// Construction requires specification of the subdivision scheme and
+    /// options associated with the mesh (as is the case with other classes
+    /// in Far). These will typically reflect the settings in the mesh but
+    /// can also be used to override them -- as determined by the subclass.
+    /// Common uses of overrides are to assign a subdivision scheme to a
+    /// simple polygonal mesh, or to change the face-varying interpolation
+    /// for the faster linear interpolation of UVs.
+    ///
     SurfaceFactory(Sdc::SchemeType      schemeType,
                    Sdc::Options const & schemeOptions,
                    Options      const & limitOptions);
-    virtual ~SurfaceFactory();
 
+    SurfaceFactory(SurfaceFactory const &) = delete;
+    SurfaceFactory & operator=(SurfaceFactory const &) = delete;
+
+    virtual ~SurfaceFactory();
+    //@}
+
+    //@{
+    /// @name Pure virtual methods requiring definition
+    ///
+    /// Pure virtual methods to be provided by subclasses.
+    ///
+
+    /// @brief Return a reference to the subclass' internal cache
+    ///
+    /// A subclass is responsible for providing a reference to a mutable
+    /// instance of SurfaceFactoryCache for use by the base class. The
+    /// subclass is free to use any type of SurfaceFactoryCache that it
+    /// requires (e.g. one it has defined/declared for thread-safety) and
+    /// will manage the lifetime of that instance.
+    //
+    //  WIP - currently this is provided by an additional virtual method
+    //      - alternatives have not been fully vetted, e.g. separate
+    //        initializer, via Options, etc.)
+    //
     virtual SurfaceFactoryCache * getInternalCache() const = 0;
+    //@}
 
 private:
     //  Supporting internal methods:

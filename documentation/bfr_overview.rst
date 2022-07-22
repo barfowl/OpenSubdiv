@@ -191,7 +191,7 @@ Bfr::Surface
 The Surface class encapsulates the piece of limit surface associated
 with a particular face of the mesh. The term "surface" is used rather
 than "patch" to emphasize that the Surface may itself be a piecewise
-parameteric surface composed of more than one patch (potentially
+parametric surface composed of more than one patch (potentially
 even a complex set of patches).
 
 Surface is also a class template selected by floating point precision,
@@ -311,7 +311,7 @@ a single quad, but other non-quad faces are parameterized as a set of quad
 A triangle subdivided with a quad-based scheme (e.g. Catmull-Clark) will
 therefore not have the parameterization of the triangular patch indicated
 previously, but another defined by its quad sub-faces illustrated above
-(to desribed in more detail below).
+(to be described in more detail below).
 
 Subdivision schemes that divide faces into triangles are currently restricted
 to triangles only, so all faces are parameterized as single triangles. (If
@@ -323,7 +323,7 @@ coordinates (u,v,w) where *w = 1 - u - v*. As is the case elsewhere in
 OpenSubdiv, *Bfr* considers parametric coordinates as 2D (u,v) pairs for all
 purposes.  All faces have an implicit 2D local parameterization and all
 interfaces requiring parametric coordinates consider only the (u,v) pair.
-If interaction with some other toolset requiring barycentric coordinates
+If interaction with some other tool set requiring barycentric coordinates
 for triangles is necessary, it is left to users to compute the implicit *w*
 accordingly.
 
@@ -342,7 +342,7 @@ and made publicly available.
 Each Surface has the Parameterization of its face assigned internally as part
 of its construction, and that is used internally by the Surface in many of its
 methods. The need to deal directly with the explicit details of the
-Paramaterization class is not generally necessary.  . Often it is sufficient
+Parameterization class is not generally necessary.  . Often it is sufficient
 to retrieve the Parameterization from a Surface for use in some other context
 (e.g. passed to Bfr::Tessellation).
 
@@ -409,7 +409,7 @@ lengths of 1.0, and so can lead to inconsistencies in parametric scale
 (typically with derivatives) across edges of the mesh if not careful.
 
 As previously mentioned, care may be necessary when dealing with the
-discontinuities that exist in parameterizations with subfaces. This is
+discontinuities that exist in parameterizations with sub-faces. This is
 particularly true if evaluating data at sampled locations of the face
 and needing to evaluate at other locations interpolated from these.
 
@@ -434,7 +434,7 @@ Tessellation
 ============
 
 Once a Surface can be evaluated it can be tessellated.  Given a 2D
-pararameterization, a tessellation consists of two parts:
+parameterization, a tessellation consists of two parts:
 
     * a set of parametric coordinates sampling the Parameterization
     * a set of faces connecting these coordinates that covers the
@@ -450,7 +450,7 @@ a heavily overloaded term.  Similarly the faces connecting the coords
 are referred to as "facets" or "Facets" -- avoiding the term "face" to
 avoid confusion with the base face of the mesh being tessellated.
 
-*Bfr* provides a simple class to support a variety of tesselltion patterns
+*Bfr* provides a simple class to support a variety of tessellation patterns
 for the different Parameterization types and methods for retrieving its
 associated coords and facets. In many cases the patterns they define are
 similar to those of GPU hardware tessellation -- which may be more familiar
@@ -515,7 +515,7 @@ vertices or edges to be identified, as well as providing the coords for the
 entire ring around the boundary separately from those of the interior if
 desired. While the ordering of coords in the interior is not defined (and
 so not to be relied upon), the ordering of the boundary coords is
-specifically fixed to support the correllation of potentially shared coords
+specifically fixed to support the correlation of potentially shared coords
 between faces.
 
 The Tessellation class is completely independent of the Surface class.
@@ -528,7 +528,7 @@ Tessellation Rates
 ******************
 
 For a particular Parameterization, the various tessellation patterns are
-detemined by one or more tessellation rates. Unlike other interfaces to
+determined by one or more tessellation rates. Unlike other interfaces to
 tessellation, rather than specifying the many rates for the most complex
 patterns, simpler patterns can be specified more simply -- with one or
 some lesser number of rates than the maximum possible.
@@ -599,7 +599,7 @@ Differences from Hardware Tessellation
 Since the specifications for hardware tessellation often leave some details
 of the patterns as implementation dependent, no two hardware implementations
 are necessarily the same. Typically there may be subtle differences in the
-non-uniform tessellation patterns along boundaries, and that is to be exected
+non-uniform tessellation patterns along boundaries, and that is to be executed
 here.
 
 *Bfr* does provide some obvious additional functionality not present in
@@ -625,7 +625,7 @@ other differences are worth noting:
 For the indexing of edges and rates, when specifying an outer rate associated
 with an edge, the array index for rate *i* is expected to correspond to edge
 *i*.  *Bfr* follows the convention established elsewhere in OpenSubdiv of
-labeling/indexing edges 0, 1, etc. betwen vertex pairs [0,1], [1,2], etc.
+labeling/indexing edges 0, 1, etc. between vertex pairs [0,1], [1,2], etc.
 So outer rate [0] corresponds to the edge between vertices [0,1]. In contrast,
 hardware tessellation associates the rate for the edge between vertices [0,1]
 as outer rate [1] -- its outer rate [0] is between vertices [N-1,0].  So an
@@ -661,9 +661,10 @@ artifacts of the hardware patterns:
 | Uniform tessellation of a triangle with *Bfr* (left) and GPU tessellation (right).          |
 +---------------------------------------------------------------------------------------------+
 
-These triangular patterns are consistent with what Moreton referred to as "interger
-spacing" for triangular patches in early work on hardware tessellation [Moreton, 2001],
-but which were later lost in the actual hardware implementation.
+These triangular patterns are consistent with what Moreton referred to as
+"integer spacing" for triangular patches in early work on hardware
+tessellation [Moreton, 2001], but which were later lost in the actual
+hardware implementation.
 
 ----
 

@@ -34,43 +34,59 @@ namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
 
-//
-//  Tessellation is a simple class that provides topological information
-//  for a specified tessellation pattern of a given parameterization.
-//
+///
+/// @brief Encapsulates a specific tessellation pattern of a Parameterization
+///
+/// Tessellation is a simple class that encapsulates a specified tessellation
+/// pattern for a given Parameterization. Tessellation parameters are given
+/// on construction and are fixed for its lifetime.
+///
+/// Methods allow inspection of the pattern in terms of the 2D coordinates of
+/// the points comprising the pattern and the faces that connect them. The
+/// 2D coordinates are referred to both in the documentation and the interface
+/// as "coords" while the faces connecting them are referred to as "facets"
+/// (to distinguish from the faces of the mesh, to which a Tessellation is
+/// applied).
+///
 class Tessellation {
 public:
-    //
-    //  Options configure a Tessellation to determine the nature of its
-    //  results and to specify the structure of the coordinate and facet
-    //  index buffers that its methods will populate.
-    //
-    //  The sizes and strides of the target buffers should be specified
-    //  explicitly as they are not inferred by the presence of other
-    //  options.
-    //
+    ///
+    /// @brief Options configure a Tessellation to specify the nature of
+    ///        both its results and the structure of the coordinate and
+    ///        facet index arrays that its methods will populate.
+    ///
+    /// The sizes and strides of the target buffers should be specified
+    /// explicitly as they are not inferred by the presence of other
+    /// options.
+    ///
+    /// Modifiers of Options return a reference to itself to facilitate
+    /// inline usage.
+    ///
     class Options {
     public:
         Options() : _preserveQuads(false), _facetSize4(false),
                     _coordStride(0), _facetStride(0) { }
 
-        //  Choice of triangulation (default) or preservation of quads
-        //  with quad-based subdivision:
+        /// @brief Select preservation of quads for quad-based subdivision
+        ///        (requires 4-sided facets, default is off)
         Options & PreserveQuads(bool on);
+        /// @brief Return if preservation of quads is set
         bool      PreserveQuads() const { return _preserveQuads; }
 
-        //  Option for the number of indices associated with each facet
-        //  (i.e. the number of indices set by the Tessellation) which can
-        //  be 3 or 4 (default is 3 and remains so unless 4 specified):
+        /// @brief Assign the number of indices per facet (must be 3 or 4,
+        ///        default is 3)
         Options & SetFacetSize(int numIndices);
+        //  @brief Return the number of indices per facet
         int       GetFacetSize() const { return 3 + (int)_facetSize4; }
 
-        //  Option for stride between facets within a larger set:
+        /// @brief Assign the stride between facets (default is facet size)
         Options & SetFacetStride(int stride);
+        /// @brief Return the stride between facets
         int       GetFacetStride() const { return _facetStride; }
 
-        //  Option for stride between (u,v) pairs within a larger set:
+        /// @brief Assign the stride between (u,v) pairs (default is 2)
         Options & SetCoordStride(int stride);
+        /// @brief Return the stride between (u,v) pairs
         int       GetCoordStride() const { return _coordStride; }
 
     private:
@@ -82,108 +98,180 @@ public:
     };
 
 public:
-    //
-    //  Constructors require a Parameterization of a face, a set of one or
-    //  more tessellation rates, and a standard set of options.
-    //
-    //  A simple constructor provides a single uniform tessellatin rate
-    //  applicable to all faces.  For non-uniform tessellations, a more
-    //  general constructor can provide separate tessellation rates for
-    //  each edge and/or one or more inner tessellation rates (two for
-    //  quads only, one for all others). Certain subsets of these rates
-    //  can be specified -- leaving others to be inferred.
-    //
-    //  A non-uniform Tessellation of a face with N edges interprets the
-    //  given number of tessellation rates as follows -- for all faces
-    //  (regardless of N):
-    //
-    //      numRates ==  1:   uniform inner rate, outer similarly uniform
-    //      numRates ==  N:   explicit outer rates per edge, inner inferred
-    //      numRates == N+1:  explicit outer rates, uniform inner rate
-    //
-    //  and for quads only (N == 4, with its two independent inner rates):
-    //
-    //      numRates ==  2:   explict inner rates, outer rates inferred
-    //      numRates == N+2:  explicit outer rates, explicit inner rates
-    //
-    //  Note that the values for outer and inner rates follow conventions
-    //  elsewhere, e.g. a uniform tessellation rate of X for a triangle
-    //  corresponds to the more explicit specification of X as the outer
-    //  rate for each of its edges and X for the inner rate.
-    //
-    //  Like other classes, constructors can produce invalid instances if
-    //  given obviously invalid arguments, e.g. an invalid Parameterization,
-    //  non-positive tessellation rates, etc.
-    //
+    //@{
+    /// @name Constructing tessellation patterns
+    ///
+    /// Constructors require a Parameterization of a face, a set of one or
+    /// more tessellation rates, and a standard set of options.
+    ///
+    /// As with other classes, constructors can produce invalid instances if
+    /// given obviously invalid arguments, e.g. an invalid Parameterization,
+    /// non-positive tessellation rate, etc.
+    ///
+
+    /// @brief Simple constructor providing a single uniform tessellation rate.
+    ///
+    /// @param  p           Parameterization of a face to be tessellated
+    /// @param  uniformRate Integer tessellation rate (non-zero)
+    /// @param  options     Options describing tessellation results
+    ///
     Tessellation(Parameterization const & p, int uniformRate,
                  Options const & options = Options());
+
+    ///
+    /// @brief General constructor providing multiple tessellation rates for
+    ///        a non-uniform tessellation.
+    ///
+    /// @param  p           Parameterization of a face to be tessellated
+    /// @param  numRates    The number of tessellation rates provided, which
+    ///                     usually includes one per edge of the face (more
+    ///                     details below)
+    /// @param  rates       The array of non-zero integer tessellation rates
+    /// @param  options     Options describing tessellation results
+    ///
+    /// For a Parameterization of a face with N edges, the acceptable number
+    /// of tessellation rates can vary. Aside from N "outer" tessellation
+    /// rates (one for each edge), all faces can have at least one "inner"
+    /// rate additionally specified while quads can have two inner rates.
+    ///
+    /// If inner rates are not specified in addition to the N outer rates,
+    /// they will be inferred (so it is not necessary to initialize quads
+    /// distinctly from other faces). Similarly -- though less useful -- the
+    /// smaller set of inner rates can be specified, leaving all outer rates
+    /// to be inferred.
+    ///
+    /// For a face with N edges, the full set of acceptable rates and their
+    /// interpretations is as follows:
+    ///
+    ///      1  - single explicit inner rate (uniform)
+    ///      2  - (quads only) two explicit inner rates, outer rates inferred
+    ///      N  - explicit edge rates, inner rates inferred
+    ///     N+1 - explicit edge rates, explicit inner rate
+    ///     N+2 - (quads only) explicit edge rates, two explicit inner rates
+    ///
+    /// When associating rates with edges, note that rates[0] corresponds
+    /// to the edge between vertices 0 and 1. This is consistent with use
+    /// elsewhere in OpenSubdiv -- where edge i lies between vertices i and
+    /// i+1 -- but differs from the conventions used with many hardware
+    ///  tessellation interfaces.
+    ///
     Tessellation(Parameterization const & p, int numRates, int const rates[],
                  Options const & options = Options());
-    ~Tessellation();
 
+    ~Tessellation();
+    //@}
+
+    //@{
+    /// @name Simple queries
+    ///
+    /// Simple queries of a constructed Tessellation.
+    ///
+
+    /// @brief Return if the Tessellation is valid
     bool IsValid() const { return _isValid; }
 
-    //
-    //  General queries:
-    //
+    /// @brief Return the Parameterization
     Parameterization GetParameterization() const { return _param; }
 
+    /// @brief Return the size of the face
     int GetFaceSize() const { return _param.GetFaceSize(); }
 
+    /// @brief Retrieve the rates assigned
     int GetRates(int rates[]) const;
 
+    /// @brief Return if the pattern is uniform
     bool IsUniform() const { return _isUniform; }
+    //@}
 
-    //
-    //  Queries to determine the number of sample points involved in the
-    //  tessellation pattern -- overall or for various features:
-    //
+    //@{
+    /// @name Methods to query and gather coordinates
+    ///
+    /// Queries to determine the number of sample points involved in the
+    /// tessellation pattern and their content are available for the entire
+    /// pattern, or for parts of the boundary or interior of the pattern.
+    ///
+    /// The methods that assign the coordinate arrays also return the number
+    /// of coordinates assigned, so the methods that just return those sizes
+    /// are not necessary if arrays for the resulting coords have already
+    /// been sufficiently allocated.
+    ///
+
+    /// @brief Return the number of coordinates in the entire pattern
     int GetNumCoords() const { return _numInteriorPoints + _numBoundaryPoints; }
 
+    /// @brief Return the number of boundary coordinates
     int GetNumBoundaryCoords() const { return _numBoundaryPoints; }
+
+    /// @brief Return the number of interior coordinates
     int GetNumInteriorCoords() const { return _numInteriorPoints; }
 
+    /// @brief Return the number of coordinates within a given edge
+    ///        (excluding those at its end vertices)
     int GetNumEdgeCoords(int edge) const { return _outerRates[edge] - 1; }
 
-    //
-    //  Methods to identify coordinates of sample points for all or specific
-    //  features of the parameterization.  All such methods return the number
-    //  of coordinates returned, so the above methods returning the size only
-    //  are not necessary if buffers for the resulting coords have already
-    //  been adequately sized:
-    //
+    /// @brief Retrieve the coordinates for the entire pattern
     template <typename REAL>
     int GetCoords(REAL coordBuffer[]) const;
 
+    /// @brief Retrieve the coordinates for the boundary
     template <typename REAL>
     int GetBoundaryCoords(REAL coordBuffer[]) const;
+
+    /// @brief Retrieve the coordinates for the boundary
     template <typename REAL>
     int GetInteriorCoords(REAL coordBuffer[]) const;
 
+    /// @brief Retrieve the coordinate for a given vertex of the face
     template <typename REAL>
     int GetVertexCoord(int vertex, REAL coordBuffer[]) const;
-    template <typename REAL>
-    int GetEdgeCoords( int edge,   REAL coordBuffer[]) const;
 
-    //
-    //  Methods to query the number and values of facets, and a few methods
-    //  to tranform (offset or remap) facet indices for various uses:
-    //
+    /// @brief Retrieve the coordinates for a given edge of the face
+    ///        (excluding those at its end vertices)
+    template <typename REAL>
+    int GetEdgeCoords(int edge,  REAL coordBuffer[]) const;
+    //@}
+
+    //@{
+    /// @name Methods to query and gather facets
+    ///
+    /// Methods to query the number and values of facets, and to transform
+    /// (offset or remap) the facet indices in various ways.
+    ///
+    /// Unlike the coordinates -- which can be separated into those on the
+    /// boundary or interior of the pattern -- the facets are not
+    /// distinguished in any ways. 
+    ///
+
+    /// @brief Return the number of facets in the entire pattern
     int GetNumFacets() const { return _numFacets; }
+
+    /// @brief Return the number of indices assigned to each facet
     int GetFacetSize() const { return _facetSize; }
 
+    /// @brief Retrieve the facet indices for the entire pattern
     int GetFacets(int facetIndexBuffer[]) const;
 
+    /// @brief Transform all facet indices by a common offset
     void TransformFacetIndices(int facetIndexBuffer[],
                                int commonOffset);
+
+    /// @brief Transform indices for boundary and interior coordinates by
+    ///        separate offsets
     void TransformFacetIndices(int facetIndexBuffer[],
                                int boundaryOffset, int interiorOffset);
+
+    /// @brief Remap indices of boundary coordinates by a given array while
+    ///        offsetting interior coordinate indices
     void TransformFacetIndices(int facetIndexBuffer[],
                                int const boundaryIndices[],
                                int       interiorOffset);
+
+    /// @brief Remap indices of boundary and interior coordinates by
+    ///        separate arrays
     void TransformFacetIndices(int facetIndexBuffer[],
                                int const boundaryIndices[],
                                int const interiorIndices[]);
+    //@}
 
 private:
     //  Private initialization methods:

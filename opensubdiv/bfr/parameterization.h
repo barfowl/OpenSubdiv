@@ -34,84 +34,131 @@ namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
 
-//
-//  Parameterization is a simple class that provides information about the
-//  parameterization of a face in a local (u,v) coordinate system. That
-//  information is determined given the size of a face (i.e. its number of
-//  vertices) and the subdivision scheme used to subdivide it.
-//
-//  The subdivision scheme is essential in determining how a face is
-//  parameterized, e.g. a triangle is regular for the Loop scheme and so
-//  has a very simple parameterization -- unlike a triangle for the
-//  Catmull-Clark scheme, which must be quadrangulated.
-//
+///
+/// @brief Simple class defining the 2D parameterization of a face
+///
+/// Parameterization is a simple class that provides information about the
+/// parameterization of a face in a local (u,v) coordinate system. It is
+/// defined by the size of a face (i.e. its number of vertices) and the
+/// subdivision scheme that determines its limit surface.
+///
+/// As an example of how the subdivision scheme is essential in determining
+/// the Parameterization, consider the case of a triangle.  A triangle is
+/// regular for the Loop scheme and so has a very simple parameterization
+/// as a triangular patch. But for the Catmull-Clark scheme, a triangle is
+/// an irregular face that must first be subdivided -- making its limit
+/// surface a piecewise collection of quadrilateral patches.
+///
 class Parameterization {
 public:
-    //
-    //  The three kinds of parameterizations defined are:  quadrilateral,
-    //  triangle and quadrangulated sub-faces.  This is not intended for
-    //  common use, but is publicly available for situations when it is
-    //  necessary to distinguish:
-    //
-    enum Type { QUAD, TRI, QUAD_SUBFACES };
+    ///
+    /// @brief Enumerated type for the different kinds of Parameterizations.
+    ///
+    /// The three kinds of parameterizations defined are:  quadrilateral,
+    /// triangle and quadrangulated sub-faces.  This is not intended for
+    /// common use, but is publicly available for situations when it is
+    /// necessary to distinguish:
+    ///
+    enum Type { QUAD,          ///<  Quadrilateral
+                TRI,           ///<  Triangle
+                QUAD_SUBFACES  ///<  Partitioned into quadrilateral sub-faces
+    };
 
 public:
+    //@{
+    /// @name Construction and simple queries
+    ///
+    /// Construction and simple queries.
+    ///
+
     Parameterization() : _faceSize(0) { }
+
+    /// @brief Primary constructor with subdivision scheme and face size
     Parameterization(Sdc::SchemeType scheme, int faceSize);
+
     ~Parameterization() { }
 
+    /// @brief Returns true if correctly initialized
     bool IsValid() const { return (_faceSize > 0); }
 
-    int  GetFaceSize() const { return _faceSize; }
+    /// @brief Returns the type of parameterization assigned
     Type GetType() const { return (Type) _type; }
 
+    /// @brief Returns the size (number of vertices) of the corresponding face
+    int  GetFaceSize() const { return _faceSize; }
+    //@}
+
 public:
-    //
-    //  Methods to query common features of a parameterization.
-    //
-    //  Methods for vertices and edges require an index of the vertex
-    //  or edge.  The edge parameter "t" locally parameterizes the edge
-    //  over [0,1] in a counter-clockwise orientation.
-    //
+    //@{
+    /// @name Queries for parametric features
+    ///
+    /// Methods are available to query common topological features of a
+    /// Parameterization, i.e. features that exist regardless of its Type
+    /// or the face it represents.
+    ///
+    /// Queries of vertices and edges require an index of the desired
+    /// vertex or edge. The edge parameter "t" locally parameterizes the
+    /// edge over [0,1] in a counter-clockwise orientation.
+    ///
+
+    /// @brief Returns the (u,v) coordinate of a given vertex
     template <typename REAL>
     void GetVertexCoord(int vertexIndex, REAL uvCoord[2]) const;
 
+    /// @brief Returns the (u,v) coordinate at any point on a given edge
     template <typename REAL>
     void GetEdgeCoord(int edgeIndex, REAL t, REAL uvCoord[2]) const;
 
+    /// @brief Returns the (u,v) coordinate for the center of the face
     template <typename REAL>
     void GetCenterCoord(REAL uvCoord[2]) const;
+    //@}
 
 public:
-    //
-    //  Methods to deal with discontinuous parameterizations, i.e. those
-    //  partitioned into sub-faces:
-    //
+    //@{
+    /// @name Methods to deal with discontinuous parameterizations
+    ///
+    /// Parameterizations that have been partitioned into sub-faces are
+    /// discontinuous and warrant care in order to process them effectively --
+    /// often requiring explicit conversions.
+    ///
+    /// These conversion methods to and from the local coordinates of a
+    /// sub-face are only for use with instances of Parameterization that
+    /// have such sub-faces.
+    ///
+    /// Note that sub-face coordinates that are normalized correspond to
+    /// coordinates for Ptex faces.
+    ///
+
+    /// @brief Returns if Parameterization has been partitioned into sub-faces
     bool HasSubFaces() const;
 
+    /// @brief Returns the integer sub-face containing the given (u,v)
     template <typename REAL>
     int GetSubFace(REAL const uvCoord[2]) const;
 
-    //
-    //  Conversion methods to/from sub-face coordinates -- only for use
-    //  with instances partitioned into sub-faces:
-    //
-    //  Note that sub-face coordinates that are normalized correspond
-    //  to coordinates for Ptex faces.
-    //
+    /// @brief Convert (u,v) to a sub-face (return value) and its local (u,v)
+    ///        coordinate
     template <typename REAL>
     int ConvertCoordToSubFace(
                 REAL const uvCoord[2], REAL subFaceCoord[2]) const;
+
+    /// @brief Convert a sub-face and its local (u,v) coordinate to (u,v)
+    template <typename REAL>
+    void ConvertSubFaceToCoord(int subFace,
+                REAL const subFaceCoord[2], REAL uvCoord[2]) const;
+
+    /// @brief Convert (u,v) to a sub-face (return value) and its normalized
+    ///        (u,v) coordinate
     template <typename REAL>
     int ConvertCoordToNormalizedSubFace(
                 REAL const uvCoord[2], REAL subFaceCoord[2]) const;
 
-    template <typename REAL>
-    void ConvertSubFaceToCoord(int subFace,
-                REAL const subFaceCoord[2], REAL uvCoord[2]) const;
+    /// @brief Convert a sub-face and its normalized (u,v) coordinate to (u,v)
     template <typename REAL>
     void ConvertNormalizedSubFaceToCoord(int subFace,
                 REAL const subFaceCoord[2], REAL uvCoord[2]) const;
+    //@}
 
 private:
     template <typename REAL>

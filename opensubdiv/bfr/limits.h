@@ -34,11 +34,15 @@ namespace OPENSUBDIV_VERSION {
 
 namespace Bfr {
 
-//
-//  Public struct with limits related to topology:
-//
+///
+/// @brief Simple struct with limits related to topology
+///
 struct Limits {
+    /// @brief Returns the maximum allowable valence for a vertex
     static int MaxValence()  { return Far::VALENCE_LIMIT; }
+
+    /// @brief Returns the maximum allowable size for a face (number of
+    ///        vertices)
     static int MaxFaceSize() { return Far::VALENCE_LIMIT; }
 };
 
