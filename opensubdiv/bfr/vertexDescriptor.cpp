@@ -28,6 +28,7 @@
 
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
 
 namespace OpenSubdiv {
 namespace OPENSUBDIV_VERSION {
@@ -42,61 +43,57 @@ bool
 VertexDescriptor::Initialize(int numFaces) {
 
     //  Mark invalid if too many or too few incident faces specified:
-    if (numFaces > Limits::MaxValence()) {
-        _numFaces = (short) Limits::MaxValence();
-        _isValid  = false;
-    } else {
-        _numFaces = (short) numFaces;
-        _isValid  = (numFaces > 0);
-    }
+    _isValid  = (numFaces > 0) && (numFaces <= Limits::MaxValence());
+    _numFaces = _isValid ? (short) numFaces : 0;
 
     //  Initialize all other members regardless of the above:
     _vertSharpness = 0.0f;
 
-    _isOrdered  = false;
+    _isManifold = false;
     _isBoundary = false;
 
-    _hasFaceSizes     = true;
+    _hasFaceSizes     = false;
     _hasEdgeSharpness = false;
-    _wasFaceSizesSet  = false;
 
-    _isInitialized = true;
+    _isInitialized = _isValid;
     _isFinalized   = false;
 
-    return _isValid;
+    return _isInitialized;
 }
 
 bool
 VertexDescriptor::Finalize() {
 
-    //
-    //  Test for a number of possible errors here and fail, e.g.:
-    //      - invalid or uninitialized
-    //      - whether face sizes common not set (don't rely on default)
-    //      - face sizes expected but not present
-    //      - edge sharpness expected but not present
-    //
-    //  WIP - failure could set an error code for inspection
-    //
-    if (!_isValid || !_isInitialized) return false;
+    //  Fail if already invalid:
+    if (!_isValid) return false;
 
-    if (!_wasFaceSizesSet) return false;
-
-    if (_hasFaceSizes && (_faceSizeOffsets.GetSize() == 0)) return false;
-
-    //  Convert the N face sizes to N+1 offsets (total face-vertices last):
+    //  Test for valid face size assignments while converting the sizes
+    //  to offsets. Also detect if the faces are all the same size -- in
+    //  which case, ignore the explicit assignments:
     if (_hasFaceSizes) {
+        int  size0 = _faceSizeOffsets[0];
+        bool sameSizes = true;
+
         int sum = 0;
         for (int i = 0; i < _numFaces; ++i) {
-            int nextSum = sum + _faceSizeOffsets[i];
+            int faceSize = _faceSizeOffsets[i];
+            if ((faceSize < 3) || (faceSize > Limits::MaxFaceSize())) {
+                _isValid = false;
+                return false;
+            }
+            sameSizes &= (faceSize == size0);
+
             _faceSizeOffsets[i] = sum;
-            sum = nextSum;
+            sum += faceSize;
         }
         _faceSizeOffsets[_numFaces] = sum;
+
+        //  No need to make use of explicit face sizes and offsets:
+        if (sameSizes) {
+            _hasFaceSizes = false;
+        }
     }
-
     _isFinalized = true;
-
     return true;
 }
 
@@ -107,7 +104,7 @@ void
 VertexDescriptor::initFaceSizes() {
 
     _faceSizeOffsets.SetSize(_numFaces + 1);
-    std::memset(_faceSizeOffsets, 0, (_numFaces + 1) * sizeof(int));
+    std::fill(&_faceSizeOffsets[0], &_faceSizeOffsets[_numFaces + 1], 0);
     _hasFaceSizes = true;
 }
 
@@ -115,7 +112,7 @@ void
 VertexDescriptor::initEdgeSharpness() {
 
     _faceEdgeSharpness.SetSize(_numFaces * 2);
-    std::memset(_faceEdgeSharpness, 0, (_numFaces * 2) * sizeof(float));
+    std::fill(&_faceEdgeSharpness[0], &_faceEdgeSharpness[_numFaces * 2], 0.0f);
     _hasEdgeSharpness = true;
 }
 

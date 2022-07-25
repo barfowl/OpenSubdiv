@@ -149,25 +149,21 @@ RefinerSurfaceFactoryBase::populateFaceVertexDescriptor(
         vd.SetManifold(isManifold);
         vd.SetBoundary(vTag._boundary);
 
-        //  Assign face sizes -- variable/explicit or constant/implicit:
+        //  Assign face sizes if not all regular:
         if (vTag._incidIrregFace) {
-            vd.SetCommonFaceSize(false);
-
             for (int i = 0; i < nFaces; ++i) {
-                int incFaceSize = baseLevel.getFaceVertices(vFaces[i]).size();
-                vd.SetIncidentFaceSize(i, incFaceSize);
+                vd.SetIncidentFaceSize(i,
+                            baseLevel.getFaceVertices(vFaces[i]).size());
             }
-        } else {
-            vd.SetCommonFaceSize(true);
         }
 
-        //  Assign vertex sharpness:
+        //  Assign vertex sharpness when present:
         if (vTag._semiSharp || vTag._infSharp) {
             vd.SetVertexSharpness(
                     baseLevel.getVertexSharpness(vIndex));
         }
 
-        //  Assign edge sharpness (try to avoid when sharpness is implicit):
+        //  Assign edge sharpness when present:
         if (vTag._semiSharpEdges || vTag._infSharpEdges) {
             if (isManifold) {
                 //  Can use manifold/ordered edge indices here:
@@ -214,7 +210,8 @@ RefinerSurfaceFactoryBase::populateFaceVertexDescriptor(
                 return i;
             }
         }
-        return vFaces.FindIndex(baseFace);
+        assert("Cannot identify face-vertex around non-manifold vertex." == 0);
+        return -1;
     }
 }
 

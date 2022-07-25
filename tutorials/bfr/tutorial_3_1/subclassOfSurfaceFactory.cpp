@@ -149,12 +149,11 @@ SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
 
     vd.Initialize(numFaces);
     {
-        //  Assign ordering and boundary status:
+        //  Assign manifold (incident faces ordered) and boundary status:
         vd.SetManifold(isManifold);
         vd.SetBoundary(baseLevel.IsVertexBoundary(vIndex));
 
-        //  Assign sizes of incident faces:
-        vd.SetCommonFaceSize(false);
+        //  Assign sizes of all incident faces:
         for (int i = 0; i < numFaces; ++i) {
             int incFaceSize = baseLevel.GetFaceVertices(vFaces[i]).size();
             assert(incFaceSize <= OpenSubdiv::Bfr::Limits::MaxFaceSize());
@@ -167,7 +166,7 @@ SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
 
         //  Assign edge sharpness:
         if (isManifold) {
-            //  Can use manifold/ordered edge indices here:
+            //  Can use manifold (ordered) edge indices here:
             ConstIndexArray vEdges = baseLevel.GetVertexEdges(vIndex);
 
             for (int i = 0; i < vEdges.size(); ++i) {

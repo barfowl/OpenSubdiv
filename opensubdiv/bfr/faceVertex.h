@@ -73,7 +73,7 @@ public:
     void Initialize(int faceSize, int regFaceSize);
     void Finalize(int faceInVertex);
 
-    VertexDescriptor & GetVertexDescriptor() { return _vTop; }
+    VertexDescriptor & GetVertexDescriptor() { return _vDesc; }
 
     void ConnectUnOrderedFaces(Index const faceVertexIndices[]);
 
@@ -100,7 +100,7 @@ public:
 
     int GetFace() const { return _faceInRing; }
 
-    int GetNumFaces()        const { return _vTop._numFaces; }
+    int GetNumFaces()        const { return _vDesc._numFaces; }
     int GetNumFaceVertices() const { return _numFaceVerts; }
 
     bool HasCommonFaceSize() const { return (_commonFaceSize > 0); }
@@ -209,7 +209,7 @@ private:
     typedef Vtr::internal::StackBuffer<short,16,true> ShortBuffer;
 
     //  Private members:
-    VertexDescriptor _vTop;
+    VertexDescriptor _vDesc;
     VertexTag        _tag;
 
     short _faceInRing;
@@ -233,7 +233,7 @@ private:
 inline int
 FaceVertex::GetFaceSize(int face) const {
     return _commonFaceSize ? _commonFaceSize :
-            (_vTop._faceSizeOffsets[face+1] - _vTop._faceSizeOffsets[face]);
+            (_vDesc._faceSizeOffsets[face+1] - _vDesc._faceSizeOffsets[face]);
 }
 
 inline int
@@ -249,7 +249,7 @@ inline int
 FaceVertex::GetFaceNext(int face) const {
     if (isUnOrdered()) {
         return getConnectedFaceNext(face);
-    } else if (face < (_vTop._numFaces - 1)) {
+    } else if (face < (_vDesc._numFaces - 1)) {
         return face + 1;
     } else {
         return isBoundary() ? -1 : 0;
@@ -262,7 +262,7 @@ FaceVertex::GetFacePrevious(int face) const {
     } else if (face) {
         return face - 1;
     } else {
-        return isBoundary() ? -1 : (_vTop._numFaces - 1);
+        return isBoundary() ? -1 : (_vDesc._numFaces - 1);
     }
 }
 
@@ -270,7 +270,7 @@ inline int
 FaceVertex::GetFaceAfter(int step) const {
     assert(step >= 0);
     if (isOrdered()) {
-        return (_faceInRing + step) % _vTop._numFaces;
+        return (_faceInRing + step) % _vDesc._numFaces;
     } else if (step == 1) {
         return getConnectedFaceNext(_faceInRing);
     } else if (step == 2) {
@@ -287,7 +287,7 @@ inline int
 FaceVertex::GetFaceBefore(int step) const {
     assert(step >= 0);
     if (isOrdered()) {
-        return (_faceInRing - step + _vTop._numFaces) % _vTop._numFaces;
+        return (_faceInRing - step + _vDesc._numFaces) % _vDesc._numFaces;
     } else if (step == 1) {
         return getConnectedFacePrev(_faceInRing);
     } else if (step == 2) {
@@ -316,7 +316,7 @@ FaceVertex::GetFaceLast(Subset const & subset) const {
 inline int
 FaceVertex::GetFaceIndexOffset(int face) const {
     return _commonFaceSize ? (face * _commonFaceSize) :
-                             _vTop._faceSizeOffsets[face];
+                             _vDesc._faceSizeOffsets[face];
 }
 
 inline FaceVertex::Index
@@ -361,29 +361,29 @@ FaceVertex::FaceIndicesMatchAcrossEdge(int facePrev, int faceNext,
 //
 inline float
 FaceVertex::GetVertexSharpness() const {
-    return _vTop._vertSharpness;
+    return _vDesc._vertSharpness;
 }
 
 inline float
 FaceVertex::GetFaceEdgeSharpness(int faceEdge) const {
-    return _vTop._faceEdgeSharpness[faceEdge];
+    return _vDesc._faceEdgeSharpness[faceEdge];
 }
 inline float
 FaceVertex::GetFaceEdgeSharpness(int face, bool trailing) const {
-    return _vTop._faceEdgeSharpness[face*2 + trailing];
+    return _vDesc._faceEdgeSharpness[face*2 + trailing];
 }
 
 inline bool
 FaceVertex::IsFaceEdgeSharp(int face, bool trailing) const {
-    return Sdc::Crease::IsSharp(_vTop._faceEdgeSharpness[face*2+trailing]);
+    return Sdc::Crease::IsSharp(_vDesc._faceEdgeSharpness[face*2+trailing]);
 }
 inline bool
 FaceVertex::IsFaceEdgeInfSharp(int face, bool trailing) const {
-    return Sdc::Crease::IsInfinite(_vTop._faceEdgeSharpness[face*2+trailing]);
+    return Sdc::Crease::IsInfinite(_vDesc._faceEdgeSharpness[face*2+trailing]);
 }
 inline bool
 FaceVertex::IsFaceEdgeSemiSharp(int face, bool trailing) const {
-    return Sdc::Crease::IsSemiSharp(_vTop._faceEdgeSharpness[face*2+trailing]);
+    return Sdc::Crease::IsSemiSharp(_vDesc._faceEdgeSharpness[face*2+trailing]);
 }
 
 } // end namespace Bfr

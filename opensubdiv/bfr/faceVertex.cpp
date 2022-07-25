@@ -50,31 +50,32 @@ FaceVertex::Initialize(int faceSize, int regFaceSize) {
     _isImpInfSharp  = false;
     _isImpSemiSharp = false;
 
-    _vTop._isInitialized = false;
+    _vDesc._isValid       = false;
+    _vDesc._isInitialized = false;
 }
 
 void
 FaceVertex::Finalize(int faceInVertex) {
 
-    assert(_vTop._isFinalized);
+    assert(_vDesc._isFinalized);
 
     _faceInRing = (short) faceInVertex;
 
     //
     //  Initialize members from the VertexDescriptor:
     //
-    if (_vTop.HasCommonFaceSize()) {
+    if (!_vDesc.HasIncidentFaceSizes()) {
         //  Common face size was previously initialized to the face size
-        _numFaceVerts = _vTop._numFaces * _commonFaceSize;
+        _numFaceVerts = _vDesc._numFaces * _commonFaceSize;
     } else {
         _commonFaceSize = 0;
         //  Recall face sizes are available as differences between offsets:
-        _numFaceVerts = _vTop._faceSizeOffsets[_vTop._numFaces];
+        _numFaceVerts = _vDesc._faceSizeOffsets[_vDesc._numFaces];
     }
 
     //  Vertex sharpness:
-    _isExpInfSharp  = Sdc::Crease::IsInfinite(_vTop._vertSharpness);
-    _isExpSemiSharp = Sdc::Crease::IsSemiSharp(_vTop._vertSharpness);
+    _isExpInfSharp  = Sdc::Crease::IsInfinite(_vDesc._vertSharpness);
+    _isExpSemiSharp = Sdc::Crease::IsSemiSharp(_vDesc._vertSharpness);
 
     //
     //  Initialize tags from VertexDescriptor and other members
@@ -88,15 +89,15 @@ FaceVertex::Finalize(int faceInVertex) {
     //
     _tag.Clear();
 
-    _tag._unCommonFaceSizes  = !_vTop.HasCommonFaceSize();
+    _tag._unCommonFaceSizes  = _vDesc.HasIncidentFaceSizes();
     _tag._irregularFaceSizes = (_commonFaceSize != _regFaceSize);
 
     _tag._infSharpVerts  = _isExpInfSharp;
     _tag._semiSharpVerts = _isExpSemiSharp;
 
-    _tag._unOrderedFaces = !_vTop.IsOrdered();
+    _tag._unOrderedFaces = !_vDesc.IsManifold();
 
-    if (_vTop.IsOrdered()) {
+    if (_vDesc.IsManifold()) {
         finalizeOrderedTags();
     }
 }
@@ -110,19 +111,19 @@ FaceVertex::finalizeOrderedTags() {
     _tag._unOrderedFaces   = false;
     _tag._nonManifoldVerts = false;
 
-    _tag._boundaryVerts    = _vTop.IsBoundary();
-    _tag._boundaryNonSharp = _vTop.IsBoundary();
+    _tag._boundaryVerts    = _vDesc.IsBoundary();
+    _tag._boundaryNonSharp = _vDesc.IsBoundary();
 
     //
     //  Assign tags (and other members) affected by edge sharpness:
     //
-    if (_vTop.HasEdgeSharpness()) {
-        float const * sharpness = &_vTop._faceEdgeSharpness[0];
+    if (_vDesc.HasEdgeSharpness()) {
+        float const * sharpness = &_vDesc._faceEdgeSharpness[0];
 
         //  Detect unsharpened boundary edges:
         bool isBoundary = _tag._boundaryVerts;
         if (isBoundary) {
-            int last = 2 * _vTop._numFaces - 1;
+            int last = 2 * _vDesc._numFaces - 1;
             _tag._boundaryNonSharp =
                     !Sdc::Crease::IsInfinite(sharpness[0]) ||
                     !Sdc::Crease::IsInfinite(sharpness[last]);
@@ -132,7 +133,7 @@ FaceVertex::finalizeOrderedTags() {
         int numInfSharpEdges  = 0;
         int numSemiSharpEdges = 0;
 
-        for (int i = isBoundary; i < _vTop._numFaces; ++i ) {
+        for (int i = isBoundary; i < _vDesc._numFaces; ++i ) {
             if (Sdc::Crease::IsInfinite(sharpness[2*i])) {
                 ++ numInfSharpEdges;
             } else if (Sdc::Crease::IsSharp(sharpness[2*i])) {
@@ -659,7 +660,7 @@ FaceVertex::createUnOrderedEdges(Edge        edges[],
     int numEdges = 0;
 
     //  Don't rely on the tag yet to determine presence of sharpness:
-    bool hasSharpness = _vTop.HasEdgeSharpness();
+    bool hasSharpness = _vDesc.HasEdgeSharpness();
 
     for (int feIndex = 0; feIndex < numFaceEdges; ++feIndex) {
         Index vIndex = (feIndex & 1) ?
