@@ -120,10 +120,6 @@ public:
     SurfaceFactoryCacheThreaded() : SurfaceFactoryCache() { }
     virtual ~SurfaceFactoryCacheThreaded() { }
 
-    SurfaceFactoryCacheThreaded(SurfaceFactoryCacheThreaded const &) = delete;
-    SurfaceFactoryCacheThreaded & operator=(
-                                SurfaceFactoryCacheThreaded const &) = delete;
-
 protected:
     /// @cond PROTECTED
     virtual DataType Find(KeyType const & key) const {

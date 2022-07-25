@@ -71,9 +71,9 @@ template <typename REAL>
 int
 Surface<REAL>::GetNumPatchPoints() const {
 
-    if (isRegular()) {
+    if (IsRegular()) {
         return GetNumControlPoints();
-    } else if (isLinear()) {
+    } else if (IsLinear()) {
         return 2 * GetNumControlPoints() + 1;
     } else {
         return getIrregPatch().GetNumPointsTotal();

@@ -42,12 +42,12 @@ Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) {
     int regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(scheme);
 
     _type     = (unsigned char) ((regFaceSize == 4) ? QUAD : TRI);
-    _faceSize = (unsigned short) std::min(faceSize, Limits::MaxFaceSize());
+    _faceSize = (unsigned short) faceSize;
     _uDim     = 0;
 
-    if (_faceSize != regFaceSize) {
-        if (_faceSize < 3) {
-            //  Reset size to 0 (invalid) for degenerate faces of all schemes:
+    if (faceSize != regFaceSize) {
+        if ((faceSize < 3) || (faceSize > Limits::MaxFaceSize())) {
+            //  Reset size to 0 (invalid) for degenerate or excessive size
             _faceSize = 0;
         } else if (regFaceSize == 3) {
             //  Reset size to 0 (invalid) for non-triangles of tri schemes:
@@ -55,9 +55,9 @@ Parameterization::Parameterization(Sdc::SchemeType scheme, int faceSize) {
         } else {
             //  Quad sub-faces -- use int sqrt for udim to preserve accuracy:
             _type = QUAD_SUBFACES;
-            _uDim = (_faceSize < 10) ?
-                    (unsigned char)(2 + (_faceSize > 4)) :
-                    (unsigned char)(1 + (int) std::sqrt((float)(_faceSize-1)));
+            _uDim = (faceSize < 10) ?
+                    (unsigned char)(2 + (faceSize > 4)) :
+                    (unsigned char)(1 + (int) std::sqrt((float)(faceSize - 1)));
         }
     }
 }

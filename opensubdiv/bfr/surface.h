@@ -280,13 +280,6 @@ private:
     internal::IrregularPatchType const & getIrregPatch() const;
 
 private:
-    //  Simple member accessors for internal use:
-    //  WIP - these are now redundant -- replaced with public versions
-    bool isValid() const   { return _data.isValid(); }
-    bool isRegular() const { return _data.isRegular(); }
-    bool isLinear() const  { return _data.isLinear(); }
-
-private:
     //  Access to the set of member variables - provided to the Factory:
     friend class SurfaceFactory;
 
@@ -307,8 +300,8 @@ inline void
 Surface<REAL>::ComputePatchPoints(REAL * points,
                                   PointDescriptor const & pointDesc) const {
 
-    if (!isRegular()) {
-        if (isLinear()) {
+    if (!IsRegular()) {
+        if (IsLinear()) {
             computeLinearPatchPoints(points, pointDesc);
         } else {
             computeIrregularPatchPoints(points, pointDesc);
@@ -336,9 +329,9 @@ Surface<REAL>::evaluateDerivs(REAL const uv[2],
                               REAL const patchPoints[],
                               PointDescriptor const & pointDesc,
                               REAL * derivatives[]) const {
-    if (isRegular()) {
+    if (IsRegular()) {
         evalRegularDerivs(uv, patchPoints, pointDesc, derivatives);
-    } else if (isLinear()) {
+    } else if (IsLinear()) {
         evalMultiLinearDerivs(uv, patchPoints, pointDesc, derivatives);
     } else {
         evalIrregularDerivs(uv, patchPoints, pointDesc, derivatives);
@@ -380,9 +373,9 @@ template <typename REAL>
 inline int
 Surface<REAL>::evaluateStencils(REAL const uv[2], REAL * sDeriv[]) const {
 
-    if (isRegular()) {
+    if (IsRegular()) {
         return evalRegularStencils(uv, sDeriv);
-    } else if (isLinear()) {
+    } else if (IsLinear()) {
         return evalMultiLinearStencils(uv, sDeriv);
     } else {
         return evalIrregularStencils(uv, sDeriv);

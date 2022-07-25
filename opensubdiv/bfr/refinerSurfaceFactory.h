@@ -87,10 +87,6 @@ public:
 
 protected:
     /// @cond PROTECTED
-    RefinerSurfaceFactoryBase(RefinerSurfaceFactoryBase const &) = delete;
-    RefinerSurfaceFactoryBase & operator=(
-                                RefinerSurfaceFactoryBase const &) = delete;
-
     //
     //  Virtual methods to satisfy the SurfaceFactoryAdapter interface:
     //
@@ -167,9 +163,6 @@ public:
 
 protected:
     /// @cond PROTECTED
-    RefinerSurfaceFactory(RefinerSurfaceFactory const &) = delete;
-    RefinerSurfaceFactory & operator=(RefinerSurfaceFactory const &) = delete;
-
     virtual SurfaceFactoryCache * getInternalCache() const {
         return & _localCache;
     }

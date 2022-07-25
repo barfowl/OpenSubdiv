@@ -223,7 +223,8 @@ __numIrregularInCache  = 0;
 inline bool
 SurfaceFactory::faceHasLimitSimple(Index faceIndex, int faceSize) const {
 
-    return (faceSize >= 3) && !isFaceHole(faceIndex);
+    return (faceSize >= 3) && (faceSize <= Limits::MaxFaceSize()) &&
+           !isFaceHole(faceIndex);
 }
 
 bool

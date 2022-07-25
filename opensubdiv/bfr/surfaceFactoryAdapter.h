@@ -83,9 +83,6 @@ protected:
     /// @cond PROTECTED
     SurfaceFactoryAdapter() { }
     virtual ~SurfaceFactoryAdapter() { }
-
-    SurfaceFactoryAdapter(SurfaceFactoryAdapter const &) = delete;
-    SurfaceFactoryAdapter & operator=(SurfaceFactoryAdapter const &) = delete;
     /// @endcond
 
 protected:
