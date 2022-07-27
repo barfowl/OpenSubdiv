@@ -88,34 +88,34 @@ public:
 protected:
     /// @cond PROTECTED
     //
-    //  Virtual methods to satisfy the SurfaceFactoryAdapter interface:
+    //  Virtual overrides to satisfy the SurfaceFactoryAdapter interface:
     //
-    virtual bool isFaceHole( Index faceIndex) const;
-    virtual int  getFaceSize(Index faceIndex) const;
+    bool isFaceHole( Index faceIndex) const override;
+    int  getFaceSize(Index faceIndex) const override;
 
-    virtual int getFaceVertexIndices(Index faceIndex,
-                                    Index vertexIndices[]) const;
-    virtual int getFaceFVarValueIndices(Index faceIndex, FVarID fvarID,
-                                        Index fvarValueIndices[]) const;
+    int getFaceVertexIndices(Index faceIndex,
+                        Index vertexIndices[]) const override;
+    int getFaceFVarValueIndices(Index faceIndex,
+                        FVarID fvarID, Index fvarValueIndices[]) const override;
 
-    virtual int populateFaceVertexDescriptor(Index faceIndex, int faceVertex,
-                                     VertexDescriptor * vertexDescriptor) const;
+    int populateFaceVertexDescriptor(Index faceIndex, int faceVertex,
+                        VertexDescriptor * vertexDescriptor) const override;
 
-    virtual int getFaceVertexIncidentFaceVertexIndices(
-                            Index faceIndex, int faceVertex,
-                            Index vertexIndices[]) const;
-    virtual int getFaceVertexIncidentFaceFVarValueIndices(
-                            Index faceIndex, int faceVertex, FVarID fvarID,
-                            Index fvarValueIndices[]) const;
+    int getFaceVertexIncidentFaceVertexIndices(
+                        Index faceIndex, int faceVertex,
+                        Index vertexIndices[]) const override;
+    int getFaceVertexIncidentFaceFVarValueIndices(
+                        Index faceIndex, int faceVertex,
+                        FVarID fvarID, Index fvarValueIndices[]) const override;
 
     //  Optional SurfaceFactoryAdapter overrides for regular patches:
-    virtual bool getFaceNeighborhoodVertexIndicesIfRegular(
-                            Index faceIndex,
-                            Index vertexIndices[]) const;
+    bool getFaceNeighborhoodVertexIndicesIfRegular(
+                        Index faceIndex,
+                        Index vertexIndices[]) const override;
 
-    virtual bool getFaceNeighborhoodFVarValueIndicesIfRegular(
-                            Index faceIndex,
-                            FVarID fvarID, Index fvarValueIndices[]) const;
+    bool getFaceNeighborhoodFVarValueIndicesIfRegular(
+                        Index faceIndex,
+                        FVarID fvarID, Index fvarValueIndices[]) const override;
     /// @endcond
 
 private:
@@ -163,7 +163,8 @@ public:
 
 protected:
     /// @cond PROTECTED
-    virtual SurfaceFactoryCache * getInternalCache() const {
+    //  Virtual override -- and last pure virtual
+    SurfaceFactoryCache * getInternalCache() const override {
         return & _localCache;
     }
     /// @endcond

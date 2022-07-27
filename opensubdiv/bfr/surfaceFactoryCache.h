@@ -122,12 +122,15 @@ public:
 
 protected:
     /// @cond PROTECTED
-    virtual DataType Find(KeyType const & key) const {
+    //
+    //  Virtual overrides from base:
+    //
+    DataType Find(KeyType const & key) const override {
         READ_LOCK_GUARD_TYPE lockGuard(_mutex);
         return find(key);
     }
 
-    virtual DataType Add(KeyType const & key, DataType const & data){
+    DataType Add(KeyType const & key, DataType const & data) override {
         WRITE_LOCK_GUARD_TYPE lockGuard(_mutex);
         return add(key, data);
     }

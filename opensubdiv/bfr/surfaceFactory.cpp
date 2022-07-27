@@ -23,6 +23,7 @@
 //
 
 #include "../bfr/hash.h"
+#include "../bfr/limits.h"
 #include "../bfr/surface.h"
 #include "../bfr/surfaceFactory.h"
 #include "../bfr/surfaceFactoryCache.h"

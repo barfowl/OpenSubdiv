@@ -162,6 +162,8 @@ public:
     };
 
 public:
+    virtual ~SurfaceFactory();
+
     //@{
     /// @name Simple queries of subdivision properties
     ///
@@ -365,8 +367,6 @@ protected:
 
     SurfaceFactory(SurfaceFactory const &) = delete;
     SurfaceFactory & operator=(SurfaceFactory const &) = delete;
-
-    virtual ~SurfaceFactory();
     //@}
 
     //@{

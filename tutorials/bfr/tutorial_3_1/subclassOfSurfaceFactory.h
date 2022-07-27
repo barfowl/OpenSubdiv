@@ -71,35 +71,35 @@ public:
 
 protected:
     //
-    //  Virtual methods to satisfy topological requirements:
+    //  Required virtual overrides to satisfy topological requirements:
     //
-    bool isFaceHole( Index faceIndex) const;
-    int  getFaceSize(Index faceIndex) const;
+    bool isFaceHole( Index faceIndex) const override;
+    int  getFaceSize(Index faceIndex) const override;
 
     int getFaceVertexIndices(   Index faceIndex,
-                                Index vertexIndices[]) const;
+                                Index vertexIndices[]) const override;
     int getFaceFVarValueIndices(Index faceIndex, FVarID fvarID,
-                                Index fvarValueIndices[]) const;
+                                Index fvarValueIndices[]) const override;
 
     int populateFaceVertexDescriptor(Index faceIndex, int faceVertex,
-                            OpenSubdiv::Bfr::VertexDescriptor * vd) const;
+                            OpenSubdiv::Bfr::VertexDescriptor *) const override;
 
     int getFaceVertexIncidentFaceVertexIndices(
                             Index faceIndex, int faceVertex,
-                            Index vertexIndices[]) const;
+                            Index vertexIndices[]) const override;
     int getFaceVertexIncidentFaceFVarValueIndices(
                             Index faceIndex, int faceVertex, FVarID fvarID,
-                            Index fvarValueIndices[]) const;
+                            Index fvarValueIndices[]) const override;
 
 protected:
     //
-    //  Virtual method to access the local topology cache:
+    //  Required virtual override to access the local topology cache:
     //
     //  The virtual method to retrieve a reference to a local cache will
     //  be invoked when/if necessary. Recall that an externally defined
     //  shared cache can be specified in the Options and takes precedence.
     //
-    OpenSubdiv::Bfr::SurfaceFactoryCache * getInternalCache() const {
+    OpenSubdiv::Bfr::SurfaceFactoryCache * getInternalCache() const override {
         return & _localCache;
     }
 

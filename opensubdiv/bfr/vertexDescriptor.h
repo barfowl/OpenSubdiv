@@ -27,8 +27,6 @@
 
 #include "../version.h"
 
-#include "../bfr/limits.h"
-
 #include "../vtr/stackBuffer.h"
 
 namespace OpenSubdiv {
