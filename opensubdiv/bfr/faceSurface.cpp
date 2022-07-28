@@ -24,6 +24,7 @@
 
 #include "../bfr/faceSurface.h"
 
+#include <algorithm>
 #include <cstring>
 #include <cstdio>
 

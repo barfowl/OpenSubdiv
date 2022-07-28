@@ -624,18 +624,18 @@ template class Surface<double>;
 //  Explicitly instantiate template methods for converting precision:
 //
 template void Surface<float>::GatherControlPoints(
-                      float const *, PointDescriptor const &,
-                      float       *, PointDescriptor const &) const;
-template void Surface<float>::GatherControlPoints(
-                      double const *, PointDescriptor const &,
+                      float const [], PointDescriptor const &,
                       float        *, PointDescriptor const &) const;
+template void Surface<float>::GatherControlPoints(
+                      double const [], PointDescriptor const &,
+                      float         *, PointDescriptor const &) const;
 
 template void Surface<double>::GatherControlPoints(
-                      double const *, PointDescriptor const &,
-                      double       *, PointDescriptor const &) const;
+                      double const [], PointDescriptor const &,
+                      double        *, PointDescriptor const &) const;
 template void Surface<double>::GatherControlPoints(
-                      float const *, PointDescriptor const &,
-                      double      *, PointDescriptor const &) const;
+                      float const [], PointDescriptor const &,
+                      double       *, PointDescriptor const &) const;
 
 } // end namespace Bfr
 

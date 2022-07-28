@@ -25,6 +25,7 @@
 #include "../bfr/faceVertex.h"
 #include "../sdc/crease.h"
 
+#include <algorithm>
 #include <cstring>
 #include <cstdio>
 #include <map>

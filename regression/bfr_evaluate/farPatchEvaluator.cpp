@@ -61,7 +61,7 @@ FarPatchEvaluator<REAL>::FarPatchEvaluator(
     patchOptions.endCapType =
         Far::PatchTableFactory::Options::ENDCAP_GREGORY_BASIS;
 
-    bool hasUVs = baseUVs.size();
+    bool hasUVs = !baseUVs.empty();
     int  fvarChannel = 0;
 
     patchOptions.generateFVarTables = hasUVs;
