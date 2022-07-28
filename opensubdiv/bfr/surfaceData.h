@@ -49,8 +49,10 @@ namespace internal {
 //
 class SurfaceData {
 public:
-    SurfaceData()  { initialize(); }
-    ~SurfaceData() { clear(); }
+    SurfaceData();
+    SurfaceData(SurfaceData const & src) { *this = src; }
+    SurfaceData & operator=(SurfaceData const & src);
+    ~SurfaceData() { invalidate(); }
 
 public:
     //  Simple accessors used by both Surface and SurfaceFactory:
@@ -77,9 +79,8 @@ public:
 
 public:
     //  Modifiers used by SurfaceFactory to assemble a Surface:
-    void clear();
-    void initialize();
-    void reinitialize() { if (isValid()) clear(), initialize(); }
+    void invalidate();
+    void reinitialize() { if (isValid()) invalidate(); }
 
     Index * getCVIndices() { return &_cvIndices[0]; }
     Index * resizeCVs(int size) {

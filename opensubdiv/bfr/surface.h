@@ -54,9 +54,6 @@ namespace Bfr {
 /// All Surfaces are assigned a Parameterization based on the subdivision
 /// scheme and the size of the face, which can then be used for evaluation
 /// and tessellation of the surface.
-//
-/// Surface is also non-copyable, so care should be taken when managing
-/// multiple surfaces declared for initialization by a factory.
 ///
 template <typename REAL>
 class Surface {
@@ -78,15 +75,24 @@ public:
     //@{
     /// @name Construction and initialization
     ///
-    /// Instances of Surface are initialized by SurfaceFactory and so
-    /// only default construction is provided.
+    /// Instances of Surface may be explicitly constructed, but are
+    /// initialized by SurfaceFactory and so only default construction
+    /// is provided. An instance will be invalid (and so unusable) if
+    /// default constructed, or if the factory that initialized it
+    /// determined that the face associated with it has no limit surface.
     ///
 
-    Surface();
-    ~Surface() { }
+    /// @brief Return if successfully initialized
+    bool IsValid() const { return _data.isValid(); }
 
     /// @brief Clear a previously initialized Surface
     void Clear() { _data.reinitialize(); }
+
+    /// @brief Default construction produces an invalid Surface
+    Surface();
+    Surface(Surface const & src) = default;
+    Surface& operator=(Surface const & src) = default;
+    ~Surface() = default;
     //@}
 
     //@{
@@ -94,9 +100,6 @@ public:
     ///
     /// Simple queries of an initialized Surface.
     ///
-
-    /// @brief Return if the Surface is valid
-    bool IsValid() const { return _data.isValid(); }
 
     /// @brief Return the Parameterization
     Parameterization GetParameterization() const { return _data.getParam(); }
@@ -241,10 +244,6 @@ public:
                             REAL const controlPoints[], PointDescriptor const &,
                             REAL result[]) const;
     //@}
-
-private:  // non-copyable:
-    Surface(Surface const &);
-    Surface & operator=(Surface const &);
 
 private:
     //  Internal methods for evaluating derivatives, basis weights and

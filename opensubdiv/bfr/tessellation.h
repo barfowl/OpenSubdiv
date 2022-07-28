@@ -158,6 +158,11 @@ public:
     Tessellation(Parameterization const & p, int numRates, int const rates[],
                  Options const & options = Options());
 
+    /// @brief Default construction is unavailable
+    Tessellation() = delete;
+
+    Tessellation(Tessellation const &) = delete;
+    Tessellation & operator=(Tessellation const &) = delete;
     ~Tessellation();
     //@}
 

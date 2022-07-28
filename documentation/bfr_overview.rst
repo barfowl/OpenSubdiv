@@ -266,10 +266,10 @@ The cost of evaluating stencils is considerably higher than direct
 evaluation, but that added overhead is often offset by avoiding the
 use of patch points.
 
-Surfaces should be considered a class for transient use.  They are
-non-copyable and retaining them for longer term usage reduces their
-benefits. The initialization cost of irregular Surfaces can be a
-deterrent and motivate their retention despite increased memory costs.
+Surfaces should be considered a class for transient use as retaining
+them for longer term usage can reduce their benefits. The relatively
+high cost of initialization of irregular Surfaces can be a deterrent
+and often motivates their retention despite increased memory costs.
 Retaining all Surfaces of a mesh for random sampling is a situation
 that should be undertaken with caution and will be discussed in more
 detail later with other advanced topics.

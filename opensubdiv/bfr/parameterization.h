@@ -66,20 +66,32 @@ public:
 
 public:
     //@{
-    /// @name Construction and simple queries
+    /// @name Construction and initialization
     ///
-    /// Construction and simple queries.
+    /// Valid construction of a Parameterization is only achieved with
+    /// the non-default constructor. A Parameterization will be invalid
+    /// (and so unusable) if default constructed, or constructed using
+    /// arguments that describe a face that cannot be parameterized.
     ///
-
-    Parameterization() : _faceSize(0) { }
 
     /// @brief Primary constructor with subdivision scheme and face size
     Parameterization(Sdc::SchemeType scheme, int faceSize);
 
-    ~Parameterization() { }
-
     /// @brief Returns true if correctly initialized
     bool IsValid() const { return (_faceSize > 0); }
+
+    /// @brief Default construction produces an invalid Parameterization
+    Parameterization() : _type(0), _uDim(0), _faceSize(0) { }
+    Parameterization(Parameterization const &) = default;
+    Parameterization & operator=(Parameterization const &) = default;
+    ~Parameterization() = default;
+    //@}
+
+    //@{
+    /// @name Simple queries
+    ///
+    /// Simple queries of an initialized Parameterization.
+    ///
 
     /// @brief Returns the type of parameterization assigned
     Type GetType() const { return (Type) _type; }

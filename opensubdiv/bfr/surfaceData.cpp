@@ -32,27 +32,50 @@ namespace Bfr {
 namespace internal {
 
 //
-//  Low level methods to initialize and clear data members of Surface --
-//  used frequently by the SurfaceFactory to repopulate instances:
+//  Constructors and other methods to manage data members for copy and
+//  destruction:
 //
-void
-SurfaceData::initialize() {
+SurfaceData::SurfaceData() : _cvIndices(), _param(),
+    _isValid(false),
+    _isDouble(false),
+    _isRegular(true),
+    _isLinear(false),
+    _regPatchType(0),
+    _regPatchMask(0),
+    _irregPatch() {
+}
 
-    _isValid  = false;
-    _isDouble = false;
+SurfaceData & 
+SurfaceData::operator=(SurfaceData const & src) {
 
-    _isRegular = true;
-    _isLinear  = false;
+    //  No need to explicitly manage pre-exising resources in destination
+    //  as they will be either re-used or released when re-assigned
 
-    _regPatchMask = 0;
-    _regPatchType = 0;
+    //  No copy/operator= supported by StackBuffer so resize and copy:
+    _cvIndices.SetSize(src._cvIndices.GetSize());
+    std::memcpy(&_cvIndices[0],
+        &src._cvIndices[0], src._cvIndices.GetSize() * sizeof(Index));
 
-    _irregPatch = 0;
+    _param = src._param;
+
+    _isValid      = src._isValid;
+    _isDouble     = src._isDouble;
+    _isRegular    = src._isRegular;
+    _isLinear     = src._isLinear;
+    _regPatchType = src._regPatchType;
+    _regPatchMask = src._regPatchMask;
+    _irregPatch   = src._irregPatch;
+
+    return *this;
 }
 
 void
-SurfaceData::clear() {
+SurfaceData::invalidate() {
 
+    //  Release any attached memory before marking as invalid:
+    _irregPatch = 0;
+
+    _isValid = false;
 }
 
 } // end namespace internal
