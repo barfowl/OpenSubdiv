@@ -22,27 +22,23 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
+//------------------------------------------------------------------------------
+//  Tutorial description:
 //
-//  Description:
-//      This tutorial illustrates the definition of a subclass of
-//      Bfr::SurfaceFactory -- providing a class with the SurfaceFactory
-//      interface adapted to a connected mesh representation.
+//      This tutorial builds on the previous tutorial that makes use of the
+//      SurfaceFactory and Surface for evaluating the limit surface of faces
+//      by using the Tessellation class to determine the points to evaluate
+//      and the faces that connect them.
 //
-//      The bulk of this code is therefore identical to tutorial 1.2,
-//      which illustrates simple use of a Bfr::Surface factory. The only
-//      difference here lies in the explicit local definition of the
-//      subclass of Bfr::SurfaceFactory for Far::TopologyRefiner -- named
-//      SubclassOfSurfaceFactory in this case.
+//      The Tessellation class replaces the explicit determination of points
+//      and faces for the triangle fan of the previous example. Given a
+//      uniform tessellation rate (via a command line option), Tessellation
+//      returns the set of coordinates to evaluate, and separately returns
+//      the faces that connect them.
 //
-
-#include "subclassOfSurfaceFactory.h"
-
-#include "meshLoader.h"
-#include "objWriter.h"
-
-#include "../../../regression/common/far_utils.h"
 
 #include <opensubdiv/far/topologyRefiner.h>
+#include <opensubdiv/bfr/refinerSurfaceFactory.h>
 #include <opensubdiv/bfr/surface.h>
 #include <opensubdiv/bfr/tessellation.h>
 
@@ -51,10 +47,14 @@
 #include <cstring>
 #include <cstdio>
 
+//  Local headers with support for this tutorial in "namespace tutorial"
+#include "./meshLoader.h"
+#include "./objWriter.h"
+
 using namespace OpenSubdiv;
 
 //
-//  Command line arguments parsed to provide run-time options:
+//  Simple command line arguments to provide input and run-time options:
 //
 class Args {
 public:
@@ -65,7 +65,7 @@ public:
     bool            tessQuadsFlag;
 
 public:
-    Args(int argc, char ** argv) :
+    Args(int argc, char * argv[]) :
         inputObjFile(),
         outputObjFile(),
         schemeType(Sdc::SCHEME_CATMARK),
@@ -115,7 +115,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
     //
     //  Use simpler local type names for the Surface and its factory:
     //
-    typedef SubclassOfSurfaceFactory     SurfaceFactory;
+    typedef Bfr::RefinerSurfaceFactory<> SurfaceFactory;
     typedef Bfr::Surface<float>          Surface;
 
     //
@@ -246,7 +246,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
 //  Load command line arguments, specified or default geometry and process:
 //
 int
-main(int argc, char **argv) {
+main(int argc, char * argv[]) {
 
     Args args(argc, argv);
 
@@ -265,3 +265,5 @@ main(int argc, char **argv) {
     delete meshTopology;
     return EXIT_SUCCESS;
 }
+
+//------------------------------------------------------------------------------

@@ -22,8 +22,9 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
+//------------------------------------------------------------------------------
+//  Tutorial description:
 //
-//  Description:
 //      This tutorial builds on others using the SurfaceFactory, Surface
 //      and Tessellation classes by using more of the functionality of the
 //      Tessellation class to construct a tessellation of the mesh that is
@@ -38,11 +39,6 @@
 //      the shared set of points.
 //
 
-#include "meshLoader.h"
-#include "objWriter.h"
-
-#include "../../../regression/common/far_utils.h"
-
 #include <opensubdiv/far/topologyRefiner.h>
 #include <opensubdiv/bfr/refinerSurfaceFactory.h>
 #include <opensubdiv/bfr/surface.h>
@@ -53,6 +49,10 @@
 #include <cstring>
 #include <cstdio>
 
+//  Local headers with support for this tutorial in "namespace tutorial"
+#include "./meshLoader.h"
+#include "./objWriter.h"
+
 using namespace OpenSubdiv;
 
 using Far::Index;
@@ -60,7 +60,7 @@ using Far::IndexArray;
 using Far::ConstIndexArray;
 
 //
-//  Command line arguments parsed to provide run-time options:
+//  Simple command line arguments to provide input and run-time options:
 //
 class Args {
 public:
@@ -71,7 +71,7 @@ public:
     bool            tessQuadsFlag;
 
 public:
-    Args(int argc, char ** argv) :
+    Args(int argc, char * argv[]) :
         inputObjFile(),
         outputObjFile(),
         schemeType(Sdc::SCHEME_CATMARK),
@@ -396,7 +396,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
 //  Load command line arguments, specified or default geometry and process:
 //
 int
-main(int argc, char **argv) {
+main(int argc, char * argv[]) {
 
     Args args(argc, argv);
 
@@ -415,3 +415,5 @@ main(int argc, char **argv) {
     delete meshTopology;
     return EXIT_SUCCESS;
 }
+
+//------------------------------------------------------------------------------

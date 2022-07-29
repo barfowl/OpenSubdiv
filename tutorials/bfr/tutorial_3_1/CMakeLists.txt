@@ -23,8 +23,8 @@
 #
 
 set(SOURCE_FILES
-    main.cpp
-    subclassOfSurfaceFactory.cpp
+    bfr_tutorial_3_1.cpp
+    customSurfaceFactory.cpp
 )
 
 osd_add_executable(bfr_tutorial_3_1 "tutorials/bfr"

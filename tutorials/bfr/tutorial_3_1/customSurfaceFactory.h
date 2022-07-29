@@ -45,7 +45,7 @@
 //  varying channels, which the SurfaceFactory can use directly, so a more
 //  explicit association of primvars with integers is not necessary here.
 //
-class SubclassOfSurfaceFactory : public OpenSubdiv::Bfr::SurfaceFactory {
+class CustomSurfaceFactory : public OpenSubdiv::Bfr::SurfaceFactory {
 public:
     typedef OpenSubdiv::Far::TopologyRefiner TopologyRefiner;
 
@@ -53,9 +53,9 @@ public:
     //
     //  Subclass-specific constructor:
     //
-    SubclassOfSurfaceFactory(TopologyRefiner const & mesh,
-                             Options const & options = Options());
-    ~SubclassOfSurfaceFactory() override = default;
+    CustomSurfaceFactory(TopologyRefiner const & mesh,
+                         Options const & options = Options());
+    ~CustomSurfaceFactory() override = default;
 
     //
     //  Additional subclass-specific public methods:
@@ -134,11 +134,11 @@ private:
 //  Simple inline extensions to the public interface:
 //
 inline int
-SubclassOfSurfaceFactory::GetNumFaces() const {
+CustomSurfaceFactory::GetNumFaces() const {
     return _mesh.GetLevel(0).GetNumFaces();
 }
 
 inline int
-SubclassOfSurfaceFactory::GetNumFVarChannels() const {
+CustomSurfaceFactory::GetNumFVarChannels() const {
     return _mesh.GetNumFVarChannels();
 }

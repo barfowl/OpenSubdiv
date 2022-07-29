@@ -22,8 +22,9 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
+//------------------------------------------------------------------------------
+//  Tutorial description:
 //
-//  Description:
 //      This tutorial illustrates the use of the SurfaceFactory, Surface
 //      and Parameterization classes for creating and evaluating the limit
 //      surface associated with each base face of a mesh.
@@ -41,11 +42,6 @@
 //      more useful results with the same simplicity.
 //
 
-#include "meshLoader.h"
-#include "objWriter.h"
-
-#include "../../../regression/common/far_utils.h"
-
 #include <opensubdiv/far/topologyRefiner.h>
 #include <opensubdiv/bfr/refinerSurfaceFactory.h>
 #include <opensubdiv/bfr/surface.h>
@@ -55,10 +51,14 @@
 #include <cstring>
 #include <cstdio>
 
+//  Local headers with support for this tutorial in "namespace tutorial"
+#include "./meshLoader.h"
+#include "./objWriter.h"
+
 using namespace OpenSubdiv;
 
 //
-//  Command line arguments parsed to provide run-time options:
+//  Simple command line arguments to provide input and run-time options:
 //
 class Args {
 public:
@@ -67,7 +67,7 @@ public:
     Sdc::SchemeType schemeType;
 
 public:
-    Args(int argc, char ** argv) :
+    Args(int argc, char * argv[]) :
         inputObjFile(),
         outputObjFile(),
         schemeType(Sdc::SCHEME_CATMARK) {
@@ -236,7 +236,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
 //  Load command line arguments, specified or default geometry and process:
 //
 int
-main(int argc, char **argv) {
+main(int argc, char * argv[]) {
 
     Args args(argc, argv);
 
@@ -255,3 +255,5 @@ main(int argc, char **argv) {
     delete meshTopology;
     return EXIT_SUCCESS;
 }
+
+//------------------------------------------------------------------------------

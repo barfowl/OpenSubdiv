@@ -22,7 +22,7 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#include "subclassOfSurfaceFactory.h"
+#include "./customSurfaceFactory.h"
 
 #include <opensubdiv/bfr/limits.h>
 #include <opensubdiv/bfr/vertexDescriptor.h>
@@ -42,7 +42,7 @@ using OpenSubdiv::Far::ConstLocalIndexArray;
 //
 //  Main constructor and destructor:
 //
-SubclassOfSurfaceFactory::SubclassOfSurfaceFactory(
+CustomSurfaceFactory::CustomSurfaceFactory(
     TopologyRefiner const & mesh, Options const & factoryOptions) :
         SurfaceFactory(mesh.GetSchemeType(),
                        mesh.GetSchemeOptions(),
@@ -56,12 +56,16 @@ SubclassOfSurfaceFactory::SubclassOfSurfaceFactory(
 
 //
 //  Inline support method to provide a valid face-varying channel from
-//  a given face-varying ID/handle used in the factory interface:
+//  a given face-varying ID used in the factory interface:
 //
 inline int
-SubclassOfSurfaceFactory::getFaceVaryingChannel(FVarID fvarID) const {
+CustomSurfaceFactory::getFaceVaryingChannel(FVarID fvarID) const {
 
-    return ((0 <= fvarID) && (fvarID < GetNumFVarChannels())) ? (int)fvarID : -1;
+    //  Verify bounds as the FVarIDs are specified by end users:
+    if ((fvarID >= 0) && (fvarID < GetNumFVarChannels())) {
+        return (int) fvarID;
+    }
+    return -1;
 }
 
 
@@ -71,13 +75,13 @@ SubclassOfSurfaceFactory::getFaceVaryingChannel(FVarID fvarID) const {
 //  Simple/trivial face queries:
 //
 bool
-SubclassOfSurfaceFactory::isFaceHole(Index face) const {
+CustomSurfaceFactory::isFaceHole(Index face) const {
 
     return _mesh.HasHoles() && _mesh.GetLevel(0).IsFaceHole(face);
 }
 
 int
-SubclassOfSurfaceFactory::getFaceSize(Index baseFace) const {
+CustomSurfaceFactory::getFaceSize(Index baseFace) const {
 
     return _mesh.GetLevel(0).GetFaceVertices(baseFace).size();
 }
@@ -86,7 +90,7 @@ SubclassOfSurfaceFactory::getFaceSize(Index baseFace) const {
 //  Specifying vertex or face-varying indices for a face:
 //
 int
-SubclassOfSurfaceFactory::getFaceVertexIndices(Index baseFace,
+CustomSurfaceFactory::getFaceVertexIndices(Index baseFace,
         Index indices[]) const {
 
     ConstIndexArray fVerts = _mesh.GetLevel(0).GetFaceVertices(baseFace);
@@ -96,7 +100,7 @@ SubclassOfSurfaceFactory::getFaceVertexIndices(Index baseFace,
 }
 
 int
-SubclassOfSurfaceFactory::getFaceFVarValueIndices(Index baseFace,
+CustomSurfaceFactory::getFaceFVarValueIndices(Index baseFace,
         FVarID fvarID, Index indices[]) const {
 
     int fvarChannel = getFaceVaryingChannel(fvarID);
@@ -113,7 +117,7 @@ SubclassOfSurfaceFactory::getFaceFVarValueIndices(Index baseFace,
 //  Specifying the topology around a face-vertex:
 //
 int
-SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
+CustomSurfaceFactory::populateFaceVertexDescriptor(
         Index baseFace, int cornerVertex,
         OpenSubdiv::Bfr::VertexDescriptor * vertexDescriptor) const {
 
@@ -221,7 +225,7 @@ SubclassOfSurfaceFactory::populateFaceVertexDescriptor(
 //  the indices for a particular vertex Index:
 //
 int
-SubclassOfSurfaceFactory::getFaceVertexIncidentFaceVertexIndices(
+CustomSurfaceFactory::getFaceVertexIncidentFaceVertexIndices(
         Index baseFace, int cornerVertex,
         Index indices[]) const {
 
@@ -229,7 +233,7 @@ SubclassOfSurfaceFactory::getFaceVertexIncidentFaceVertexIndices(
 }
 
 int
-SubclassOfSurfaceFactory::getFaceVertexIncidentFaceFVarValueIndices(
+CustomSurfaceFactory::getFaceVertexIncidentFaceFVarValueIndices(
         Index baseFace, int corner,
         FVarID fvarID, Index indices[]) const {
 
@@ -240,7 +244,7 @@ SubclassOfSurfaceFactory::getFaceVertexIncidentFaceFVarValueIndices(
 }
 
 int
-SubclassOfSurfaceFactory::getFaceVertexPointIndices(
+CustomSurfaceFactory::getFaceVertexPointIndices(
         Index baseFace, int cornerVertex,
         Index indices[], int vtxOrFVarChannel) const {
 

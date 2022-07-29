@@ -23,7 +23,7 @@
 #
 
 set(SOURCE_FILES
-    main.cpp
+    bfr_tutorial_2_2.cpp
 )
 
 osd_add_executable(bfr_tutorial_2_2 "tutorials/bfr"

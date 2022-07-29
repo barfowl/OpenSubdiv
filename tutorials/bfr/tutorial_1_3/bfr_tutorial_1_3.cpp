@@ -22,8 +22,9 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
+//------------------------------------------------------------------------------
+//  Tutorial description:
 //
-//  Description:
 //      This tutorial builds on the previous tutorial that makes use of the
 //      SurfaceFactory, Surface and Tessellation classes for evaluating and
 //      tessellating the limit surface of faces of a mesh by adding support
@@ -33,11 +34,6 @@
 //      with the vertex positions and normals (previously illustrated) as
 //      part of the tessellation written to the Obj file.
 //
-
-#include "meshLoader.h"
-#include "objWriter.h"
-
-#include "../../../regression/common/far_utils.h"
 
 #include <opensubdiv/far/topologyRefiner.h>
 #include <opensubdiv/bfr/refinerSurfaceFactory.h>
@@ -49,10 +45,14 @@
 #include <cstring>
 #include <cstdio>
 
+//  Local headers with support for this tutorial in "namespace tutorial"
+#include "./meshLoader.h"
+#include "./objWriter.h"
+
 using namespace OpenSubdiv;
 
 //
-//  Command line arguments parsed to provide run-time options:
+//  Simple command line arguments to provide input and run-time options:
 //
 class Args {
 public:
@@ -64,7 +64,7 @@ public:
     bool            uv2xyzFlag;
 
 public:
-    Args(int argc, char ** argv) :
+    Args(int argc, char * argv[]) :
         inputObjFile(),
         outputObjFile(),
         schemeType(Sdc::SCHEME_CATMARK),
@@ -111,8 +111,8 @@ private:
 //
 void
 tessellateToObj(Far::TopologyRefiner const & meshTopology,
-                std::vector<float>   const & meshVtxData,  int vtxDataSize,
-                std::vector<float>   const & meshFVarData, int fvarDataSize,
+                std::vector<float>   const & meshVertexPositions,
+                std::vector<float>   const & meshFaceVaryingUVs,
                 Args                 const & options) {
 
     //
@@ -120,21 +120,6 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
     //
     typedef Bfr::RefinerSurfaceFactory<> SurfaceFactory;
     typedef Bfr::Surface<float>          Surface;
-    typedef Surface::PointDescriptor     SurfacePoint;
-
-    //
-    //  Identify the source positions and UVs within more general data
-    //  arrays for the mesh. If position and/or UV are not at the start
-    //  of the vtx and/or fvar data, simply offset the head of the array
-    //  here accordingly:
-    //
-    bool meshHasUVs = (meshTopology.GetNumFVarChannels() > 0);
-
-    float const * meshPosData = meshVtxData.data();
-    SurfacePoint  meshPosPoint(3, vtxDataSize);
-
-    float const * meshUVData = meshHasUVs ? meshFVarData.data() : 0;
-    SurfacePoint  meshUVPoint(2, fvarDataSize);
 
     //
     //  Initialize the SurfaceFactory for the given base mesh (very low
@@ -155,6 +140,8 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
     //  identifier when only one is present (or of interest), it can be
     //  specified via the Options.
     //
+    bool meshHasUVs = (meshTopology.GetNumFVarChannels() > 0);
+
     SurfaceFactory::Options surfaceOptions;
     if (meshHasUVs) {
         surfaceOptions.SetDefaultFVarID(0);
@@ -250,7 +237,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
         //  Evaluate vertex positions:
         {
             //  Resize patch point and output arrays:
-            int pointSize = meshPosPoint.size;
+            int pointSize = 3;
 
             facePatchPoints.resize(posSurface.GetNumPatchPoints() * pointSize);
 
@@ -259,15 +246,12 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
             outDv.resize(numOutCoords * pointSize);
 
             //  Populate patch point and output arrays:
-            float       * patchPosData = facePatchPoints.data();
-            SurfacePoint  patchPosPoint(pointSize);
-
-            posSurface.PreparePatchPoints(meshPosData,  meshPosPoint,
-                                          patchPosData, patchPosPoint);
+            posSurface.PreparePatchPoints(meshVertexPositions.data(), pointSize,
+                                          facePatchPoints.data(), pointSize);
 
             for (int i = 0, j = 0; i < numOutCoords; ++i, j += pointSize) {
                 posSurface.Evaluate(&outCoords[i*2],
-                                    patchPosData, patchPosPoint,
+                                    facePatchPoints.data(), pointSize,
                                     &outPos[j], &outDu[j], &outDv[j]);
             }
         }
@@ -276,22 +260,19 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
         if (meshHasUVs) {
             //  Resize patch point and output arrays:
             //      - note reuse of the same patch point array as position
-            int pointSize = meshUVPoint.size;
+            int pointSize = 2;
 
             facePatchPoints.resize(uvSurface.GetNumPatchPoints() * pointSize);
 
             outUV.resize(numOutCoords * pointSize);
 
             //  Populate patch point and output arrays:
-            float      * patchUVData = facePatchPoints.data();
-            SurfacePoint patchUVPoint(pointSize);
-
-            uvSurface.PreparePatchPoints(meshUVData,  meshUVPoint,
-                                         patchUVData, patchUVPoint);
+            uvSurface.PreparePatchPoints(meshFaceVaryingUVs.data(), pointSize,
+                                         facePatchPoints.data(), pointSize);
 
             for (int i = 0, j = 0; i < numOutCoords; ++i, j += pointSize) {
                 uvSurface.Evaluate(&outCoords[i*2],
-                                   patchUVData, patchUVPoint,
+                                   facePatchPoints.data(), pointSize,
                                    &outUV[j]);
             }
         }
@@ -336,7 +317,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
 //  Load command line arguments, specified or default geometry and process:
 //
 int
-main(int argc, char **argv) {
+main(int argc, char * argv[]) {
 
     Args args(argc, argv);
 
@@ -350,34 +331,10 @@ main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    //
-    //  Expand the loaded position and UV arrays to include additional
-    //  data (initialized with -1 for distinction), e.g. add a 4-tuple
-    //  for RGBA color to the vertex data and add a third field ("w")
-    //  to the face-varying data:
-    //
-    int numPos = (int) meshVtxPositions.size() / 3;
-    int vtxSize  = 7;
-    std::vector<float> vtxData(numPos * vtxSize, -1.0f);
-    for (int i = 0; i < numPos; ++i) {
-        vtxData[i*vtxSize]     = meshVtxPositions[i*3];
-        vtxData[i*vtxSize + 1] = meshVtxPositions[i*3 + 1];
-        vtxData[i*vtxSize + 2] = meshVtxPositions[i*3 + 2];
-    }
-
-    int numUVs = (int) meshFVarUVs.size() / 2;
-    int fvarSize = 3;
-    std::vector<float> fvarData(numUVs * fvarSize, -1.0f);
-    for (int i = 0; i < numUVs; ++i) {
-        fvarData[i*fvarSize]     = meshFVarUVs[i*2];
-        fvarData[i*fvarSize + 1] = meshFVarUVs[i*2 + 1];
-    }
-
-    //
-    //  Pass the expanded data arrays along with their respective strides:
-    //
-    tessellateToObj(*meshTopology, vtxData, vtxSize, fvarData, fvarSize, args);
+    tessellateToObj(*meshTopology, meshVtxPositions, meshFVarUVs, args);
 
     delete meshTopology;
     return EXIT_SUCCESS;
 }
+
+//------------------------------------------------------------------------------
