@@ -50,10 +50,7 @@ SubclassOfSurfaceFactory::SubclassOfSurfaceFactory(
         _mesh(mesh),
         _localCache() {
 
-}
-
-SubclassOfSurfaceFactory::~SubclassOfSurfaceFactory() {
-
+    SurfaceFactory::setInternalCache(&_localCache);
 }
 
 

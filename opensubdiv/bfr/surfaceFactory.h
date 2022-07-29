@@ -84,10 +84,6 @@ class FaceSurface;
 /// what are its incident faces?), satisfying these methods will be
 /// impossible, or, at best, extremely inefficient.
 ///
-/// In addition to the virtual SurfaceFactoryMeshAdapter interface, additional
-/// pure virtual methods are required for the subclass to choose the way
-/// its instances manage caching of internal data reused by the factory.
-///
 /// Ultimately a subclass of SurfaceFactory is expected to be a lightweight
 /// interface to a connected mesh -- lightweight in terms of both time and
 /// memory usage. It's construction is expected to be trivial, after which
@@ -171,10 +167,10 @@ public:
     ///
 
     /// @brief Return the subdivision scheme
-    Sdc::SchemeType GetSchemeType() const { return _schemeType; }
+    Sdc::SchemeType GetSchemeType() const { return _subdivScheme; }
 
     /// @brief Return the set of subdivision options
-    Sdc::Options GetSchemeOptions() const { return _schemeOptions; }
+    Sdc::Options GetSchemeOptions() const { return _subdivOptions; }
     //@}
 
 public:
@@ -365,33 +361,18 @@ protected:
                    Sdc::Options const & schemeOptions,
                    Options      const & limitOptions);
 
+    /// @brief Subclass to identify an internal cache for use by base class
+    void setInternalCache(SurfaceFactoryCache * cache);
+
     SurfaceFactory(SurfaceFactory const &) = delete;
     SurfaceFactory & operator=(SurfaceFactory const &) = delete;
     //@}
 
-    //@{
-    /// @name Pure virtual methods requiring definition
-    ///
-    /// Pure virtual methods to be provided by subclasses.
-    ///
-
-    /// @brief Return a reference to the subclass' internal cache
-    ///
-    /// A subclass is responsible for providing a reference to a mutable
-    /// instance of SurfaceFactoryCache for use by the base class. The
-    /// subclass is free to use any type of SurfaceFactoryCache that it
-    /// requires (e.g. one it has defined/declared for thread-safety) and
-    /// will manage the lifetime of that instance.
-    //
-    //  WIP - currently this is provided by an additional virtual method
-    //      - alternatives have not been fully vetted, e.g. separate
-    //        initializer, via Options, etc.)
-    //
-    virtual SurfaceFactoryCache * getInternalCache() const = 0;
-    //@}
-
 private:
     //  Supporting internal methods:
+    void setSubdivisionOptions(Sdc::SchemeType, Sdc::Options const & options);
+    void setFactoryOptions(Options const & factoryOptions);
+
     bool faceHasLimitSimple(Index faceIndex, int faceSize) const;
 
     bool faceHasLimitNeighborhood(Index faceIndex) const;
@@ -445,15 +426,12 @@ private:
                               SurfaceType const & surfaceSource,
                               FaceSurface const & surfaceDescription) const;
 
-    //  Methods for dealing with optional cache:
-    SurfaceFactoryCache * getAssignedCache() const;
-
 private:
     //  Members describing options and subdivision properties (very little
     //  memory and low initialization cost)
-    Sdc::SchemeType _schemeType;
-    Sdc::Options    _schemeOptions;
-    Options         _limitOptions;
+    Sdc::SchemeType _subdivScheme;
+    Sdc::Options    _subdivOptions;
+    Options         _factoryOptions;
 
     //  Members related to subdivision topology, options and limit tests:
     unsigned int _linearScheme      : 1;
@@ -464,6 +442,9 @@ private:
     unsigned int _rejectIrregularFacesForLimit   : 1;
 
     int  _regFaceSize;
+
+    //  Members related to caching:
+    SurfaceFactoryCache mutable * _topologyCache;
 };
 
 //
@@ -519,7 +500,7 @@ SurfaceFactory::InitFaceVaryingSurface(Index face, Surface<REAL> * s,
 template <typename REAL>
 inline bool
 SurfaceFactory::InitFaceVaryingSurface(Index face, Surface<REAL> * s) const {
-    FVarID dfltID = _limitOptions.GetDefaultFVarID();
+    FVarID dfltID = _factoryOptions.GetDefaultFVarID();
     return initSurfaces(face, 0, 0, &s->getSurfaceData(), 1, &dfltID);
 }
 
@@ -529,8 +510,8 @@ SurfaceFactory::InitSurfaces(Index faceIndex, Surface<REAL> * vtxSurface,
         Surface<REAL> * fvarSurfaces, FVarID const fvarIDs[], int fvarCount,
         Surface<REAL> * varSurface) const {
 
-    bool   useDfltFVarID = fvarSurfaces && (fvarIDs == 0) && (fvarCount == 0);
-    FVarID dfltFVarID    = useDfltFVarID ? _limitOptions.GetDefaultFVarID() : 0;
+    bool useDfltFVarID = fvarSurfaces && (fvarIDs == 0) && (fvarCount == 0);
+    FVarID dfltFVarID = useDfltFVarID ? _factoryOptions.GetDefaultFVarID() : 0;
 
     return initSurfaces(faceIndex,
                         vtxSurface    ? &vtxSurface->getSurfaceData()   : 0,
@@ -570,7 +551,7 @@ SurfaceFactory::CreateFaceVaryingSurface(Index faceIndex, FVarID fvarID) const {
 template <typename REAL>
 inline Surface<REAL> *
 SurfaceFactory::CreateFaceVaryingSurface(Index face) const {
-    FVarID dfltID = _limitOptions.GetDefaultFVarID();
+    FVarID dfltID = _factoryOptions.GetDefaultFVarID();
     return CreateFaceVaryingSurface<REAL>(face, dfltID);
 }
 

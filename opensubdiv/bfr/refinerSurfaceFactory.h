@@ -49,7 +49,7 @@ namespace Bfr {
 /// The SurfaceFactoryMeshAdapter interface for TopologyRefiner is provided
 /// in full, along with some public extensions specific to TopologyRefiner.
 ///
-/// Remaining virtual requirements of SurfaceFactory are NOT specified
+/// Additional caching expectations of SurfaceFactory are NOT specified
 /// here. These are deferred to subclasses to implement different behaviors
 /// of the factory's internal caching. A template for such subclasses is 
 /// additionally provided -- allowing clients desiring a thread-safe cache
@@ -66,7 +66,7 @@ public:
     RefinerSurfaceFactoryBase(Far::TopologyRefiner const & mesh,
                               Options const & options);
 
-    ~RefinerSurfaceFactoryBase() override;
+    ~RefinerSurfaceFactoryBase() override = default;
     //@}
 
     //@{
@@ -143,9 +143,10 @@ private:
 /// @brief Template for concrete subclasses of RefinerSurfaceFactoryBase
 ///
 /// This class template is used to declare concrete subclasses of
-/// RefinerSurfaceFactoryBase with the required addition of management of
-/// an internal cache. With a thread-safe subclass of SurfaceFactoryCache,
-/// the resulting subclass for the factory will be thread-safe.
+/// RefinerSurfaceFactoryBase with the addition support of an internal
+/// cache used by the base class. With an instance of a thread-safe
+/// subclass of SurfaceFactoryCache declared as a member, the resulting
+/// factory will be thread-safe.
 ///
 /// @tparam CACHE_TYPE  A subclass of SurfaceFactoryCache
 ///
@@ -158,19 +159,14 @@ public:
     RefinerSurfaceFactory(Far::TopologyRefiner const & mesh,
                           Options const & options = Options()) :
             RefinerSurfaceFactoryBase(mesh, options),
-            _localCache() { }
-    ~RefinerSurfaceFactory() override { }
+            _localCache() {
 
-protected:
-    /// @cond PROTECTED
-    //  Virtual override -- and last pure virtual
-    SurfaceFactoryCache * getInternalCache() const override {
-        return & _localCache;
+        SurfaceFactory::setInternalCache(&_localCache);
     }
-    /// @endcond
+    ~RefinerSurfaceFactory() override = default;
 
 private:
-    CACHE_TYPE mutable _localCache;
+    CACHE_TYPE _localCache;
 };
 
 } // end namespace Bfr

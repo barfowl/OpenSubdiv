@@ -118,7 +118,7 @@ template <class MUTEX_TYPE, class READ_LOCK_GUARD_TYPE,
 class SurfaceFactoryCacheThreaded : public SurfaceFactoryCache {
 public:
     SurfaceFactoryCacheThreaded() : SurfaceFactoryCache() { }
-    ~SurfaceFactoryCacheThreaded() override { }
+    ~SurfaceFactoryCacheThreaded() override = default;
 
 protected:
     /// @cond PROTECTED

@@ -55,7 +55,7 @@ public:
     //
     SubclassOfSurfaceFactory(TopologyRefiner const & mesh,
                              Options const & options = Options());
-    virtual ~SubclassOfSurfaceFactory();
+    ~SubclassOfSurfaceFactory() override = default;
 
     //
     //  Additional subclass-specific public methods:
@@ -90,18 +90,6 @@ protected:
     int getFaceVertexIncidentFaceFVarValueIndices(
                             Index faceIndex, int faceVertex, FVarID fvarID,
                             Index fvarValueIndices[]) const override;
-
-protected:
-    //
-    //  Required virtual override to access the local topology cache:
-    //
-    //  The virtual method to retrieve a reference to a local cache will
-    //  be invoked when/if necessary. Recall that an externally defined
-    //  shared cache can be specified in the Options and takes precedence.
-    //
-    OpenSubdiv::Bfr::SurfaceFactoryCache * getInternalCache() const override {
-        return & _localCache;
-    }
 
 private:
     //
@@ -138,8 +126,7 @@ private:
     //
     typedef OpenSubdiv::Bfr::SurfaceFactoryCache LocalFactoryCacheType;
 
-    //  Remember to declare the cache as mutable:
-    LocalFactoryCacheType mutable _localCache;
+    LocalFactoryCacheType _localCache;
 };
 
 

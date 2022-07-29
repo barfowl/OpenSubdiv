@@ -42,18 +42,15 @@ using Far::ConstLocalIndexArray;
 //  Main constructor and destructor:
 //
 RefinerSurfaceFactoryBase::RefinerSurfaceFactoryBase(
-    Far::TopologyRefiner const & mesh, Options const & limitOptions) :
+    Far::TopologyRefiner const & mesh, Options const & factoryOptions) :
         SurfaceFactory(mesh.GetSchemeType(),
                        mesh.GetSchemeOptions(),
-                       limitOptions),
+                       factoryOptions),
         _mesh(mesh),
         _numFaces(mesh.GetLevel(0).GetNumFaces()),
         _numFVarChannels(mesh.GetNumFVarChannels()) {
 
-}
-
-RefinerSurfaceFactoryBase::~RefinerSurfaceFactoryBase() {
-
+    //  Management of internal cache deferred to subclasses
 }
 
 

@@ -122,29 +122,39 @@ public:
 
 
 //
-//  Main constructor and destructor:
+//  Main constructor and supporting initialization methods:
 //
-SurfaceFactory::SurfaceFactory(
-    Sdc::SchemeType      schemeType,
-    Sdc::Options const & schemeOptions,
-    Options      const & limitOptions) :
-        _schemeType(schemeType),
-        _schemeOptions(schemeOptions),
-        _limitOptions(limitOptions) {
+SurfaceFactory::SurfaceFactory(Sdc::SchemeType      subdivScheme,
+                               Sdc::Options const & subdivOptions,
+                               Options      const & factoryOptions) :
+        _topologyCache(0) {
+
+    //  Order of operations not important here:
+    setSubdivisionOptions(subdivScheme, subdivOptions);
+    setFactoryOptions(factoryOptions);
+}
+
+void
+SurfaceFactory::setSubdivisionOptions(Sdc::SchemeType      subdivScheme,
+                                      Sdc::Options const & subdivOptions) {
+
+    //  Assign the main member variables before others derived from them:
+    _subdivScheme  = subdivScheme;
+    _subdivOptions = subdivOptions;
 
     //  Initialize members dependent on subdivision topology:
-    _regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(_schemeType);
+    _regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(_subdivScheme);
 
     _linearScheme =
-        (Sdc::SchemeTypeTraits::GetLocalNeighborhoodSize(_schemeType) == 0);
+        (Sdc::SchemeTypeTraits::GetLocalNeighborhoodSize(_subdivScheme) == 0);
 
     _linearFVarInterp = _linearScheme ||
-                       (_schemeOptions.GetFVarLinearInterpolation() ==
+                       (_subdivOptions.GetFVarLinearInterpolation() ==
                                  Sdc::Options::FVAR_LINEAR_ALL);
 
     //  Initialize members related to the "face has limit" test:
     _rejectSmoothBoundariesForLimit = !_linearScheme &&
-                       (_schemeOptions.GetVtxBoundaryInterpolation() ==
+                       (_subdivOptions.GetVtxBoundaryInterpolation() ==
                                  Sdc::Options::VTX_BOUNDARY_NONE);
 
     _rejectIrregularFacesForLimit = !_linearScheme && (_regFaceSize == 3);
@@ -153,15 +163,28 @@ SurfaceFactory::SurfaceFactory(
                                 _rejectIrregularFacesForLimit;
 }
 
-inline SurfaceFactoryCache *
-SurfaceFactory::getAssignedCache() const {
+void
+SurfaceFactory::setFactoryOptions(Options const & factoryOptions) {
 
-    if (_limitOptions.IsCachingEnabled()) {
-        return _limitOptions.GetExternalCache() ?
-               _limitOptions.GetExternalCache() :
-               getInternalCache();
+    //  Assign the main member variable before others derived from them:
+    _factoryOptions = factoryOptions;
+
+    if (_factoryOptions.IsCachingEnabled()) {
+        if (_factoryOptions.GetExternalCache()) {
+            _topologyCache = _factoryOptions.GetExternalCache();
+        }
     }
-    return 0;
+}
+
+void
+SurfaceFactory::setInternalCache(SurfaceFactoryCache * cache) {
+
+    //  Remember caching must be on and an external cache takes precedence
+    if (_factoryOptions.IsCachingEnabled()) {
+        if (_factoryOptions.GetExternalCache() == 0) {
+            _topologyCache = cache;
+        }
+    }
 }
 
 SurfaceFactory::~SurfaceFactory() {
@@ -173,7 +196,7 @@ printf("    __numLinearPatches     = %6d\n", __numLinearPatches);
 printf("    __numExpRegularPatches = %6d\n", __numExpRegularPatches);
 printf("    __numRegularPatches    = %6d\n", __numRegularPatches);
 printf("    __numIrregularPatches  = %6d\n", __numIrregularPatches);
-if (!_limitOptions.DisableTopologyCache()) {
+if (!_factoryOptions.DisableTopologyCache()) {
 printf("\n");
 printf("    __numIrregularUncached = %6d\n", __numIrregularUncached);
 printf("    __numIrregularInCache  = %6d\n", __numIrregularInCache);
@@ -308,7 +331,7 @@ SurfaceFactory::FaceHasLimitSurface(Index faceIndex) const {
 Parameterization
 SurfaceFactory::GetFaceParameterization(Index faceIndex) const {
 
-    return Parameterization(_schemeType, getFaceSize(faceIndex));
+    return Parameterization(_subdivScheme, getFaceSize(faceIndex));
 }
 
 
@@ -666,7 +689,7 @@ SurfaceFactory::assignLinearSurface(SurfaceType * surfacePtr,
     //  Initialize instance members from the associated irregular patch:
     int faceSize  = getFaceSize(faceIndex);
 
-    surface.setParam(Parameterization(_schemeType, faceSize));
+    surface.setParam(Parameterization(_subdivScheme, faceSize));
 
     surface.setRegular(faceSize == _regFaceSize);
     surface.setLinear(true);
@@ -707,7 +730,7 @@ SurfaceFactory::assignRegularSurface(SurfaceType * surfacePtr,
     //
     //  Assign the parameterization and discriminants first:
     //
-    surface.setParam(Parameterization(_schemeType, _regFaceSize));
+    surface.setParam(Parameterization(_subdivScheme, _regFaceSize));
 
     surface.setRegular(true);
     surface.setLinear(false);
@@ -754,7 +777,7 @@ SurfaceFactory::assignRegularSurface(SurfaceType * surfacePtr,
     //
     //  Assign the parameterization and discriminants first:
     //
-    surface.setParam(Parameterization(_schemeType, _regFaceSize));
+    surface.setParam(Parameterization(_subdivScheme, _regFaceSize));
 
     surface.setRegular(true);
     surface.setLinear(false);
@@ -789,19 +812,18 @@ SurfaceFactory::assignIrregularSurface(SurfaceType * surfacePtr,
     //
     IrregularPatchBuilder::Options buildOptions;
 
-    buildOptions.sharpLevel      = _limitOptions.GetApproxLevelSharp();
-    buildOptions.smoothLevel     = _limitOptions.GetApproxLevelSmooth();
+    buildOptions.sharpLevel      = _factoryOptions.GetApproxLevelSharp();
+    buildOptions.smoothLevel     = _factoryOptions.GetApproxLevelSmooth();
     buildOptions.doublePrecision = surfacePtr->isDouble();
 
     IrregularPatchBuilder builder(descriptor, buildOptions);
 
-    internal::IrregularPatchSharedPtr patch(0);
-
     //
     //  Construct a new irregular patch or identify one from the cache:
     //
-    SurfaceFactoryCache * cache = getAssignedCache();
-    if (cache == 0) {
+    internal::IrregularPatchSharedPtr patch(0);
+
+    if (_topologyCache == 0) {
         patch = builder.Build();
     } else {
         //
@@ -816,9 +838,9 @@ SurfaceFactory::assignIrregularSurface(SurfaceType * surfacePtr,
         SurfaceFactoryCache::KeyType key =
                 hashTopologyKey(descriptor, buildOptions);
 
-        patch = cache->Find(key);
+        patch = _topologyCache->Find(key);
         if (patch == 0) {
-            patch = cache->Add(key, builder.Build());
+            patch = _topologyCache->Add(key, builder.Build());
 #ifdef _BFR_DEBUG_TOP_TYPE_STATS
 __numIrregularInCache ++;
 #endif
@@ -830,7 +852,7 @@ __numIrregularInCache ++;
     //
     SurfaceType & surface = *surfacePtr;
 
-    surface.setParam(Parameterization(_schemeType, descriptor.GetFaceSize()));
+    surface.setParam(Parameterization(_subdivScheme, descriptor.GetFaceSize()));
 
     surface.setRegular(false);
     surface.setLinear(false);
@@ -1110,7 +1132,7 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
     //  will be necessary to deal with a potentially irregular face-varying
     //  surface.
     //
-    FaceTopology faceTopology(_schemeType, _schemeOptions);
+    FaceTopology faceTopology(_subdivScheme, _subdivOptions);
     IndexBuffer  vtxIndices(16);
     FaceSurface  vtxSurfDesc;
 
