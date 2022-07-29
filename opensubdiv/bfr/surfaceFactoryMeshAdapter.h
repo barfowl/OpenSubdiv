@@ -40,13 +40,13 @@ class VertexDescriptor;
 /// @brief Abstract interface adapting SurfaceFactory to a connected mesh
 ///        representation
 ///
-//  SurfaceFactoryAdapter is an abstract class that defines the interface
+//  SurfaceFactoryMeshAdapter is an abstract class that defines the interface
 //  through which subclasses of SurfaceFactory adapt to a connected mesh
 //  representation. The interface defines methods that describe the mesh
 //  topology and control indices in the neighborhood of a mesh -- from
 //  which the SurfaceFactory to identifies an appropriate limit surface.
 //
-//  SurfaceFactoryAdapter methods require a subclass to provide a complete
+//  SurfaceFactoryMeshAdapter methods require a subclass to provide a complete
 //  description of the topology around a base face, as well as indices
 //  associated with it (both vertex and face-varying).  The intent here is
 //  to keep the number of methods required to a minimum, and also to minimize
@@ -62,7 +62,7 @@ class VertexDescriptor;
 //  topology -- sets of face-varying data are uniquely distinguished by an
 //  associated integer (a face-varying ID).
 //
-class SurfaceFactoryAdapter {
+class SurfaceFactoryMeshAdapter {
 public:
     /// @brief Integer type representing a mesh index
     typedef int Index;
@@ -81,8 +81,8 @@ public:
 
 protected:
     /// @cond PROTECTED
-    SurfaceFactoryAdapter() { }
-    virtual ~SurfaceFactoryAdapter() { }
+    SurfaceFactoryMeshAdapter() { }
+    virtual ~SurfaceFactoryMeshAdapter() { }
     /// @endcond
 
 protected:
@@ -215,13 +215,13 @@ private:
 //  Inline defaults for optional methods:
 //
 inline bool
-SurfaceFactoryAdapter::getFaceNeighborhoodVertexIndicesIfRegular(
+SurfaceFactoryMeshAdapter::getFaceNeighborhoodVertexIndicesIfRegular(
         Index, Index[]) const {
     return false;
 }
 
 inline bool
-SurfaceFactoryAdapter::getFaceNeighborhoodFVarValueIndicesIfRegular(
+SurfaceFactoryMeshAdapter::getFaceNeighborhoodFVarValueIndicesIfRegular(
         Index, FVarID, Index[]) const {
     return false;
 }

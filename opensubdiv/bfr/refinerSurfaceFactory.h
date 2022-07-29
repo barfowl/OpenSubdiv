@@ -46,8 +46,8 @@ namespace Bfr {
 /// RefinerSurfaceFactoryBase is an intermediate subclass of SurfaceFactory
 /// using Far::TopologyRefiner as the connected mesh representation.
 ///
-/// The SurfaceFactoryAdapter interface for TopologyRefiner is provided in
-/// full, along with some public extensions specific to TopologyRefiner.
+/// The SurfaceFactoryMeshAdapter interface for TopologyRefiner is provided
+/// in full, along with some public extensions specific to TopologyRefiner.
 ///
 /// Remaining virtual requirements of SurfaceFactory are NOT specified
 /// here. These are deferred to subclasses to implement different behaviors
@@ -66,7 +66,7 @@ public:
     RefinerSurfaceFactoryBase(Far::TopologyRefiner const & mesh,
                               Options const & options);
 
-    virtual ~RefinerSurfaceFactoryBase();
+    ~RefinerSurfaceFactoryBase() override;
     //@}
 
     //@{
@@ -88,7 +88,7 @@ public:
 protected:
     /// @cond PROTECTED
     //
-    //  Virtual overrides to satisfy the SurfaceFactoryAdapter interface:
+    //  Virtual overrides to satisfy the SurfaceFactoryMeshAdapter interface:
     //
     bool isFaceHole( Index faceIndex) const override;
     int  getFaceSize(Index faceIndex) const override;
@@ -108,7 +108,7 @@ protected:
                         Index faceIndex, int faceVertex,
                         FVarID fvarID, Index fvarValueIndices[]) const override;
 
-    //  Optional SurfaceFactoryAdapter overrides for regular patches:
+    //  Optional SurfaceFactoryMeshAdapter overrides for regular patches:
     bool getFaceNeighborhoodVertexIndicesIfRegular(
                         Index faceIndex,
                         Index vertexIndices[]) const override;
@@ -159,7 +159,7 @@ public:
                           Options const & options = Options()) :
             RefinerSurfaceFactoryBase(mesh, options),
             _localCache() { }
-    virtual ~RefinerSurfaceFactory() { }
+    ~RefinerSurfaceFactory() override { }
 
 protected:
     /// @cond PROTECTED

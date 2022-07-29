@@ -67,7 +67,7 @@ set(PUBLIC_HEADER_FILES
      surface.h
      surfaceData.h
      surfaceFactory.h
-     surfaceFactoryAdapter.h
+     surfaceFactoryMeshAdapter.h
      surfaceFactoryCache.h
      tessellation.h
      vertexDescriptor.h

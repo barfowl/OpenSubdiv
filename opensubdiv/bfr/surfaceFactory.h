@@ -28,7 +28,7 @@
 #include "../version.h"
 
 #include "../bfr/surface.h"
-#include "../bfr/surfaceFactoryAdapter.h"
+#include "../bfr/surfaceFactoryMeshAdapter.h"
 #include "../sdc/options.h"
 #include "../sdc/types.h"
 
@@ -61,30 +61,30 @@ class FaceSurface;
 /// instance of the subclass' mesh type) as well as other methods that
 /// may involve the mesh's data types (primvars) in their native form.
 ///
-/// By inheriting the SurfaceFactoryAdapter interface, SurfaceFactory
+/// By inheriting the SurfaceFactoryMeshAdapter interface, SurfaceFactory
 /// requires its subclasses to implement the small suite of pure
 /// virtual methods to complete the factory's implementation for the
 /// subclass' mesh type. These methods provide the base factory with
 /// topological information about faces of that mesh -- from which it
 /// creates instances of Surface defining their limit surface.
 ///
-/// The SurfaceFactory inherits rather than contains SurfaceFactoryAdapter
-/// as instances of SurfaceFactoryAdapter serve no purpose on their own,
+/// The SurfaceFactory inherits rather than contains SurfaceFactoryMeshAdapter
+/// as instances of SurfaceFactoryMeshAdapter serve no purpose on their own,
 /// and the interface between the two is designed with the specific needs
 /// of the SurfaceFactory. When customizing a subclass of SurfaceFactory
 /// for a particular mesh type, this inheritance also avoids the need to
 /// coordinate the subclass of SurfaceFactory with the separate subclass
-/// of SurfaceFactoryAdapter.
+/// of SurfaceFactoryMeshAdapter.
 ///
 /// It must be emphasized that a subclass of SurfaceFactory is written to
 /// support a specific type of "connected" mesh -- not simply a container
-/// of data defining a mesh. The SurfaceFactoryAdapter interface describes
+/// of data defining a mesh. The SurfaceFactoryMeshAdapter interface describes
 /// the complete topological neighborhood around a specific face, and
 /// without any connectivity between mesh components (e.g. given a vertex,
 /// what are its incident faces?), satisfying these methods will be
 /// impossible, or, at best, extremely inefficient.
 ///
-/// In addition to the virtual SurfaceFactoryAdapter interface, additional
+/// In addition to the virtual SurfaceFactoryMeshAdapter interface, additional
 /// pure virtual methods are required for the subclass to choose the way
 /// its instances manage caching of internal data reused by the factory.
 ///
@@ -104,7 +104,7 @@ class FaceSurface;
 /// manage caching for construction efficiency -- either internally or
 /// between itself and other factories (advanced).
 ///
-class SurfaceFactory : public SurfaceFactoryAdapter {
+class SurfaceFactory : public SurfaceFactoryMeshAdapter {
 public:
     ///
     /// @brief Simple set of options assigned to instances of SurfaceFactory
@@ -162,7 +162,7 @@ public:
     };
 
 public:
-    virtual ~SurfaceFactory();
+    ~SurfaceFactory() override;
 
     //@{
     /// @name Simple queries of subdivision properties
