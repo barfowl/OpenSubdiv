@@ -649,8 +649,9 @@ to one of its three edges.
 
 *Bfr* uses patterns more consistent with those resulting from the subdivision
 of triangles. Only edges parallel to the edges of the triangle are introduced,
-which both reduces the number of facets as well as reducing some of the
-artifacts of the hardware patterns:
+which creates more uniform facets (both edge lengths and area) and reduces
+their number (by one third). This can reduce artifacts that sometimes arise
+with use of the hardware patterns at lower tessellation rates:
 
 +----------------------------------------------+----------------------------------------------+
 | .. image:: images/bfr_tess_diff_tri_osd.png  | .. image:: images/bfr_tess_diff_tri_gpu.png  |
@@ -661,10 +662,11 @@ artifacts of the hardware patterns:
 | Uniform tessellation of a triangle with *Bfr* (left) and GPU tessellation (right).          |
 +---------------------------------------------------------------------------------------------+
 
-These triangular patterns are consistent with what Moreton referred to as
-"integer spacing" for triangular patches in early work on hardware
-tessellation [Moreton, 2001], but which were later lost in the actual
-hardware implementation.
+These triangular patterns were previously referred to as "integer spacing"
+for triangular patches in early work on hardware tessellation. But use of
+these patterns was generally discarded in favor of techniques that split
+the triangle into three quads -- allowing the hardware solution for quad
+tessellation to be reused.
 
 ----
 
