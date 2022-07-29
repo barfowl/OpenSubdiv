@@ -377,7 +377,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
         outFacets.resize(numFacets * tessFacetSize);
         tessPattern.GetFacets(outFacets.data());
 
-        tessPattern.TransformFacetIndices(outFacets.data(),
+        tessPattern.TransformFacetCoordIndices(outFacets.data(),
                         tessBoundaryIndices.data(), tessInteriorOffset);
 
         //

@@ -2426,39 +2426,30 @@ Tessellation::GetFacets(int facetIndices[]) const {
 }
 
 void
-Tessellation::TransformFacetIndices(int facetIndices[],
-                                    int commonOffset) {
+Tessellation::TransformFacetCoordIndices(int facetIndices[], int commonOffset) {
 
-    for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
-        for (int j = 0; j < (int)_facetSize; ++j) {
-            int & index = facetIndices[j];
-            if (index >= 0) {
-                index += commonOffset;
+    if (_facetSize == 4) {
+        for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
+            facetIndices[0] += commonOffset;
+            facetIndices[1] += commonOffset;
+            facetIndices[2] += commonOffset;
+            if (facetIndices[3] >= 0) {
+                facetIndices[3] += commonOffset;
             }
+        }
+    } else {
+        for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
+            facetIndices[0] += commonOffset;
+            facetIndices[1] += commonOffset;
+            facetIndices[2] += commonOffset;
         }
     }
 }
 
 void
-Tessellation::TransformFacetIndices(int facetIndices[],
-                                    int boundaryOffset, int interiorOffset) {
-
-    for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
-        for (int j = 0; j < (int)_facetSize; ++j) {
-            int & index = facetIndices[j];
-            if (index >= 0) {
-                index += (index < _numBoundaryPoints)
-                       ? boundaryOffset
-                       : interiorOffset;
-            }
-        }
-    }
-}
-
-void
-Tessellation::TransformFacetIndices(int facetIndices[],
-                                    int const boundaryIndices[],
-                                    int interiorOffset) {
+Tessellation::TransformFacetCoordIndices(int facetIndices[],
+                                         int const boundaryIndices[],
+                                         int interiorOffset) {
 
     for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
         for (int j = 0; j < (int)_facetSize; ++j) {
@@ -2473,9 +2464,9 @@ Tessellation::TransformFacetIndices(int facetIndices[],
 }
 
 void
-Tessellation::TransformFacetIndices(int facetIndices[],
-                                    int const boundaryIndices[],
-                                    int const interiorIndices[]) {
+Tessellation::TransformFacetCoordIndices(int facetIndices[],
+                                         int const boundaryIndices[],
+                                         int const interiorIndices[]) {
 
     for (int i = 0; i < _numFacets; ++i, facetIndices += _facetStride) {
         for (int j = 0; j < (int)_facetSize; ++j) {

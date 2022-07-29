@@ -310,8 +310,8 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
         outFacets.resize(numFacets * tessFacetSize);
         tessPattern.GetFacets(outFacets.data());
 
-        tessPattern.TransformFacetIndices(outFacets.data(),
-                                          objVertexIndexOffset);
+        tessPattern.TransformFacetCoordIndices(outFacets.data(),
+                                               objVertexIndexOffset);
 
         //
         //  Write the evaluated points and faces connecting them as Obj:
