@@ -45,7 +45,7 @@ namespace Bfr {
 //
 //      - an instance of FaceTopology with all topological information
 //      - a set of FaceVertexSubsets for topological extent of each corner
-//      - a set of indices associate with all vertices of FaceTopology
+//      - a set of indices associated with all vertices of FaceTopology
 //      - a subset of the Sdc::Options that actually affects the surface
 //
 //  with a few additional members summarizing features of these.  The full
@@ -85,7 +85,7 @@ public:
     //   Main public methods to distinguish surface and topology:
     bool IsRegular() const { return _isRegular; }
 
-    bool TopologyMatchesVertex() const { return _matchesVertex; }
+    bool FVarTopologyMatchesVertex() const { return _matchesVertex; }
 
     //  Debugging:
     void print(bool printVerts = false) const;

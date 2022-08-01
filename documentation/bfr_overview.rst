@@ -182,7 +182,7 @@ face-varying and the possibility of seams).
 
 While the internal representations of the Surfaces constructed for
 different data interpolation types may differ, since they are all
-constructed as Surfaces, the functionality use to evaluate them is
+constructed as Surfaces, the functionality used to evaluate them is
 identical.
 
 Bfr::Surface
@@ -342,7 +342,7 @@ and made publicly available.
 Each Surface has the Parameterization of its face assigned internally as part
 of its construction, and that is used internally by the Surface in many of its
 methods. The need to deal directly with the explicit details of the
-Parameterization class is not generally necessary.  . Often it is sufficient
+Parameterization class is not generally necessary. Often it is sufficient
 to retrieve the Parameterization from a Surface for use in some other context
 (e.g. passed to Bfr::Tessellation).
 
@@ -528,10 +528,7 @@ Tessellation Rates
 ******************
 
 For a particular Parameterization, the various tessellation patterns are
-determined by one or more tessellation rates. Unlike other interfaces to
-tessellation, rather than specifying the many rates for the most complex
-patterns, simpler patterns can be specified more simply -- with one or
-some lesser number of rates than the maximum possible.
+determined by one or more tessellation rates.
 
 The simplest set of patterns uses a single tessellation rate and is said
 to be "uniform", i.e. all edges and the interior of the face are split to
@@ -590,7 +587,8 @@ or otherwise inferred:
 |    :width:  100%                            |    :width:  100%                            |
 |    :target: images/bfr_tess_mXn_quad_A.png  |    :target: images/bfr_tess_mXn_quad_B.png  |
 +---------------------------------------------+---------------------------------------------+
-| Quad tessellations with differing inner rates with matching and varying outer rates.      |
+| Quad tessellations with differing inner rates with matching (left) and varying outer      |
+| rates (right).                                                                            |
 +-------------------------------------------------------------------------------------------+
 
 Differences from Hardware Tessellation
@@ -603,7 +601,7 @@ non-uniform tessellation patterns along boundaries, and that is to be executed
 here.
 
 *Bfr* does provide some obvious additional functionality not present in
-hardware tessellation and vice versa, e.g *Bfr* provides the following (not
+hardware tessellation and vice versa, e.g. *Bfr* provides the following (not
 supported by hardware tessellation):
 
     * patterns for parameterizations other than quads and tris (e.g. N-sided)

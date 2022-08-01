@@ -37,6 +37,7 @@ SurfaceFactoryCache::SurfaceFactoryCache() : _map() {
 }
 
 SurfaceFactoryCache::~SurfaceFactoryCache() {
+    //  Potentially monitor usage on destruction
 }
 
 

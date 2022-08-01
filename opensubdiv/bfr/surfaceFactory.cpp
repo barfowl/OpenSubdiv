@@ -1246,7 +1246,7 @@ SurfaceFactory::populateNonLinearSurfaces(Index faceIndex,
             FaceSurface fvarSurfDesc(vtxSurfDesc, fvIndices);
 
             //  Detect matching or other topology and dispatch accordingly:
-            if (fvarSurfDesc.TopologyMatchesVertex() && vtxSurfIsValid) {
+            if (fvarSurfDesc.FVarTopologyMatchesVertex() && vtxSurfIsValid) {
                 copyNonLinearSurface(&fvarSurf, *surfaces.GetVertexSurface(),
                                      fvarSurfDesc);
             } else if (fvarSurfDesc.IsRegular()) {
