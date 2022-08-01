@@ -40,7 +40,7 @@ using namespace OpenSubdiv::OPENSUBDIV_VERSION;
 
 //
 //  FarPatchEvaluator bundles the Far::PatchTable and its ecosystem of
-//  related class to provide an evaluation interface targetted towards
+//  related class to provide an evaluation interface targeted towards
 //  evaluation of the base faces of a mesh.
 //
 template <typename REAL>

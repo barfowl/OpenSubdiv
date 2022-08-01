@@ -82,7 +82,7 @@ public:
     void Initialize(FaceTopology const & vtxTopology, Index const vtxInds[]);
     void Initialize(FaceSurface const  & vtxSurface,  Index const fvarInds[]);
 
-    //   Main public methods to distinquish surface and topology:
+    //   Main public methods to distinguish surface and topology:
     bool IsRegular() const { return _isRegular; }
 
     bool TopologyMatchesVertex() const { return _matchesVertex; }

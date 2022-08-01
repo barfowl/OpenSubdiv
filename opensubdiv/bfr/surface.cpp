@@ -445,7 +445,7 @@ Surface<REAL>::evalMultiLinearStencils(REAL const uv[2], REAL *sDeriv[]) const {
 
     //
     //  Linear evaluation of irregular N-sided faces evaluates one of N
-    //  locally subdivided quad faces and identifes that sub-face -- also
+    //  locally subdivided quad faces and identifies that sub-face -- also
     //  the origin vertex of the quad. The basis weights are subsequently
     //  transformed into the four unique values that are then assigned to
     //  the N vertices of the face.
@@ -511,7 +511,7 @@ Surface<REAL>::evalMultiLinearDerivs(REAL const uv[],
 
     //
     //  Linear evaluation of irregular N-sided faces evaluates one of N
-    //  locally subdivided quad faces and identifes that sub-face.
+    //  locally subdivided quad faces and identifies that sub-face.
     //
     //  Assign weights for requested derivatives and evaluate:
     //

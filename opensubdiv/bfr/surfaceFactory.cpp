@@ -42,7 +42,7 @@ namespace OPENSUBDIV_VERSION {
 namespace Bfr {
 //
 //  DEBUG - static variables to keep track of constructed Surfaces
-//        - note that these global variables have extrememly limited use:
+//        - note that these global variables have extremely limited use:
 //            - they are initialized once per process
 //            - reported and reset on destruction of a SurfaceFactory
 //
@@ -236,7 +236,7 @@ __numIrregularInCache  = 0;
 //  requires a complete topological description of each corner of the face.
 //
 //  Similarly, the case of Loop subdivision in the presence of non-triangles
-//  required determining if any corner of the face has an incidendent face
+//  required determining if any corner of the face has an incident face
 //  that is not a triangle.
 //
 //  The method here inspects a corner at a time and tries to reject a face
@@ -345,7 +345,7 @@ namespace {
 
     //
     //  Note that the data used in determining a topology key is not
-    //  purely topological.  While most data detemines a unique limit
+    //  purely topological.  While most data determines a unique limit
     //  surface, a few parameters determine the approximation to it
     //  (e.g. the various adaptive refinement levels) or dictate other
     //  properties of its representation (e.g. double precision).
@@ -359,7 +359,7 @@ namespace {
     //
     //  This alternate function for computing the cache key was applied
     //  to common topologies with low-valence and simply packs integer
-    //  bifields with the topology of the face and all of its corners.
+    //  bitfields with the topology of the face and all of its corners.
     //
     //  It is typically 3x faster than the hashing method, but is suited
     //  for general use. Given the relatively low cost of computing the
@@ -848,7 +848,7 @@ __numIrregularInCache ++;
     }
 
     //
-    //  Assign the Surface parameterization, discrimanants and patch:
+    //  Assign the Surface parameterization, discriminants and patch:
     //
     SurfaceType & surface = *surfacePtr;
 

@@ -50,7 +50,7 @@ class VertexDescriptor;
 //  description of the topology around a base face, as well as indices
 //  associated with it (both vertex and face-varying).  The intent here is
 //  to keep the number of methods required to a minimum, and also to minimize
-//  the number of invokactions required by the factory.
+//  the number of invocations required by the factory.
 //
 //  With the need to support both linear and non-linear cases (for which
 //  linear is trivial by comparison) and the limit surface for both vertex

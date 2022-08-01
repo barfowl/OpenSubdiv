@@ -41,7 +41,7 @@ FarPatchEvaluator<REAL>::FarPatchEvaluator(
             _baseMeshUVs(baseUVs) {
 
     //
-    //  Intialize simple members first:
+    //  Initialize simple members first:
     //
     _regFaceSize = Sdc::SchemeTypeTraits::GetRegularFaceSize(
                         baseMesh.GetSchemeType());
@@ -180,7 +180,7 @@ FarPatchEvaluator<REAL>::Evaluate(Far::Index                baseFace,
     results.Resize(numCoords);
 
     //
-    //  Identify the patch face and see if it needs to be reparameterized:
+    //  Identify the patch face and see if it needs to be re-parameterized:
     //
     int patchFace = _patchFaces->GetFaceId(baseFace);
 

@@ -195,7 +195,7 @@ RefinerSurfaceFactoryBase::populateFaceVertexDescriptor(
     //
     //  Remember that for some non-manifold cases the face may occur
     //  multiple times around this vertex, so make sure to identify the
-    //  the instance that matches the specified corner of the face.
+    //  instance that matches the specified corner of the face.
     //
     if (isManifold) {
         return vFaces.FindIndex(baseFace);
@@ -299,7 +299,7 @@ RefinerSurfaceFactoryBase::getFaceNeighborhoodVertexIndicesIfRegular(
     //
     //  Recall also that in the case of "boundary none", a face that does
     //  not have a limit surface will have been tagged as a hole.  So all
-    //  faces here -- and all regular faces in genral -- have a limit.
+    //  faces here -- and all regular faces in general -- have a limit.
     //
     //  To determine regular patches with inf-sharp features, we can first
     //  trivially reject an interior face if it has any inf-sharp features.

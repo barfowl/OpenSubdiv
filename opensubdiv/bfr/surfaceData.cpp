@@ -48,7 +48,7 @@ SurfaceData::SurfaceData() : _cvIndices(), _param(),
 SurfaceData & 
 SurfaceData::operator=(SurfaceData const & src) {
 
-    //  No need to explicitly manage pre-exising resources in destination
+    //  No need to explicitly manage pre-existing resources in destination
     //  as they will be either re-used or released when re-assigned
 
     //  No copy/operator= supported by StackBuffer so resize and copy:

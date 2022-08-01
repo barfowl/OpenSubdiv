@@ -311,7 +311,7 @@ FaceVertex::GetFaceLast(Subset const & subset) const {
 }
 
 //
-//  Inline methods for accessing indices associated with indicent faces:
+//  Inline methods for accessing indices associated with incident faces:
 //
 inline int
 FaceVertex::GetFaceIndexOffset(int face) const {

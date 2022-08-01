@@ -63,7 +63,7 @@ Areas for improvement:
        - some exist purely to avoid cases that were not properly
          supported at the time
        - some exist to support implementation options that have
-         sinced been removed
+         since been removed
 
     - better metrics for determining relative tolerances:
        - currently a proportion of the bounding box is used
@@ -73,7 +73,7 @@ Areas for improvement:
 
 Nagging complications:
 
-One frustrating aspect of the comparision between Bfr and Far is that --
+One frustrating aspect of the comparison between Bfr and Far is that --
 despite using the same patch evaluation at the lowest level -- the way
 that Far couples the processing of vertex and face-varying data leads to
 accumulated inaccuracies which trigger differences.

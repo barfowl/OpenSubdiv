@@ -198,7 +198,7 @@ struct PointCopier<REAL, REAL, SIZE> {
 //          - an array of or consecutive weights for all resulting points
 //
 //  Several operations combining control points for patch evaluation make
-//  use of the same paramters, so these are encapsulated in a common set.
+//  use of the same parameters, so these are encapsulated in a common set.
 //  All classes are expected to declare Parameters for their operation --
 //  even if it is simply a typedef for the set of common parameters.
 //

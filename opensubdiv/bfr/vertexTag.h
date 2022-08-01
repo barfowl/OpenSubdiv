@@ -41,7 +41,7 @@ namespace Bfr {
 //  supports bitwise-OR so that tags for the corners of a face can quickly
 //  be combined to determine properties of the associated limit surface.
 //
-//  In order to accomodate the two separate uses more clearly -- that of
+//  In order to accommodate the two separate uses more clearly -- that of
 //  a set of bits applying to a single corner/vertex versus a set of bits
 //  resulting from the combination (bitwise-OR) of several -- the bitfield
 //  is defined as a base class and two separate classes are derived from

@@ -636,7 +636,7 @@ namespace {
 //
 //  Utility functions to help assembly of tessellation patterns -- grouped
 //  into local structs/namespaces for each of the supported parameterization
-//  types:  quad, triangle (tri) or quadranglated sub-faces (qsub):
+//  types:  quad, triangle (tri) or quadrangulated sub-faces (qsub):
 //
 //  Given the similar structure to these -- the construction of patterns
 //  using concentric rings of Coords, rings of Facets between successive

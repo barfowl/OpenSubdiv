@@ -690,7 +690,7 @@ namespace {
 
     bool
     doFacesMatch(int size, int const a[], int const b[]) {
-        //  Find a matching vertex to correllate possible rotation:
+        //  Find a matching vertex to correlate possible rotation:
         for (int i = 0; i < size; ++i) {
             if (b[i] == a[0]) {
                 return doFacesMatch(size, a, b, i);
