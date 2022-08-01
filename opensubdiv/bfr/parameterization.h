@@ -136,7 +136,9 @@ public:
     ///
     /// These conversion methods to and from the local coordinates of a
     /// sub-face are only for use with instances of Parameterization that
-    /// have such sub-faces.
+    /// have such sub-faces. Results for input coordinates that are
+    /// significantly outside the domain of the input parameterization are
+    /// undefined.
     ///
     /// Note that sub-face coordinates that are normalized correspond to
     /// coordinates for Ptex faces.

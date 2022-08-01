@@ -120,6 +120,10 @@ public:
     /// Control points are the subset of points in the mesh that influence
     /// a Surface. They can be identified as part of the mesh data by their
     /// indices, or gathered into an array for other purposes.
+    ///
+    /// It is not necessary to deal directly with control points for
+    /// evaluation, but they are useful with limit stencils and other
+    /// purposes, e.g. computing a bounding box of the Surface.
     ///       
 
     /// @brief Return the number of control points affecting the Surface
@@ -137,6 +141,11 @@ public:
     /// @param  controlPoints    Output array of control point data
     /// @param  controlPointDesc The size and stride of control point data
     ///
+    /// Note that this method requires the mesh data be in a contiguous
+    /// array. If a large data set is fragmented into blocks or pages, this
+    /// method cannot be used and control points will need to be gathered
+    /// explicitly.
+    ///
     template <typename REAL_MESH>
     void GatherControlPoints(REAL_MESH       const   meshPoints[],
                              PointDescriptor const & meshPointDesc,
@@ -149,7 +158,7 @@ public:
     ///
     /// Patch points are derived from the control points and are used to
     /// evaluate the Surface. The patch points always include the control
-    /// points.
+    /// points as a subset.
     ///       
 
     /// @brief Return the number of patch points representing the Surface
@@ -168,6 +177,12 @@ public:
     /// @param  meshPointDesc  The size and stride of mesh point data
     /// @param  patchPoints    Output array of patch point data
     /// @param  patchPointDesc The size and stride of patch point data
+    ///
+    /// Note that this method requires the mesh data be in a contiguous
+    /// array. If a large data set is fragmented into blocks or pages, this
+    /// method cannot be used. The control points will need to be gathered
+    /// explicitly as the subset of patch points, after which the method to
+    /// compute the remaining patch points can be used.
     ///
     template <typename REAL_MESH>
     void PreparePatchPoints(REAL_MESH       const   meshPoints[],
@@ -191,22 +206,23 @@ public:
     //@{
     /// @name Evaluation methods
     ///
-    /// Patch points are derived from the control points and are used to
-    /// evaluate the Surface. The patch points always include the control
-    /// points as a subset.
+    /// Evaluation methods use the patch points to compute position, 1st and
+    /// 2nd derivatives of the Surface at a given (u,v) coordinate within
+    /// the domain of the Surface's Parameterization. All parameters of the
+    /// different overloads are required.
     ///       
 
-    /// @brief Evaluate position
+    /// @brief Evaluation of position
     void Evaluate(REAL const uv[2],
                   REAL const patchPoints[], PointDescriptor const & pointDesc,
                   REAL * P) const;
 
-    /// @brief Evaluate position and 1st derivatives
+    /// @brief Overload of evaluation for 1st derivatives
     void Evaluate(REAL const uv[2],
                   REAL const patchPoints[], PointDescriptor const & pointDesc,
                   REAL * P, REAL * Du, REAL * Dv) const;
 
-    /// @brief Evaluate position, 1st and 2nd derivatives
+    /// @brief Overload of evaluation for 2nd derivatives
     void Evaluate(REAL const uv[2],
                   REAL const patchPoints[], PointDescriptor const & pointDesc,
                   REAL * P, REAL * Du,  REAL * Dv,
@@ -217,19 +233,22 @@ public:
     /// @name Stencil evaluation and application methods
     ///
     /// Limit stencils are sets of coefficients that express an evaluation
-    /// as a linear combination of the control points. In addition to methods
-    /// to provide limit stencils, methods are also provided to apply them
-    /// to the control points.
+    /// as a linear combination of the control points. As with the direct
+    /// evaluation methods, they are overloaded to optionally provide
+    /// evaluation for 1st and 2nd derivatives.
+    ///
+    /// In addition to methods to provide limit stencils, methods are also
+    /// provided to apply them to the control points.
     ///       
 
-    /// @brief Evaluate a limit stencil for position
+    /// @brief Evaluation of limit stencil for position
     int EvaluateStencils(REAL const uv[2], REAL sP[]) const;
 
-    /// @brief Evaluate limit stencils for position and 1st derivatives
+    /// @brief Overload of evaluation of limit stencils for 1st derivatives
     int EvaluateStencils(REAL const uv[2], REAL sP[],
                          REAL sDu[], REAL sDv[]) const;
 
-    /// @brief Evaluate limit stencils for position, 1st and 2nd derivatives
+    /// @brief Overload of evaluation of limit stencils for 2nd derivatives
     int EvaluateStencils(REAL const uv[2], REAL sP[],
                          REAL sDu[],  REAL sDv[],
                          REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;

@@ -153,13 +153,27 @@ Parameterization::convertCoordToSubFace(bool normalized,
     int uTile = (int) uvCoord[0];
     int vTile = (int) uvCoord[1];
 
+    REAL uFrac = uvCoord[0] - (REAL) uTile;
+    REAL vFrac = uvCoord[1] - (REAL) vTile;
+
+    //  Allow for coords slightly outside the domain of each tile:
+    if ((uFrac > 0.75f) && (uTile < (_uDim - 1))) {
+        uTile ++;
+        uFrac = uFrac - 1.0f;
+    }
+
+    if ((vFrac > 0.75f) && (vTile < (_uDim - 1))) {
+        vTile ++;
+        vFrac = vFrac - 1.0f;
+    }
+
     //  Be sure this assignment always supports in-place conversion:
     if (normalized) {
-        subCoord[0] = (uvCoord[0] - (REAL) uTile) * 2.0f;
-        subCoord[1] = (uvCoord[1] - (REAL) vTile) * 2.0f;
+        subCoord[0] = uFrac * 2.0f;
+        subCoord[1] = vFrac * 2.0f;
     } else {
-        subCoord[0] = (uvCoord[0] - (REAL) uTile);
-        subCoord[1] = (uvCoord[1] - (REAL) vTile);
+        subCoord[0] = uFrac;
+        subCoord[1] = vFrac;
     }
     return _uDim * vTile + uTile;
 }
