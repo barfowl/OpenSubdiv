@@ -88,6 +88,8 @@ required for such purposes.
 
 ----
 
+.. _bfr-navlink-evaluation:
+
 Evaluation
 ==========
 
@@ -276,6 +278,8 @@ detail later with other advanced topics.
 
 ----
 
+.. _bfr-navlink-parameterization:
+
 Parameterization
 ================
 
@@ -429,6 +433,8 @@ to convert from *Bfr*'s tiled parameterization to and from other
 representations that use a local parameterization for each sub-face.
 
 ----
+
+.. _bfr-navlink-tessellation:
 
 Tessellation
 ============
@@ -660,7 +666,7 @@ with use of the hardware patterns at lower tessellation rates:
 | Uniform tessellation of a triangle with *Bfr* (left) and GPU tessellation (right).          |
 +---------------------------------------------------------------------------------------------+
 
-These triangular patterns were previously referred to as "integer spacing"
+These triangular patterns have been referred to as "integer spacing"
 for triangular patches in early work on hardware tessellation. But use of
 these patterns was generally discarded in favor of techniques that split
 the triangle into three quads -- allowing the hardware solution for quad
@@ -668,25 +674,37 @@ tessellation to be reused.
 
 ----
 
-SurfaceFactory Usage
-====================
+.. _bfr-navlink-surfacefactory:
 
-Deferred pending review... possible topics to include (in no particular
-order):
+More on Bfr::SurfaceFactory
+===========================
 
-    * internal caching and declarations for thread-safety
-    * lifetime/ownership of Surfaces and SurfaceFactory, cache, etc.
-    * use of an external cache shared between SurfaceFactories (meshes)
-    * explicit external caching of entire Surfaces
+Work in progress -- topics to include:
+
+    * Bfr::RefinerSurfaceFactory as an example
+    * Bfr::SurfaceFactoryCache and its thread-safety
+    * thread-safe declaration and usage of SurfaceFactory
+    * using an external SurfaceFactoryCache with multiple meshes
+
+      * serial
+      * parallel
 
 ----
 
-SurfaceFactory Subclasses
-=========================
+.. _bfr-navlink-customizing:
 
-Deferred pending review... possible topics to include (in no particular
-order):
+Customizing a Bfr::SurfaceFactory
+=================================
 
-    * fulfilling the topology requirements
-    * fulfilling the internal caching requirements
+Work in progress -- topics to include:
+
+    * SurfaceFactory and Bfr::SurfaceFactoryMeshAdapter
+    * fulfilling the SurfaceFactoryMeshAdapter interface
+
+      * retrieving simple properties of a face
+      * retrieving indices at all face-vertices
+      * retrieving indices for the neighborhood around a face-vertex
+      * accelerated retrieval for regular face neighborhoods
+
+    * customizing a subclass of SurfaceFactory
 

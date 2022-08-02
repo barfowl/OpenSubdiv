@@ -57,6 +57,11 @@ Tutorial 1.2
  indicating which points are to be evaluated by the Surface.
  `[code] <bfr_tutorial_1_2.html>`__
 
+.. image:: images/bfr_tutorial_1_2.png
+   :align: center
+   :height: 100px
+   :target: images/bfr_tutorial_1_2.png
+
 Tutorial 1.3
 ^^^^^^^^^^^^
  This tutorial extends the previous tutorial on uniform Tessellation by
@@ -79,6 +84,11 @@ Tutorial 2.1
  used to determine the tessellation rate for each edge of a face.
  `[code] <bfr_tutorial_2_1.html>`__
 
+.. image:: images/bfr_tutorial_2_1.png
+   :align: center
+   :height: 100px
+   :target: images/bfr_tutorial_2_1.png
+
 Tutorial 2.2
 ^^^^^^^^^^^^
  This tutorial is a more complex extension of the use of Tessellation
@@ -91,21 +101,17 @@ Tutorial 2.2
 
 3. Creating a Custom Bfr::SurfaceFactory
 ****************************************
+
+Tutorial 3.1
+^^^^^^^^^^^^
  This tutorial shows a basic example of the more advanced topic of creating
- a subclass of SurfaceFactory adapted to a connected mesh representation,
- which requires an implementation of the SurfaceFactoryMeshAdapter interface
- for that mesh.  (Note that an intimate understanding of the topological
- support and limitations of the target mesh representation in order to
- succeed.) A simplified version of the implementation of Far::TopologyRefiner
+ a subclass of SurfaceFactory adapted to a connected mesh representation --
+ requiring an implementation of the SurfaceFactoryMeshAdapter interface for
+ that mesh.  A simplified version of the implementation of Far::TopologyRefiner
  is provided.  (Note that the `[code] <bfr_tutorial_3_1.html>`__ imported
  here is that of the main program, not the separate header and source files
  of the custom subclass illustrated -- which current documentation scripts
  cannot import.)
-
-
-Tutorial 3.1
-^^^^^^^^^^^^
- This tutorial presents 3.1 ...  `[code] <bfr_tutorial_3_1.html>`__
 
 ----
 
@@ -123,7 +129,7 @@ Tutorial 1.1
 
 .. image:: images/far_tutorial_1_1.0.png
    :align: center
-   :width: 100px
+   :height: 100px
    :target: images/far_tutorial_1_1.0.png
 
 Tutorial 1.2
@@ -144,7 +150,7 @@ Tutorial 2.1
 
 .. image:: images/far_tutorial_2_1.0.png
    :align: center
-   :width: 100px
+   :height: 100px
    :target: images/far_tutorial_2_1.0.png
 
 Tutorial 2.2
@@ -156,7 +162,7 @@ Tutorial 2.2
 
 .. image:: images/far_tutorial_2_2.0.png
    :align: center
-   :width: 100px
+   :height: 100px
    :target: images/far_tutorial_2_2.0.png
 
 Tutorial 2.3
@@ -207,7 +213,7 @@ Tutorial 5.1
 
 .. image:: images/far_tutorial_5_1.0.png
    :align: center
-   :width: 100px
+   :height: 100px
    :target: images/far_tutorial_5_1.0.png
 
 Tutorial 5.2
@@ -265,6 +271,6 @@ Tutorial 2
 
 .. image:: images/hbr_tutorial_2.0.png
    :align: center
-   :width: 100px
+   :height: 100px
    :target: images/hbr_tutorial_2.0.png
 

@@ -69,11 +69,11 @@
                         </ul>
                         <li><a href="bfr_overview.html">Bfr</a></li>
                         <ul>
-                            <li><a href="bfr_overview.html#bfr-evaluation">Evaluation</a></li>
-                            <li><a href="bfr_overview.html#bfr-parameterization">Parameterization</a></li>
-                            <li><a href="bfr_overview.html#bfr-tessellation">Tessellation</a></li>
-                            <li><a href="bfr_overview.html#bfr-surfacefactory-usage">More on SurfaceFactory</a></li>
-                            <li><a href="bfr_overview.html#bfr-surfacefactory-subclasses">Custom SurfaceFactories</a></li>
+                            <li><a href="bfr_overview.html#bfr-navlink-evaluation">Evaluation</a></li>
+                            <li><a href="bfr_overview.html#bfr-navlink-parameterization">Parameterization</a></li>
+                            <li><a href="bfr_overview.html#bfr-navlink-tessellation">Tessellation</a></li>
+                            <li><a href="bfr_overview.html#bfr-navlink-surfacefactory">More on Surface Factory</a></li>
+                            <li><a href="bfr_overview.html#bfr-navlink-customizing">Custom Surface Factory</a></li>
                         </ul>
                         <li><a href="osd_overview.html">Osd</a></li>
                         <ul>
