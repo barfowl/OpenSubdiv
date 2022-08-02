@@ -163,16 +163,22 @@ BfrSurfaceEvaluator<REAL>::evaluateByStencils(
             }
 
             if (results.evalPosition) {
-                pSurface.ApplyStencil(&sP[0],  meshPos, 3, &results.p[i][0]);
+                pSurface.ApplyStencilFromMesh(&sP[0],  meshPos, 3,
+                                              &results.p[i][0]);
             }
             if (results.eval1stDeriv) {
-                pSurface.ApplyStencil(&sDu[0], meshPos, 3, &results.du[i][0]);
-                pSurface.ApplyStencil(&sDv[0], meshPos, 3, &results.dv[i][0]);
+                pSurface.ApplyStencilFromMesh(&sDu[0], meshPos, 3,
+                                              &results.du[i][0]);
+                pSurface.ApplyStencilFromMesh(&sDv[0], meshPos, 3,
+                                              &results.dv[i][0]);
             }
             if (results.eval2ndDeriv) {
-                pSurface.ApplyStencil(&sDuu[0], meshPos, 3, &results.duu[i][0]);
-                pSurface.ApplyStencil(&sDuv[0], meshPos, 3, &results.duv[i][0]);
-                pSurface.ApplyStencil(&sDvv[0], meshPos, 3, &results.dvv[i][0]);
+                pSurface.ApplyStencilFromMesh(&sDuu[0], meshPos, 3,
+                                              &results.duu[i][0]);
+                pSurface.ApplyStencilFromMesh(&sDuv[0], meshPos, 3,
+                                              &results.duv[i][0]);
+                pSurface.ApplyStencilFromMesh(&sDvv[0], meshPos, 3,
+                                              &results.dvv[i][0]);
             }
         }
     }
@@ -187,7 +193,8 @@ BfrSurfaceEvaluator<REAL>::evaluateByStencils(
         for (int i = 0; i < numCoords; ++i, st += 2) {
             uvSurface.EvaluateStencils(st, &sUV[0]);
 
-            uvSurface.ApplyStencil(&sUV[0], meshUVs, 3, &results.uv[i][0]);
+            uvSurface.ApplyStencilFromMesh(&sUV[0], meshUVs, 3,
+                                           &results.uv[i][0]);
         }
     }
 }

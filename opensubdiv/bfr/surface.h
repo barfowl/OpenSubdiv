@@ -123,7 +123,13 @@ public:
     ///
     /// It is not necessary to deal directly with control points for
     /// evaluation, but they are useful with limit stencils and other
-    /// purposes, e.g. computing a bounding box of the Surface.
+    /// purposes, e.g. computing a bounding box of the control hull of
+    /// the Surface.
+    ///
+    /// Note that methods that access control points from the array of
+    /// mesh data require that the array be contiguous. If a large data
+    /// set is fragmented into blocks or pages, these methods cannot be
+    /// used and control points will need to be gathered explicitly.
     ///       
 
     /// @brief Return the number of control points affecting the Surface
@@ -141,16 +147,21 @@ public:
     /// @param  controlPoints    Output array of control point data
     /// @param  controlPointDesc The size and stride of control point data
     ///
-    /// Note that this method requires the mesh data be in a contiguous
-    /// array. If a large data set is fragmented into blocks or pages, this
-    /// method cannot be used and control points will need to be gathered
-    /// explicitly.
-    ///
     template <typename REAL_MESH>
     void GatherControlPoints(REAL_MESH       const   meshPoints[],
                              PointDescriptor const & meshPointDesc,
                              REAL                  * controlPoints,
                              PointDescriptor const & controlPointDesc) const;
+
+    /// @brief Compute bounds of control points from a local array
+    void BoundControlPoints(REAL            const   controlPoints[],
+                            PointDescriptor const & controlPointDesc,
+                            REAL * boundMin, REAL * boundMax) const;
+
+    /// @brief Compute bounds of control points from the mesh data
+    void BoundControlPointsFromMesh(REAL            const   meshPoints[],
+                                    PointDescriptor const & meshPointDesc,
+                                    REAL * boundMin, REAL * boundMax) const;
     //@}
 
     //@{
@@ -253,15 +264,15 @@ public:
                          REAL sDu[],  REAL sDv[],
                          REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
 
-    /// @brief Apply a limit stencil to control points in the mesh
+    /// @brief Apply a limit stencil to control points from a local array
     void ApplyStencil(REAL const stencil[],
-                      REAL const meshPoints[], PointDescriptor const &,
+                      REAL const controlPoints[], PointDescriptor const &,
                       REAL result[]) const;
 
-    /// @brief Apply a limit stencil to control points in a local array
-    void ApplyStencilGathered(REAL const stencil[],
-                            REAL const controlPoints[], PointDescriptor const &,
-                            REAL result[]) const;
+    /// @brief Apply a limit stencil to control points from the mesh data
+    void ApplyStencilFromMesh(REAL const stencil[],
+                              REAL const meshPoints[], PointDescriptor const &,
+                              REAL result[]) const;
     //@}
 
 private:

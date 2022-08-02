@@ -180,6 +180,59 @@ Surface<REAL>::computeIrregularPatchPoints(REAL * pointData,
     PointCombiner::Apply(combParams);
 }
 
+//
+//  Methods for computing the extent of the control points:
+//
+template <typename REAL>
+void
+Surface<REAL>::BoundControlPoints(
+        REAL const controlPoints[], PointDescriptor const & pointDesc,
+        REAL * boundMin, REAL * boundMax) const {
+
+    int numPoints = GetNumControlPoints();
+    int pointSize = pointDesc.size;
+
+    REAL const * p = controlPoints;
+    std::memcpy(boundMin, p, pointSize * sizeof(REAL));
+    std::memcpy(boundMax, p, pointSize * sizeof(REAL));
+
+    for (int i = 1; i < numPoints; ++i) {
+        p += pointDesc.stride;
+        for (int j = 0; j < pointSize; ++j) {
+            boundMin[j] = std::min(boundMin[j], p[j]);
+            boundMax[j] = std::max(boundMax[j], p[j]);
+        }
+    }
+}
+
+template <typename REAL>
+void
+Surface<REAL>::BoundControlPointsFromMesh(
+        REAL const meshPoints[], PointDescriptor const & pointDesc,
+        REAL * boundMin, REAL * boundMax) const {
+
+    int numPoints = GetNumControlPoints();
+    int pointSize = pointDesc.size;
+
+    int const * meshIndices = _data.getCVIndices();
+
+    REAL const * p = meshPoints + pointDesc.stride * meshIndices[0];
+    std::memcpy(boundMin, p, pointSize * sizeof(REAL));
+    std::memcpy(boundMax, p, pointSize * sizeof(REAL));
+
+    for (int i = 1; i < numPoints; ++i) {
+        p = meshPoints + pointDesc.stride * meshIndices[i];
+        for (int j = 0; j < pointSize; ++j) {
+            boundMin[j] = std::min(boundMin[j], p[j]);
+            boundMax[j] = std::max(boundMax[j], p[j]);
+        }
+    }
+}
+
+
+//
+//  Internal helper for evaluation:
+//
 namespace {
     template <typename REAL>
     inline int
@@ -563,7 +616,7 @@ Surface<REAL>::evalMultiLinearDerivs(REAL const uv[],
 //
 template <typename REAL>
 void
-Surface<REAL>::ApplyStencil(REAL const stencil[],
+Surface<REAL>::ApplyStencilFromMesh(REAL const stencil[],
         REAL const meshPoints[], PointDescriptor const & pointDesc,
         REAL result[]) const {
 
@@ -589,7 +642,7 @@ Surface<REAL>::ApplyStencil(REAL const stencil[],
 
 template <typename REAL>
 void
-Surface<REAL>::ApplyStencilGathered(REAL const stencil[],
+Surface<REAL>::ApplyStencil(REAL const stencil[],
         REAL const controlPoints[], PointDescriptor const & pointDesc,
         REAL result[]) const {
 
