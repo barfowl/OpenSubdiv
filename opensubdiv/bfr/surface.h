@@ -182,8 +182,6 @@ public:
     /// points derived from them that may be required to represent the
     /// limit surface as one or more parametric patches.
     ///
-    /// @tparam REAL_MESH      Floating point precision of mesh points
-    ///
     /// @param  meshPoints     Input array of mesh point data
     /// @param  meshPointDesc  The size and stride of mesh point data
     /// @param  patchPoints    Output array of patch point data
@@ -195,8 +193,7 @@ public:
     /// explicitly as the subset of patch points, after which the method to
     /// compute the remaining patch points can be used.
     ///
-    template <typename REAL_MESH>
-    void PreparePatchPoints(REAL_MESH       const   meshPoints[],
+    void PreparePatchPoints(REAL            const   meshPoints[],
                             PointDescriptor const & meshPointDesc,
                             REAL                  * patchPoints,
                             PointDescriptor const & patchPointDesc) const;
@@ -339,10 +336,9 @@ Surface<REAL>::ComputePatchPoints(REAL * points,
 }
 
 template <typename REAL>
-template <typename REAL_MESH>
 inline void
 Surface<REAL>::PreparePatchPoints(
-        REAL_MESH const meshPoints[], PointDescriptor const & meshPointDesc,
+        REAL const meshPoints[], PointDescriptor const & meshPointDesc,
         REAL * patchPoints,  PointDescriptor const & patchPointDesc) const {
 
     GatherControlPoints(meshPoints, meshPointDesc, patchPoints, patchPointDesc);
