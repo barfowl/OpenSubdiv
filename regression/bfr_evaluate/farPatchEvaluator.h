@@ -22,8 +22,7 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#include "vec3.h"
-#include "results.h"
+#include "./types.h"
 
 #include <opensubdiv/far/topologyRefiner.h>
 #include <opensubdiv/far/patchTable.h>

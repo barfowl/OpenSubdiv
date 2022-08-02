@@ -21,13 +21,124 @@
 //   KIND, either express or implied. See the Apache License for the specific
 //   language governing permissions and limitations under the Apache License.
 //
+#ifndef OPENSUBDIV3_REGRESSION_BFR_EVALUATE_TYPES_H
+#define OPENSUBDIV3_REGRESSION_BFR_EVALUATE_TYPES_H
 
-#ifndef OPENSUBDIV3_REGRESSION_BFR_EVALUATE_DELTAS_H
-#define OPENSUBDIV3_REGRESSION_BFR_EVALUATE_DELTAS_H
-
-#include "vec3.h"
-
+#include <vector>
+#include <algorithm>
+#include <cmath>
 #include <cstring>
+#include <cassert>
+
+//
+//  Simple interpolatable struct for (x,y,z) positions and normals:
+//
+template <typename REAL>
+struct Vec3 {
+    Vec3<REAL>() { }
+    Vec3<REAL>(REAL x, REAL y, REAL z) { p[0] = x, p[1] = y, p[2] = z; }
+
+    //  Clear() and AddWithWeight() required for interpolation:
+    void Clear( void * =0 ) { p[0] = p[1] = p[2] = 0.0f; }
+
+    void AddWithWeight(Vec3<REAL> const & src, REAL weight) {
+        p[0] += weight * src.p[0];
+        p[1] += weight * src.p[1];
+        p[2] += weight * src.p[2];
+    }
+
+    //  Element access via []:
+    REAL const & operator[](int i) const { return p[i]; }
+    REAL       & operator[](int i)       { return p[i]; }
+
+    //  Element access via []:
+    REAL const * Coords() const { return p; }
+    REAL       * Coords()       { return p; }
+
+    //  Additional useful mathematical operations:
+    Vec3<REAL> operator-(Vec3<REAL> const & x) const {
+        return Vec3<REAL>(p[0] - x.p[0], p[1] - x.p[1], p[2] - x.p[2]);
+    }
+    Vec3<REAL> operator+(Vec3<REAL> const & x) const {
+        return Vec3<REAL>(p[0] + x.p[0], p[1] + x.p[1], p[2] + x.p[2]);
+    }
+    Vec3<REAL> operator*(REAL s) const {
+        return Vec3<REAL>(p[0] * s, p[1] * s, p[2] * s);
+    }
+    Vec3<REAL> Cross(Vec3<REAL> const & x) const {
+        return Vec3<REAL>(p[1]*x.p[2] - p[2]*x.p[1],
+                          p[2]*x.p[0] - p[0]*x.p[2],
+                          p[0]*x.p[1] - p[1]*x.p[0]);
+    }
+    REAL Dot(Vec3<REAL> const & x) const {
+        return p[0]*x.p[0] + p[1]*x.p[1] + p[2]*x.p[2];
+    }
+    REAL Length() const {
+        return std::sqrt(this->Dot(*this));
+    }
+
+    //  Static method to compute normal vector:
+    static
+    Vec3<REAL> ComputeNormal(Vec3<REAL> const & Du, Vec3<REAL> const & Dv,
+                             REAL eps = 0.0f) {
+        Vec3<REAL> N = Du.Cross(Dv);
+        REAL lenSqrd = N.Dot(N);
+        if (lenSqrd <= eps) return Vec3<REAL>(0.0f, 0.0f, 0.0f);
+        return N * (1.0f / std::sqrt(lenSqrd));
+    }
+
+    //  Member variables (XYZ coordinates):
+    REAL p[3];
+};
+
+typedef Vec3<float>  Vec3f;
+typedef Vec3<double> Vec3d;
+
+
+//
+//  Simple struct to hold the results of a face evaluation:
+//
+template <typename REAL>
+struct EvalResults {
+    EvalResults() : evalPosition(true),
+                    eval1stDeriv(true),
+                    eval2ndDeriv(false),
+                    evalUV(false),
+                    useStencils(false) { }
+
+    bool evalPosition;
+    bool eval1stDeriv;
+    bool eval2ndDeriv;
+    bool evalUV;
+    bool useStencils;
+
+    std::vector< Vec3<REAL> > p;
+    std::vector< Vec3<REAL> > du;
+    std::vector< Vec3<REAL> > dv;
+    std::vector< Vec3<REAL> > duu;
+    std::vector< Vec3<REAL> > duv;
+    std::vector< Vec3<REAL> > dvv;
+
+    std::vector< Vec3<REAL> > uv;
+
+    void Resize(int size) {
+       if (evalPosition) {
+            p.resize(size);
+            if (eval1stDeriv) {
+                du.resize(size);
+                dv.resize(size);
+                if (eval2ndDeriv) {
+                    duu.resize(size);
+                    duv.resize(size);
+                    dvv.resize(size);
+                }
+            }
+        }
+        if (evalUV) {
+            uv.resize(size);
+        }
+    }
+};
 
 
 //
@@ -77,9 +188,6 @@ public:
                 if (maxDelta < dx) maxDelta = dx;
                 if (maxDelta < dy) maxDelta = dy;
                 if (maxDelta < dz) maxDelta = dz;
-//printf("Diff:  Bfr(%12.6f %12.6f %12.6f)\n",            ai[0], ai[1], ai[2]);
-//printf("    != Far(%12.6f %12.6f %12.6f) (%d of %d)\n", bi[0], bi[1], bi[2],
-//                                                        i, size);
             }
         }
     }
@@ -202,4 +310,4 @@ public:
     }
 };
 
-#endif /* OPENSUBDIV3_REGRESSION_BFR_EVALUATE_DELTAS_H */
+#endif /* OPENSUBDIV3_REGRESSION_BFR_EVALUATE_TYPES_H */
