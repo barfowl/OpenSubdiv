@@ -163,7 +163,7 @@ public:
     //@{
     /// @name Simple queries of subdivision properties
     ///
-    /// Simple public queries to inspect subdivision properties.
+    /// Simple queries to inspect subdivision properties.
     ///
 
     /// @brief Return the subdivision scheme
@@ -175,10 +175,9 @@ public:
 
 public:
     //@{
-    /// @name Simple public queries influencing Surface construction
+    /// @name Simple queries influencing Surface construction
     ///
-    /// Simple public queries of faces that might influence Surface
-    /// construction.
+    /// Methods to quickly inspect faces that influence Surface construction.
     ///
     /// A small set of methods is useful to inspect faces in order to
     /// determine if their corresponding Surfaces should be initialized.
@@ -213,8 +212,7 @@ public:
     //@{
     /// @name Methods to initialize Surfaces
     ///
-    /// Public methods to initialize instances of Surface for a specific
-    /// face.
+    /// Methods to initialize instances of Surface for a specific face.
     ///
     /// Given the different interpolation types for data associated with
     /// mesh vertices (i.e. vertex, varying and face-varying data), the
@@ -317,7 +315,7 @@ public:
     //@{
     /// @name Methods to construct Surfaces
     ///
-    /// Simple convenience methods to allocate and construct Surface.
+    /// Methods to both allocate and initialize a single Surface.
     //
     //      WIP - considering removing these since non-essential
     //

@@ -80,8 +80,9 @@ public:
     /// @brief Returns true if correctly initialized
     bool IsValid() const { return (_faceSize > 0); }
 
-    /// @brief Default construction produces an invalid Parameterization
+    /// @brief Default construction produces an invalid instance
     Parameterization() : _type(0), _uDim(0), _faceSize(0) { }
+
     Parameterization(Parameterization const &) = default;
     Parameterization & operator=(Parameterization const &) = default;
     ~Parameterization() = default;
@@ -90,7 +91,7 @@ public:
     //@{
     /// @name Simple queries
     ///
-    /// Simple queries of an initialized Parameterization.
+    /// Simple queries of a valid Parameterization.
     ///
 
     /// @brief Returns the type of parameterization assigned
@@ -102,13 +103,13 @@ public:
 
 public:
     //@{
-    /// @name Queries for parametric features
+    /// @name Methods to inspect parametric features
     ///
-    /// Methods are available to query common topological features of a
-    /// Parameterization, i.e. features that exist regardless of its Type
-    /// or the face it represents.
+    /// Methods are available to inspect common topological features of a
+    /// Parameterization, i.e. the parametric coordinates corresponding
+    /// to the vertices, edges or center of the face it represents.
     ///
-    /// Queries of vertices and edges require an index of the desired
+    /// Methods for vertices and edges require an index of the desired
     /// vertex or edge. The edge parameter "t" locally parameterizes the
     /// edge over [0,1] in a counter-clockwise orientation.
     ///
@@ -199,7 +200,13 @@ Parameterization::HasSubFaces() const {
 template <typename REAL>
 inline int
 Parameterization::GetSubFace(REAL const uvCoord[2]) const {
-    return HasSubFaces() ? (_uDim * (int)uvCoord[1] + (int)uvCoord[0]) : 0;
+
+    if (!HasSubFaces()) return 0;
+
+    int uTile = (int) uvCoord[0];
+    int vTile = (int) uvCoord[1];
+    return (vTile + ((uvCoord[1] - (REAL) vTile) > 0.75f)) * _uDim +
+           (uTile + ((uvCoord[0] - (REAL) uTile) > 0.75f));
 }
 
 //  Conversions to unnormalized sub-face coordinates:

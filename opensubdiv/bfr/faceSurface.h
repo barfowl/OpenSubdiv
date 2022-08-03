@@ -56,7 +56,7 @@ namespace Bfr {
 //
 //      - for the vertex topology of a face, initialization requires:
 //          - an instance of FaceTopology
-//          - vertex indices associated with the FaceTology (though in
+//          - vertex indices associated with the FaceTopology (though in
 //            some cases the vertex indices are not necessary)
 //
 //      - for the face-varying topology of a face:

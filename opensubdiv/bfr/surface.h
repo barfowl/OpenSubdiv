@@ -82,14 +82,15 @@ public:
     /// determined that the face associated with it has no limit surface.
     ///
 
-    /// @brief Return if successfully initialized
+    /// @brief Return true if successfully initialized
     bool IsValid() const { return _data.isValid(); }
 
     /// @brief Clear a previously initialized Surface
     void Clear() { _data.reinitialize(); }
 
-    /// @brief Default construction produces an invalid Surface
+    /// @brief Default construction produces an invalid instance
     Surface();
+
     Surface(Surface const & src) = default;
     Surface& operator=(Surface const & src) = default;
     ~Surface() = default;
@@ -98,7 +99,7 @@ public:
     //@{
     /// @name Simple queries
     ///
-    /// Simple queries of an initialized Surface.
+    /// Simple queries of valid Surface.
     ///
 
     /// @brief Return the Parameterization
@@ -115,7 +116,7 @@ public:
     //@}
 
     //@{
-    /// @name Methods dealing with control points
+    /// @name Methods to manage control points
     ///
     /// Control points are the subset of points in the mesh that influence
     /// a Surface. They can be identified as part of the mesh data by their
@@ -150,22 +151,24 @@ public:
     template <typename REAL_MESH>
     void GatherControlPoints(REAL_MESH       const   meshPoints[],
                              PointDescriptor const & meshPointDesc,
-                             REAL                  * controlPoints,
+                             REAL                    controlPoints[],
                              PointDescriptor const & controlPointDesc) const;
 
     /// @brief Compute bounds of control points from a local array
     void BoundControlPoints(REAL            const   controlPoints[],
                             PointDescriptor const & controlPointDesc,
-                            REAL * boundMin, REAL * boundMax) const;
+                            REAL                    minExtent[],
+                            REAL                    maxExtent[]) const;
 
     /// @brief Compute bounds of control points from the mesh data
     void BoundControlPointsFromMesh(REAL            const   meshPoints[],
                                     PointDescriptor const & meshPointDesc,
-                                    REAL * boundMin, REAL * boundMax) const;
+                                    REAL                    minExtent[],
+                                    REAL                    maxExtent[]) const;
     //@}
 
     //@{
-    /// @name Methods dealing with patch points
+    /// @name Methods to manage patch points
     ///
     /// Patch points are derived from the control points and are used to
     /// evaluate the Surface. The patch points always include the control
@@ -195,7 +198,7 @@ public:
     ///
     void PreparePatchPoints(REAL            const   meshPoints[],
                             PointDescriptor const & meshPointDesc,
-                            REAL                  * patchPoints,
+                            REAL                    patchPoints[],
                             PointDescriptor const & patchPointDesc) const;
 
     /// @brief Compute all patch points following the control points
@@ -207,12 +210,12 @@ public:
     /// @param  patchPoints    Array of patch point data to be modified
     /// @param  patchPointDesc The size and stride of patch point data
     ///
-    void ComputePatchPoints(REAL                  * patchPoints,
+    void ComputePatchPoints(REAL                    patchPoints[],
                             PointDescriptor const & patchPointDesc) const;
     //@}
 
     //@{
-    /// @name Evaluation methods
+    /// @name Evaluation of positions and derivatives
     ///
     /// Evaluation methods use the patch points to compute position, 1st and
     /// 2nd derivatives of the Surface at a given (u,v) coordinate within
@@ -223,22 +226,22 @@ public:
     /// @brief Evaluation of position
     void Evaluate(REAL const uv[2],
                   REAL const patchPoints[], PointDescriptor const & pointDesc,
-                  REAL * P) const;
+                  REAL P[]) const;
 
     /// @brief Overload of evaluation for 1st derivatives
     void Evaluate(REAL const uv[2],
                   REAL const patchPoints[], PointDescriptor const & pointDesc,
-                  REAL * P, REAL * Du, REAL * Dv) const;
+                  REAL P[], REAL Du[], REAL Dv[]) const;
 
     /// @brief Overload of evaluation for 2nd derivatives
     void Evaluate(REAL const uv[2],
                   REAL const patchPoints[], PointDescriptor const & pointDesc,
-                  REAL * P, REAL * Du,  REAL * Dv,
-                  REAL * Duu, REAL * Duv, REAL * Dvv) const;
+                  REAL P[], REAL Du[],  REAL Dv[],
+                  REAL Duu[], REAL Duv[], REAL Dvv[]) const;
     //@}
 
     //@{
-    /// @name Stencil evaluation and application methods
+    /// @name Evaluation and application of limit stencils
     ///
     /// Limit stencils are sets of coefficients that express an evaluation
     /// as a linear combination of the control points. As with the direct
@@ -296,8 +299,8 @@ private:
     int evalMultiLinearStencils(REAL const uv[2], REAL * sDeriv[]) const;
 
     //  Internal methods to compute patch points:
-    void computeLinearPatchPoints(REAL * p, PointDescriptor const &) const;
-    void computeIrregularPatchPoints(REAL * p, PointDescriptor const &) const;
+    void computeLinearPatchPoints(REAL p[], PointDescriptor const &) const;
+    void computeIrregularPatchPoints(REAL p[], PointDescriptor const &) const;
 
     //  Internal methods specific to regular or irregular patches:
     unsigned char getRegPatchType() const { return _data.getRegPatchType(); }
@@ -323,7 +326,7 @@ private:
 //
 template <typename REAL>
 inline void
-Surface<REAL>::ComputePatchPoints(REAL * points,
+Surface<REAL>::ComputePatchPoints(REAL points[],
                                   PointDescriptor const & pointDesc) const {
 
     if (!IsRegular()) {
@@ -339,7 +342,7 @@ template <typename REAL>
 inline void
 Surface<REAL>::PreparePatchPoints(
         REAL const meshPoints[], PointDescriptor const & meshPointDesc,
-        REAL * patchPoints,  PointDescriptor const & patchPointDesc) const {
+        REAL patchPoints[],  PointDescriptor const & patchPointDesc) const {
 
     GatherControlPoints(meshPoints, meshPointDesc, patchPoints, patchPointDesc);
     ComputePatchPoints(patchPoints, patchPointDesc);
@@ -367,7 +370,7 @@ inline void
 Surface<REAL>::Evaluate(REAL const uv[2],
                         REAL const patchPoints[],
                         PointDescriptor const & pointDesc,
-                        REAL * P) const {
+                        REAL P[]) const {
 
     REAL * derivatives[6] = { P, 0, 0, 0, 0, 0 };
     evaluateDerivs(uv, patchPoints, pointDesc, derivatives);
@@ -377,7 +380,7 @@ inline void
 Surface<REAL>::Evaluate(REAL const uv[2],
                         REAL const patchPoints[],
                         PointDescriptor const & pointDesc,
-                        REAL * P, REAL * Du, REAL * Dv) const {
+                        REAL P[], REAL Du[], REAL Dv[]) const {
 
     REAL * derivatives[6] = { P, Du, Dv, 0, 0, 0 };
     evaluateDerivs(uv, patchPoints, pointDesc, derivatives);
@@ -387,8 +390,8 @@ inline void
 Surface<REAL>::Evaluate(REAL const uv[2],
                         REAL const patchPoints[],
                         PointDescriptor const & pointDesc,
-                        REAL * P,   REAL * Du,  REAL * Dv,
-                        REAL * Duu, REAL * Duv, REAL * Dvv) const {
+                        REAL P[],   REAL Du[],  REAL Dv[],
+                        REAL Duu[], REAL Duv[], REAL Dvv[]) const {
 
     REAL * derivatives[6] = { P, Du, Dv, Duu, Duv, Dvv };
     evaluateDerivs(uv, patchPoints, pointDesc, derivatives);

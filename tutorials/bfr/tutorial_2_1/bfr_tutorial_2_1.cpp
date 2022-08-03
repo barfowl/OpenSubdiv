@@ -279,7 +279,9 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
 
             for (int i = 0, j = 0; i < N; ++i, j += pointSize) {
                 float const * vPos = &meshVertexPositions[verts[i] * pointSize];
-                std::copy(vPos, vPos + 3, &outPos[j]);
+                outPos[j  ] = vPos[0];
+                outPos[j+1] = vPos[1];
+                outPos[j+2] = vPos[2];
             }
         } else {
             Bfr::Parameterization faceParam = faceSurface.GetParameterization();

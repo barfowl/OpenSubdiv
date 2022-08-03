@@ -157,12 +157,11 @@ Parameterization::convertCoordToSubFace(bool normalized,
     REAL vFrac = uvCoord[1] - (REAL) vTile;
 
     //  Allow for coords slightly outside the domain of each tile:
-    if ((uFrac > 0.75f) && (uTile < (_uDim - 1))) {
+    if (uFrac > 0.75f) {
         uTile ++;
         uFrac = uFrac - 1.0f;
     }
-
-    if ((vFrac > 0.75f) && (vTile < (_uDim - 1))) {
+    if (vFrac > 0.75f) {
         vTile ++;
         vFrac = vFrac - 1.0f;
     }

@@ -30,6 +30,7 @@
 #include "../far/patchDescriptor.h"
 #include "../far/patchBasis.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 
@@ -97,7 +98,7 @@ template <typename REAL_MESH>
 void
 Surface<REAL>::GatherControlPoints(
         REAL_MESH const meshPoints[], PointDescriptor const & meshDesc,
-        REAL * controlPoints, PointDescriptor const & controlDesc) const {
+        REAL controlPoints[], PointDescriptor const & controlDesc) const {
 
     //
     //  Assemble parameters of the point copy operation and apply:
@@ -120,7 +121,7 @@ Surface<REAL>::GatherControlPoints(
 
 template <typename REAL>
 void
-Surface<REAL>::computeLinearPatchPoints(REAL * pointData,
+Surface<REAL>::computeLinearPatchPoints(REAL pointData[],
         PointDescriptor const & pointDesc) const {
 
     //
@@ -147,7 +148,7 @@ Surface<REAL>::computeLinearPatchPoints(REAL * pointData,
 
 template <typename REAL>
 void
-Surface<REAL>::computeIrregularPatchPoints(REAL * pointData,
+Surface<REAL>::computeIrregularPatchPoints(REAL pointData[],
         PointDescriptor const & pointDesc) const {
 
     //
@@ -187,7 +188,7 @@ template <typename REAL>
 void
 Surface<REAL>::BoundControlPoints(
         REAL const controlPoints[], PointDescriptor const & pointDesc,
-        REAL * boundMin, REAL * boundMax) const {
+        REAL boundMin[], REAL boundMax[]) const {
 
     int numPoints = GetNumControlPoints();
     int pointSize = pointDesc.size;
@@ -209,7 +210,7 @@ template <typename REAL>
 void
 Surface<REAL>::BoundControlPointsFromMesh(
         REAL const meshPoints[], PointDescriptor const & pointDesc,
-        REAL * boundMin, REAL * boundMax) const {
+        REAL boundMin[], REAL boundMax[]) const {
 
     int numPoints = GetNumControlPoints();
     int pointSize = pointDesc.size;
@@ -678,17 +679,17 @@ template class Surface<double>;
 //
 template void Surface<float>::GatherControlPoints(
                       float const [], PointDescriptor const &,
-                      float        *, PointDescriptor const &) const;
+                      float       [], PointDescriptor const &) const;
 template void Surface<float>::GatherControlPoints(
                       double const [], PointDescriptor const &,
-                      float         *, PointDescriptor const &) const;
+                      float        [], PointDescriptor const &) const;
 
 template void Surface<double>::GatherControlPoints(
                       double const [], PointDescriptor const &,
-                      double        *, PointDescriptor const &) const;
+                      double       [], PointDescriptor const &) const;
 template void Surface<double>::GatherControlPoints(
                       float const [], PointDescriptor const &,
-                      double       *, PointDescriptor const &) const;
+                      double      [], PointDescriptor const &) const;
 
 } // end namespace Bfr
 

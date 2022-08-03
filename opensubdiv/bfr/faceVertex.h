@@ -50,7 +50,7 @@ namespace Bfr {
 //
 //  One fundamental extension of FaceVertex is that it includes the
 //  location of the face in the ring of incident faces around the vertex.
-//  VertexDescriptor alone simple specifies the neighborhood of the
+//  VertexDescriptor alone simply specifies the neighborhood of the
 //  vertex, but the FaceVertex provides context relative to the face for
 //  which all of this information is being gathered.
 //

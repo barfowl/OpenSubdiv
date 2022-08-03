@@ -58,9 +58,9 @@ namespace Bfr {
 class RefinerSurfaceFactoryBase : public SurfaceFactory {
 public:
     //@{
-    /// @name Constructor and destructor
+    /// @name Construction and initialization
     ///
-    /// Constructor and destructor
+    /// Construction and initialization
     ///
 
     RefinerSurfaceFactoryBase(Far::TopologyRefiner const & mesh,
@@ -143,7 +143,7 @@ private:
 /// @brief Template for concrete subclasses of RefinerSurfaceFactoryBase
 ///
 /// This class template is used to declare concrete subclasses of
-/// RefinerSurfaceFactoryBase with the addition support of an internal
+/// RefinerSurfaceFactoryBase with the additional support of an internal
 /// cache used by the base class. With an instance of a thread-safe
 /// subclass of SurfaceFactoryCache declared as a member, the resulting
 /// factory will be thread-safe.
