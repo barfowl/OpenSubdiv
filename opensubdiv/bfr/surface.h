@@ -249,27 +249,29 @@ public:
     /// evaluation for 1st and 2nd derivatives.
     ///
     /// In addition to methods to provide limit stencils, methods are also
-    /// provided to apply them to the control points.
+    /// provided to apply them to the control points. Since application of
+    /// stencils is identical for each (i.e. the same for position and any
+    /// derivative) no overloads are provided for derivatives.
     ///       
 
-    /// @brief Evaluation of limit stencil for position
-    int EvaluateStencils(REAL const uv[2], REAL sP[]) const;
+    /// @brief Evaluation of the limit stencil for position
+    int EvaluateStencil(REAL const uv[2], REAL sP[]) const;
 
-    /// @brief Overload of evaluation of limit stencils for 1st derivatives
-    int EvaluateStencils(REAL const uv[2], REAL sP[],
-                         REAL sDu[], REAL sDv[]) const;
+    /// @brief Overload of limit stencil evaluation for 1st derivatives
+    int EvaluateStencil(REAL const uv[2], REAL sP[],
+                        REAL sDu[], REAL sDv[]) const;
 
-    /// @brief Overload of evaluation of limit stencils for 2nd derivatives
-    int EvaluateStencils(REAL const uv[2], REAL sP[],
-                         REAL sDu[],  REAL sDv[],
-                         REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
+    /// @brief Overload of limit stencil evaluation for 2nd derivatives
+    int EvaluateStencil(REAL const uv[2], REAL sP[],
+                        REAL sDu[],  REAL sDv[],
+                        REAL sDuu[], REAL sDuv[], REAL sDvv[]) const;
 
-    /// @brief Apply a limit stencil to control points from a local array
+    /// @brief Apply a single stencil to control points from a local array
     void ApplyStencil(REAL const stencil[],
                       REAL const controlPoints[], PointDescriptor const &,
                       REAL result[]) const;
 
-    /// @brief Apply a limit stencil to control points from the mesh data
+    /// @brief Apply a single stencil to control points from the mesh data
     void ApplyStencilFromMesh(REAL const stencil[],
                               REAL const meshPoints[], PointDescriptor const &,
                               REAL result[]) const;
@@ -411,14 +413,14 @@ Surface<REAL>::evaluateStencils(REAL const uv[2], REAL * sDeriv[]) const {
 }
 template <typename REAL>
 inline int
-Surface<REAL>::EvaluateStencils(REAL const uv[2], REAL sP[]) const {
+Surface<REAL>::EvaluateStencil(REAL const uv[2], REAL sP[]) const {
 
     REAL * derivativeStencils[6] = { sP, 0, 0, 0, 0, 0 };
     return evaluateStencils(uv, derivativeStencils);
 }
 template <typename REAL>
 inline int
-Surface<REAL>::EvaluateStencils(REAL const uv[2],
+Surface<REAL>::EvaluateStencil(REAL const uv[2],
                           REAL sP[], REAL sDu[], REAL sDv[]) const {
 
     REAL * derivativeStencils[6] = { sP, sDu, sDv, 0, 0, 0 };
@@ -426,7 +428,7 @@ Surface<REAL>::EvaluateStencils(REAL const uv[2],
 }
 template <typename REAL>
 inline int
-Surface<REAL>::EvaluateStencils(REAL const uv[2],
+Surface<REAL>::EvaluateStencil(REAL const uv[2],
                           REAL sP[],   REAL sDu[],  REAL sDv[],
                           REAL sDuu[], REAL sDuv[], REAL sDvv[]) const {
 

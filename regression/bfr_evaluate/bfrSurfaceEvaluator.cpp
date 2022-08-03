@@ -154,12 +154,12 @@ BfrSurfaceEvaluator<REAL>::evaluateByStencils(
             REAL const * meshPos = &_baseMeshPos[0][0];
 
             if (!results.eval1stDeriv) {
-                pSurface.EvaluateStencils(st, &sP[0]);
+                pSurface.EvaluateStencil(st, &sP[0]);
             } else if (!results.eval2ndDeriv) {
-                pSurface.EvaluateStencils(st, &sP[0], &sDu[0], &sDv[0]);
+                pSurface.EvaluateStencil(st, &sP[0], &sDu[0], &sDv[0]);
             } else {
-                pSurface.EvaluateStencils(st, &sP[0], &sDu[0], &sDv[0],
-                                              &sDuu[0], &sDuv[0], &sDvv[0]);
+                pSurface.EvaluateStencil(st, &sP[0], &sDu[0], &sDv[0],
+                                             &sDuu[0], &sDuv[0], &sDvv[0]);
             }
 
             if (results.evalPosition) {
@@ -191,7 +191,7 @@ BfrSurfaceEvaluator<REAL>::evaluateByStencils(
 
         REAL const * st = &tessCoords[0];
         for (int i = 0; i < numCoords; ++i, st += 2) {
-            uvSurface.EvaluateStencils(st, &sUV[0]);
+            uvSurface.EvaluateStencil(st, &sUV[0]);
 
             uvSurface.ApplyStencilFromMesh(&sUV[0], meshUVs, 3,
                                            &results.uv[i][0]);
