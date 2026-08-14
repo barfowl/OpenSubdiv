@@ -32,8 +32,8 @@ typedef Vtr::ConstLocalIndexArray  ConstLocalIndexArray;
 
 inline bool IndexIsValid(Index index) { return Vtr::IndexIsValid(index); }
 
-static const Index INDEX_INVALID = Vtr::INDEX_INVALID;
-static const int   VALENCE_LIMIT = Vtr::VALENCE_LIMIT;
+inline constexpr Index INDEX_INVALID = Vtr::INDEX_INVALID;
+inline constexpr int   VALENCE_LIMIT = Vtr::VALENCE_LIMIT;
 
 } // end namespace Far
 

@@ -158,6 +158,11 @@ set(OSD_COMPILER_FLAGS)
 # Disable spurious warnings in gcc builds and clang
 if (CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_CLANGCC OR CMAKE_COMPILER_IS_ICC )
 
+    # Requrie C++17 for GCC builds of local changes (not sure of other compilers...)
+    if(CMAKE_COMPILER_IS_GNUCC)
+        list(APPEND OSD_COMPILER_FLAGS -std=c++17)
+    endif()
+
     # Turn on all warnings
     if(CMAKE_COMPILER_IS_ICC)
         list(APPEND OSD_COMPILER_FLAGS -w2 -wd1572 -wd1418 -wd981 -wd383 -wd193 -wd444)
