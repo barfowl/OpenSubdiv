@@ -57,8 +57,13 @@ public:
     /// arguments that describe a face that cannot be parameterized.
     ///
 
-    /// @brief Primary constructor with subdivision scheme and face size
+    /// @brief Primary constructor that determines the parameterization
+    ///        type from the subdivision scheme and face size
     Parameterization(Sdc::SchemeType scheme, int faceSize);
+
+    /// @brief Alternate constructor for a specific parameterization type
+    ///        (the optional face size is ignored if implicit in the type)
+    Parameterization(Type type, int faceSize = 0);
 
     /// @brief Returns true if correctly initialized
     bool IsValid() const { return (_faceSize > 0); }
