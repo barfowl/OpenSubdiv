@@ -334,19 +334,21 @@ to retrieve the Parameterization from a Surface for use in some other context
 (e.g. passed to Bfr::Tessellation).
 
 The enumerated type Parameterization::Type currently defines three kinds of
-parameterizations -- one of which is assigned to each instance on construction
-according to the properties of the face:
+parameterizations -- one of which is assigned to an instance on construction.
+A subdivision scheme typically uses one Type for its regular faces and
+another for its irregular faces. So the Parameterization for the face of a
+mesh is most conveniently constructed by specifying the scheme and face size,
+which assigns the Type as follows:
 
-+---------------+--------------------------------------------------------------+
-| QUAD          | Applied to quadrilateral faces with a quad-based             |
-|               | subdivision scheme (e.g. Catmark or Bilinear).               |
-+---------------+--------------------------------------------------------------+
-| TRI           | Applied to triangular faces with a triangle-based            |
-|               | subdivision scheme (e.g. Loop).                              |
-+---------------+--------------------------------------------------------------+
-| QUAD_SUBFACES | Applied to non-quad faces with a quad-based subdivision      |
-|               | scheme -- dividing the face into quadrilateral sub-faces.    |
-+---------------+--------------------------------------------------------------+
++---------------+---------------------+--------------------+
+| Type          | Subdivision Scheme  | Face Size          |
++===============+=====================+====================+
+| TRI           | Loop                | 3 (triangles only) |
++---------------+---------------------+--------------------+
+| QUAD          | Catmark or Bilinear | 4 (quads only)     |
++---------------+---------------------+--------------------+
+| QUAD_SUBFACES | Catmark or Bilinear | 3, 5 or more       |
++---------------+---------------------+--------------------+
 
 Parameterizations that involve subdivision into sub-faces, e.g. QUAD_SUBFACES,
 may warrant some care as they are not continuous. Depending on how they are
