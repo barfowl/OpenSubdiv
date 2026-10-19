@@ -1,0 +1,28 @@
+#
+#   Three shapes -- a triangle, quad and pentagon -- all with smooth corners.
+#
+t interpolateboundary 1/0/0 2
+
+#   Triangle:
+v  0.0  0.0  0
+v  1.0  0.0  0
+v  0.5  1.0  0
+
+f 1 2 3
+
+#   Quad:
+v  1.0  0.0  0
+v  2.0  0.0  0
+v  2.0  1.0  0
+v  1.0  1.0  0
+
+f 4 5 6 7
+
+#   Pentagon:
+v  2.3  0.0  0
+v  2.7  0.0  0
+v  3.0  0.5  0
+v  2.5  1.0  0
+v  2.0  0.5  0
+
+f  8 9 10 11 12

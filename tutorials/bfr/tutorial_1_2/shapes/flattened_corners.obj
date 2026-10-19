@@ -1,0 +1,37 @@
+#
+#   Single shape -- a 3x3 grid of quads with sharp corners "flattened"
+#   by making the three boundary vertices at the corners colilinear.
+#
+t interpolateboundary 1/0/0 1
+
+v   0.5   0.5  0.0
+v   1.0   0.0  0.0
+v   2.0   0.0  0.0
+v   2.5   0.5  0.0
+
+v   0.0   1.0  0.0
+v   1.0   1.0  0.0
+v   2.0   1.0  0.0
+v   3.0   1.0  0.0
+
+v   0.0   2.0  0.0
+v   1.0   2.0  0.0
+v   2.0   2.0  0.0
+v   3.0   2.0  0.0
+
+v   0.5   2.5  0.0
+v   1.0   3.0  0.0
+v   2.0   3.0  0.0
+v   2.5   2.5  0.0
+
+f  1  2  6  5
+f  2  3  7  6
+f  3  4  8  7
+
+f  5  6 10  9
+f  6  7 11 10
+f  7  8 12 11
+
+f  9 10 14 13
+f 10 11 15 14
+f 11 12 16 15

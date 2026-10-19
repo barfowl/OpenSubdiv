@@ -1,0 +1,32 @@
+#
+#   Two shapes -- both containing a valence-2 interior vertex raised out
+#   of the XY plane:
+#       - two adjoining quads sharing two edges
+#       - two adjoining pentagons sharing two edges
+#
+t interpolateboundary 1/0/0 1
+
+#   Two quads:
+v  -0.5   0.6  0.0
+v   0.0   0.1  0.0
+v   0.5   0.6  0.0
+v   0.0   1.1  0.0
+
+v   0.0   0.6  1.0
+
+f  5  4  1  2
+f  4  5  2  3
+
+#   Two pentagons:
+v  -1.0  -1.1  0.0
+v   0.0  -1.1  0.0
+v   1.0  -1.1  0.0
+v  -1.0  -0.1  0.0
+v   0.0  -0.1  0.0
+v   1.0  -0.1  0.0
+
+v   0.0  -0.6  1.0
+
+f  6  7 12 10 9
+f  7  8 11 10 12
+
