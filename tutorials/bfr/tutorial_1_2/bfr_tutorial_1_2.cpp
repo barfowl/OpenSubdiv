@@ -131,7 +131,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
     std::vector<float> facePatchPoints;
 
     std::vector<float> outCoords;
-    std::vector<float> outPos, outDu, outDv;
+    std::vector<float> outPos, outNorm;
     std::vector<int>   outFacets;
 
     //
@@ -183,17 +183,20 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
         facePatchPoints.resize(faceSurface.GetNumPatchPoints() * pointSize);
 
         outPos.resize(numOutCoords * pointSize);
-        outDu.resize(numOutCoords * pointSize);
-        outDv.resize(numOutCoords * pointSize);
+        outNorm.resize(numOutCoords * pointSize);
 
         //  Populate patch point and output arrays:
         faceSurface.PreparePatchPoints(meshVertexPositions.data(), pointSize,
                                        facePatchPoints.data(), pointSize);
 
         for (int i = 0, j = 0; i < numOutCoords; ++i, j += pointSize) {
+            float du[3], dv[3];
+
             faceSurface.Evaluate(&outCoords[i*2],
                                  facePatchPoints.data(), pointSize,
-                                 &outPos[j], &outDu[j], &outDv[j]);
+                                 &outPos[j], du, dv);
+
+            objWriter.getNormal(&outNorm[j], du, dv);
         }
 
         //
@@ -219,7 +222,7 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
         objWriter.WriteGroupName("baseFace_", faceIndex);
 
         objWriter.WriteVertexPositions(outPos);
-        objWriter.WriteVertexNormals(outDu, outDv);
+        objWriter.WriteVertexNormals(outNorm);
 
         objWriter.WriteFaces(outFacets, tessFacetSize, true, false);
     }

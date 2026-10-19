@@ -27,8 +27,7 @@ public:
     int GetNumFaces()    const { return _numFaces; }
 
     void WriteVertexPositions(std::vector<float> const & p, int size = 3);
-    void WriteVertexNormals(std::vector<float> const & du,
-                            std::vector<float> const & dv);
+    void WriteVertexNormals(std::vector<float> const & N);
     void WriteVertexUVs(std::vector<float> const & uv);
 
     void WriteFaces(std::vector<int> const & faceVertices, int faceSize,
@@ -37,7 +36,7 @@ public:
 
     void WriteGroupName(char const * prefix, int index);
 
-private:
+//private:
     void getNormal(float N[3], float const du[3], float const dv[3]) const;
 
 private:
@@ -110,17 +109,12 @@ ObjWriter::getNormal(float N[3], float const du[3], float const dv[3]) const {
 }
 
 void
-ObjWriter::WriteVertexNormals(std::vector<float> const & du,
-                              std::vector<float> const & dv) {
+ObjWriter::WriteVertexNormals(std::vector<float> const & normals) {
 
-    assert(du.size() == dv.size());
-    int numNewNormals = (int)du.size() / 3;
+    int numNewNormals = (int)normals.size() / 3;
 
-    float const * dPdu = &du[0];
-    float const * dPdv = &dv[0];
-    for (int i = 0; i < numNewNormals; ++i, dPdu += 3, dPdv += 3) {
-        float N[3];
-        getNormal(N, dPdu, dPdv);
+    float const * N = &normals[0];
+    for (int i = 0; i < numNewNormals; ++i, N += 3) {
         fprintf(_fptr, "vn %f %f %f\n", N[0], N[1], N[2]);
     }
     _numNormals += numNewNormals;
