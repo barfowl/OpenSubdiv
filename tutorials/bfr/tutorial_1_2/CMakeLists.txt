@@ -8,4 +8,6 @@
 osd_add_bfr_tutorial(
     bfr_tutorial_1_2
     bfr_tutorial_1_2.cpp
+    extendedSurface.cpp
+    patchNormal.cpp
 )

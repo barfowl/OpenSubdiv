@@ -33,6 +33,7 @@
 //  Local headers with support for this tutorial in "namespace tutorial"
 #include "./meshLoader.h"
 #include "./objWriter.h"
+#include "./extendedSurface.h"
 
 using namespace OpenSubdiv;
 
@@ -45,6 +46,7 @@ public:
     std::string     outputObjFile;
     Sdc::SchemeType schemeType;
     int             tessUniformRate;
+    bool            oldNormalsFlag;
     bool            tessQuadsFlag;
 
 public:
@@ -52,7 +54,8 @@ public:
         inputObjFile(),
         outputObjFile(),
         schemeType(Sdc::SCHEME_CATMARK),
-        tessUniformRate(5),
+        tessUniformRate(6),
+        oldNormalsFlag(false),
         tessQuadsFlag(false) {
 
         for (int i = 1; i < argc; ++i) {
@@ -75,6 +78,8 @@ public:
                 if (++i < argc) tessUniformRate = atoi(argv[i]);
             } else if (!strcmp(argv[i], "-quads")) {
                 tessQuadsFlag = true;
+            } else if (!strcmp(argv[i], "-old")) {
+                oldNormalsFlag = true;
             } else {
                 fprintf(stderr,
                     "Warning: Unrecognized argument '%s' ignored\n", argv[i]);
@@ -190,13 +195,21 @@ tessellateToObj(Far::TopologyRefiner const & meshTopology,
                                        facePatchPoints.data(), pointSize);
 
         for (int i = 0, j = 0; i < numOutCoords; ++i, j += pointSize) {
-            float du[3], dv[3];
+            if (options.oldNormalsFlag) {
+                float du[3], dv[3];
 
-            faceSurface.Evaluate(&outCoords[i*2],
-                                 facePatchPoints.data(), pointSize,
-                                 &outPos[j], du, dv);
+                faceSurface.Evaluate(&outCoords[i*2],
+                                     facePatchPoints.data(), pointSize,
+                                     &outPos[j], du, dv);
 
-            objWriter.getNormal(&outNorm[j], du, dv);
+                objWriter.getNormal(&outNorm[j], du, dv);
+            } else {
+                tutorial::ExtendedSurface extSurface(faceSurface);
+
+                extSurface.EvaluateNormal(&outCoords[i*2],
+                                          facePatchPoints.data(), pointSize,
+                                          &outPos[j], &outNorm[j]);
+            }
         }
 
         //
